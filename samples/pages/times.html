@@ -1,0 +1,340 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>九九乘法练习</title>
+<style>
+:root{
+  --bg:#f2f5fb; --card:#ffffff; --fg:#161c2b; --muted:#6a7387; --line:#e4e8f2;
+  --accent:#3568f0; --accent-soft:#e9efff; --good:#0f9d58; --good-soft:#e6f6ed;
+  --bad:#d93b3f; --bad-soft:#fdeaea; --gold:#f0a020; --warm:#f0824a; --warm-soft:#fdeee5;
+  --shadow:0 6px 22px rgba(22,28,43,.08);
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --bg:#11141b; --card:#1a1f2a; --fg:#eef1f7; --muted:#98a1b3; --line:#2a3140;
+    --accent:#6d94ff; --accent-soft:#1e2740; --good:#3ecf8e; --good-soft:#16301f;
+    --bad:#ff7b7f; --bad-soft:#33191b; --gold:#ffc457; --warm:#ffa06e; --warm-soft:#33231a;
+    --shadow:0 6px 22px rgba(0,0,0,.35);
+  }
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+[hidden]{display:none !important}
+body{
+  margin:0;background:var(--bg);color:var(--fg);
+  font-family:system-ui,-apple-system,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+  display:flex;justify-content:center;padding:16px 14px 26px;min-height:100vh;
+}
+.app{width:100%;max-width:430px}
+h1{font-size:19px;margin:0 0 2px;letter-spacing:.5px}
+.sub{font-size:13px;color:var(--muted);margin:0 0 16px}
+
+.card{background:var(--card);border-radius:20px;box-shadow:var(--shadow);border:1px solid var(--line)}
+
+/* ---------- 开始页 ---------- */
+#start{padding:26px 22px;text-align:center}
+#start .emoji{font-size:44px;line-height:1}
+#start h2{font-size:20px;margin:12px 0 6px}
+#start p{color:var(--muted);font-size:14px;line-height:1.7;margin:0 0 22px}
+.big-btn{
+  display:block;width:100%;border:0;border-radius:16px;background:var(--accent);color:#fff;
+  font-size:19px;font-weight:700;padding:16px;cursor:pointer;font-family:inherit;
+}
+.big-btn:active{transform:translateY(1px);filter:brightness(.94)}
+
+/* ---------- 答题页 ---------- */
+.topbar{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;gap:10px}
+.counter{font-size:14px;color:var(--muted);font-variant-numeric:tabular-nums}
+.badge{font-size:12px;font-weight:700;padding:4px 10px;border-radius:999px;background:var(--accent-soft);color:var(--accent)}
+.badge.warm{background:var(--warm-soft);color:var(--warm)}
+.barwrap{height:8px;border-radius:999px;background:var(--line);overflow:hidden;margin-bottom:14px}
+.bar{height:100%;width:0;border-radius:999px;background:var(--accent);transition:width .25s ease}
+.bar.p2{background:var(--warm)}
+
+.qcard{padding:26px 18px 22px;text-align:center;margin-bottom:14px}
+.qa{font-size:clamp(30px,10vw,42px);font-weight:800;letter-spacing:1px;
+    font-variant-numeric:tabular-nums;display:flex;align-items:center;justify-content:center;gap:12px}
+.entry{display:inline-block;min-width:1.7em;text-align:center;color:var(--accent);
+  border-bottom:4px solid var(--accent);border-radius:2px;line-height:1.15}
+.entry.empty{color:var(--muted);opacity:.55;border-bottom-color:var(--line)}
+.fb{min-height:26px;margin-top:14px;font-size:16px;font-weight:700;transition:opacity .15s}
+.fb.good{color:var(--good)}
+.fb.bad{color:var(--bad)}
+.fb.bad.hint{color:var(--muted);font-weight:600;font-size:15px}
+.shake{animation:sh .35s}
+@keyframes sh{0%,100%{transform:translateX(0)}20%{transform:translateX(-7px)}40%{transform:translateX(6px)}60%{transform:translateX(-4px)}80%{transform:translateX(3px)}}
+.pop{animation:pp .3s}
+@keyframes pp{0%{transform:scale(.92)}60%{transform:scale(1.06)}100%{transform:scale(1)}}
+
+/* ---------- 数字键盘 ---------- */
+.pad{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.pad button{
+  border:1px solid var(--line);background:var(--card);color:var(--fg);
+  font-family:inherit;font-size:26px;font-weight:700;border-radius:16px;
+  min-height:56px;cursor:pointer;box-shadow:var(--shadow);font-variant-numeric:tabular-nums;
+}
+.pad button:active{background:var(--accent-soft);transform:translateY(1px)}
+.pad button.ok{background:var(--accent);color:#fff;border-color:transparent;font-size:22px}
+.pad button.del{font-size:20px;color:var(--muted)}
+
+/* ---------- 成绩页 ---------- */
+#result{padding:24px 20px}
+.stars{font-size:26px;letter-spacing:3px;color:var(--gold);text-align:center}
+.score{text-align:center;font-size:52px;font-weight:800;line-height:1.15;margin:6px 0 0;
+  font-variant-numeric:tabular-nums}
+.score small{font-size:18px;font-weight:600;color:var(--muted);margin-left:4px}
+.scoreline{text-align:center;color:var(--muted);font-size:14px;margin:8px 0 4px;font-variant-numeric:tabular-nums}
+.msg{text-align:center;font-size:16px;font-weight:700;margin:10px 0 20px;line-height:1.5}
+.grid{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:20px}
+.cell{border-radius:12px;padding:8px 2px;text-align:center;font-size:12px;line-height:1.4;
+  font-variant-numeric:tabular-nums;border:1px solid transparent}
+.cell b{display:block;font-size:14px}
+.cell.ok{background:var(--good-soft);color:var(--good);border-color:var(--good)}
+.cell.half{background:var(--warm-soft);color:var(--warm);border-color:var(--warm)}
+.cell.no{background:var(--bad-soft);color:var(--bad);border-color:var(--bad)}
+.cell .ans{display:block;font-size:10px;opacity:.85;margin-top:2px}
+.legend{display:flex;flex-wrap:wrap;gap:12px;justify-content:center;font-size:12px;
+  color:var(--muted);margin-bottom:20px}
+.legend i{display:inline-block;width:9px;height:9px;border-radius:3px;margin-right:4px}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <h1>九九乘法练习</h1>
+  <p class="sub">每次 10 道题 · 答错的题最后再来一遍</p>
+
+  <!-- 开始 -->
+  <section id="start" class="card">
+    <div class="emoji">✏️</div>
+    <h2>准备好了吗？</h2>
+    <p>一共 10 道题。<br>答对了我会夸你，答错的题最后再练一次。</p>
+    <button class="big-btn" id="startBtn">开始练习</button>
+  </section>
+
+  <!-- 答题 -->
+  <section id="quiz" hidden>
+    <div class="topbar">
+      <span class="counter" id="counter">第 1 / 10 题</span>
+      <span class="badge" id="phaseBadge">第一遍</span>
+    </div>
+    <div class="barwrap"><div class="bar" id="bar"></div></div>
+
+    <div class="card qcard">
+      <div class="qa"><span id="qa">3 × 4 =</span><span class="entry empty" id="entry">?</span></div>
+      <div class="fb" id="fb"></div>
+    </div>
+
+    <div class="pad" id="pad">
+      <button data-k="1">1</button><button data-k="2">2</button><button data-k="3">3</button>
+      <button data-k="4">4</button><button data-k="5">5</button><button data-k="6">6</button>
+      <button data-k="7">7</button><button data-k="8">8</button><button data-k="9">9</button>
+      <button class="del" data-k="del">⌫</button><button data-k="0">0</button><button class="ok" data-k="ok">确定</button>
+    </div>
+  </section>
+
+  <!-- 成绩 -->
+  <section id="result" class="card" hidden>
+    <div class="stars" id="stars"></div>
+    <div class="score" id="score"></div>
+    <div class="scoreline" id="scoreline"></div>
+    <div class="msg" id="msg"></div>
+    <div class="grid" id="grid"></div>
+    <div class="legend">
+      <span><i style="background:var(--good)"></i>第一次就对了</span>
+      <span><i style="background:var(--warm)"></i>再练时对了</span>
+      <span><i style="background:var(--bad)"></i>还没掌握</span>
+    </div>
+    <button class="big-btn" id="againBtn">再来一局</button>
+  </section>
+
+</div>
+
+<script>
+(function(){
+  var TOTAL = 10;
+  var PRAISE = ['太棒了！','答对啦！','真厉害！','漂亮！','就是这样！','好样的！','高手！','聪明！'];
+
+  var qs = [], idx = 0, phase = 1, wrong = [], input = '', locked = false;
+
+  function $(id){ return document.getElementById(id); }
+  function pick(a){ return a[Math.floor(Math.random()*a.length)]; }
+
+  function makeQs(){
+    var seen = {}, out = [];
+    while(out.length < TOTAL){
+      var a = 1 + Math.floor(Math.random()*9);
+      var b = 1 + Math.floor(Math.random()*9);
+      var k = a + 'x' + b;
+      if(seen[k]) continue;
+      seen[k] = 1;
+      out.push({ a:a, b:b, firstTry:null, retryOk:null, firstAnswer:null });
+    }
+    return out;
+  }
+
+  function currentQ(){ return phase === 1 ? qs[idx] : wrong[idx]; }
+
+  function render(){
+    var q = currentQ();
+    var total = phase === 1 ? TOTAL : wrong.length;
+
+    $('counter').textContent = phase === 1
+      ? '第 ' + (idx+1) + ' / ' + TOTAL + ' 题'
+      : '再练 ' + (idx+1) + ' / ' + total;
+    var badge = $('phaseBadge');
+    badge.textContent = phase === 1 ? '第一遍' : '再练一遍';
+    badge.className = 'badge' + (phase === 1 ? '' : ' warm');
+
+    var bar = $('bar');
+    bar.style.width = (idx / total * 100) + '%';
+    bar.className = 'bar' + (phase === 1 ? '' : ' p2');
+
+    $('qa').textContent = q.a + ' × ' + q.b + ' =';
+    var e = $('entry');
+    e.textContent = input === '' ? '?' : input;
+    e.className = 'entry' + (input === '' ? ' empty' : '');
+
+    var fb = $('fb');
+    fb.textContent = '';
+    fb.className = 'fb';
+    $('qcard-shake') ;
+  }
+
+  function showFb(kind, text){
+    var fb = $('fb');
+    fb.textContent = text;
+    fb.className = 'fb ' + kind;
+    var card = document.querySelector('.qcard');
+    card.classList.remove('pop','shake');
+    void card.offsetWidth;
+    card.classList.add(kind === 'good' ? 'pop' : 'shake');
+  }
+
+  function digit(d){
+    if(locked) return;
+    if(input.length >= 2) return;
+    input += d;
+    render();
+    if(input.length === 2){ setTimeout(function(){ submit(); }, 160); }
+  }
+
+  function back(){
+    if(locked) return;
+    input = input.slice(0, -1);
+    render();
+  }
+
+  function submit(){
+    if(locked || input === '') return;
+    var q = currentQ();
+    var ans = parseInt(input, 10);
+    var right = ans === q.a * q.b;
+    locked = true;
+
+    if(phase === 1){
+      q.firstAnswer = ans;
+      q.firstTry = right;
+      if(!right) wrong.push(q);
+    } else {
+      q.retryAnswer = ans;
+      q.retryOk = right;
+    }
+
+    if(right){
+      showFb('good', pick(PRAISE));
+      setTimeout(next, 800);
+    } else {
+      showFb('bad', '再想想～ 正确答案是 ' + (q.a * q.b));
+      setTimeout(next, 1600);
+    }
+  }
+
+  function next(){
+    locked = false;
+    input = '';
+    if(phase === 1){
+      idx++;
+      if(idx >= TOTAL){
+        if(wrong.length){ phase = 2; idx = 0; render(); return; }
+        finish(); return;
+      }
+      render();
+    } else {
+      idx++;
+      if(idx >= wrong.length){ finish(); return; }
+      render();
+    }
+  }
+
+  function start(){
+    qs = makeQs(); idx = 0; phase = 1; wrong = []; input = ''; locked = false;
+    $('start').hidden = true;
+    $('result').hidden = true;
+    $('quiz').hidden = false;
+    render();
+  }
+
+  function finish(){
+    $('quiz').hidden = true;
+    var first = 0, retried = 0;
+    qs.forEach(function(q){
+      if(q.firstTry) first++;
+      else if(q.retryOk) retried++;
+    });
+    var score = first * 10 + retried * 5;
+
+    var stars = score >= 100 ? 5 : score >= 90 ? 4 : score >= 80 ? 3 : score >= 60 ? 2 : 1;
+    $('stars').textContent = '★★★★★'.slice(0, stars) + '☆☆☆☆☆'.slice(0, 5 - stars);
+    $('score').innerHTML = score + '<small>分</small>';
+
+    var line = '第一次就答对 ' + first + ' 道';
+    if(wrong.length) line += ' · 再练一遍又对了 ' + retried + ' 道';
+    $('scoreline').textContent = line;
+
+    var msg;
+    if(score >= 100) msg = '全对！九九乘法表难不倒你 🎉';
+    else if(score >= 90) msg = '很扎实！就差一点点 💪';
+    else if(score >= 80) msg = '不错哦，再练练就更稳了 👍';
+    else if(score >= 60) msg = '有进步空间，多练几遍吧 🌱';
+    else msg = '别着急，我们慢慢来～ 🤝';
+    $('msg').textContent = msg;
+
+    var html = '';
+    qs.forEach(function(q){
+      var cls, ans = '';
+      if(q.firstTry){ cls = 'ok'; }
+      else if(q.retryOk){ cls = 'half'; ans = '<span class="ans">你答 ' + q.firstAnswer + '</span>'; }
+      else { cls = 'no'; ans = '<span class="ans">你答 ' + q.firstAnswer + '</span>'; }
+      html += '<div class="cell ' + cls + '"><b>' + q.a + '×' + q.b + '</b>' + ans + '</div>';
+    });
+    $('grid').innerHTML = html;
+
+    $('result').hidden = false;
+  }
+
+  $('pad').addEventListener('click', function(e){
+    var b = e.target.closest('button');
+    if(!b) return;
+    var k = b.dataset.k;
+    if(k === 'del') back();
+    else if(k === 'ok') submit();
+    else digit(k);
+  });
+
+  document.addEventListener('keydown', function(e){
+    if($('quiz').hidden) return;
+    if(e.key >= '0' && e.key <= '9'){ digit(e.key); }
+    else if(e.key === 'Backspace'){ e.preventDefault(); back(); }
+    else if(e.key === 'Enter'){ submit(); }
+  });
+
+  $('startBtn').addEventListener('click', start);
+  $('result').addEventListener('click', function(e){
+    if(e.target.id === 'againBtn') start();
+  });
+})();
+</script>
+</body>
+</html>

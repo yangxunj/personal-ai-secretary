@@ -1,0 +1,213 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>家务轮值表</title>
+<style>
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  :root{
+    --bg:#f7f5f2; --card:#ffffff; --ink:#23211f; --muted:#8b8378; --line:#e8e3dc;
+    --accent:#c2694a; --accent-soft:#f8e9e2; --soft:#f1eee9;
+    --shadow:0 1px 2px rgba(0,0,0,.04), 0 8px 22px rgba(0,0,0,.05);
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --bg:#131517; --card:#1d2124; --ink:#ecebe8; --muted:#98938c; --line:#2b3033;
+      --accent:#e08a68; --accent-soft:#3a2823; --soft:#23272a;
+      --shadow:0 1px 2px rgba(0,0,0,.3), 0 8px 22px rgba(0,0,0,.35);
+    }
+  }
+  html,body{margin:0;padding:0}
+  body{
+    background:var(--bg); color:var(--ink);
+    font-family:system-ui,-apple-system,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+    font-size:16px; line-height:1.5; -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:520px; margin:0 auto; padding:22px 16px 44px}
+  header{display:flex; align-items:center; justify-content:space-between; gap:10px}
+  h1{font-size:21px; margin:0; letter-spacing:.01em}
+  .todaypill{
+    font-size:12.5px; color:var(--muted); background:var(--card); border:1px solid var(--line);
+    padding:5px 11px; border-radius:999px; font-variant-numeric:tabular-nums; white-space:nowrap;
+  }
+  .sub{color:var(--muted); font-size:13px; margin:7px 0 0}
+
+  .nav{display:flex; align-items:center; gap:10px; margin:18px 0 14px}
+  .nbtn{
+    width:48px; height:48px; flex:0 0 48px; border-radius:15px; border:1px solid var(--line);
+    background:var(--card); color:var(--ink); font-size:19px; line-height:1;
+    display:flex; align-items:center; justify-content:center; cursor:pointer; box-shadow:var(--shadow);
+  }
+  .nbtn:active{transform:scale(.95)}
+  .navcenter{flex:1; text-align:center; min-width:0}
+  .wt{font-size:17px; font-weight:650}
+  .wr{font-size:12.5px; color:var(--muted); font-variant-numeric:tabular-nums; margin-top:3px}
+  .backwrap{text-align:center; margin:-6px 0 12px}
+  .back{
+    font-size:12.5px; color:var(--accent); background:var(--accent-soft); border:0;
+    padding:7px 14px; border-radius:999px; cursor:pointer; font-family:inherit;
+  }
+  .back.hide{display:none}
+
+  .days{display:grid; grid-template-columns:repeat(7,1fr); gap:4px; margin-bottom:16px}
+  .day{text-align:center; padding:8px 0 7px; border-radius:13px; font-variant-numeric:tabular-nums}
+  .day .dw{font-size:11px; color:var(--muted)}
+  .day .dd{font-size:14px; margin-top:2px}
+  .day.on{background:var(--accent-soft)}
+  .day.on .dw{color:var(--accent)}
+  .day.on .dd{color:var(--accent); font-weight:700}
+
+  .sechead{font-size:12.5px; color:var(--muted); font-weight:600; letter-spacing:.04em; margin:0 0 9px}
+  .cards{display:grid; grid-template-columns:1fr 1fr; gap:12px}
+  .card{
+    background:var(--card); border:1px solid var(--line); border-radius:18px;
+    padding:15px 14px 16px; box-shadow:var(--shadow);
+  }
+  .chore{font-size:13px; color:var(--muted); display:flex; align-items:center; gap:7px; white-space:nowrap}
+  .dot{width:8px; height:8px; border-radius:50%; flex:0 0 8px}
+  .who{font-size:22px; font-weight:700; margin-top:9px; letter-spacing:.02em}
+
+  .nextup{margin-top:18px; background:var(--card); border:1px solid var(--line); border-radius:18px; padding:14px 15px}
+  .nextup h2{font-size:12.5px; color:var(--muted); font-weight:600; margin:0 0 10px; letter-spacing:.04em}
+  .chips{display:flex; flex-wrap:wrap; gap:8px}
+  .chip{font-size:13px; background:var(--soft); border-radius:999px; padding:6px 12px; color:var(--ink)}
+  .chip span{color:var(--muted); margin:0 4px}
+  .foot{color:var(--muted); font-size:12px; line-height:1.7; margin-top:20px}
+</style>
+</head>
+<body>
+<div class="wrap" id="wrap">
+  <header>
+    <h1>家务轮值表</h1>
+    <div class="todaypill" id="todaypill"></div>
+  </header>
+  <p class="sub">爸爸 · 妈妈 · 姐姐 · 弟弟 ｜ 洗碗 · 倒垃圾 · 拖地 · 喂猫，每周顺延一格</p>
+
+  <div class="nav">
+    <button class="nbtn" id="prev" aria-label="上一周">‹</button>
+    <div class="navcenter">
+      <div class="wt" id="wt"></div>
+      <div class="wr" id="wr"></div>
+    </div>
+    <button class="nbtn" id="next" aria-label="下一周">›</button>
+  </div>
+  <div class="backwrap"><button class="back hide" id="back">回到本周</button></div>
+
+  <div class="days" id="days"></div>
+
+  <p class="sechead" id="sechead"></p>
+  <div class="cards" id="cards"></div>
+
+  <div class="nextup">
+    <h2 id="nexthead"></h2>
+    <div class="chips" id="chips"></div>
+  </div>
+
+  <div class="foot">
+    轮换规则：以 2026 年 9 月 21 日那周为起始周（爸爸洗碗 · 妈妈倒垃圾 · 姐姐拖地 · 弟弟喂猫），之后每周每人往后顺延一件事，四周一循环，谁也不会一直干同一件。<br>
+    左右滑动屏幕也能翻周。
+  </div>
+</div>
+
+<script>
+(function(){
+  var PEOPLE = ['爸爸','妈妈','姐姐','弟弟'];
+  var CHORES = [
+    {n:'洗碗',  e:'🍽️', c:'#e0824f'},
+    {n:'倒垃圾', e:'🗑️', c:'#5c9e6a'},
+    {n:'拖地',  e:'🧹', c:'#4b8fbd'},
+    {n:'喂猫',  e:'🐱', c:'#b07a92'}
+  ];
+  var WK = ['周一','周二','周三','周四','周五','周六','周日'];
+
+  function dayNum(y,m,d){ return Math.floor(Date.UTC(y,m,d)/86400000); }
+  var ANCHOR = dayNum(2026,8,21);            // 2026-09-21 周一 = 起始周
+  var now = new Date();
+  var TODAY = dayNum(now.getFullYear(), now.getMonth(), now.getDate());
+  var CURW = Math.floor((TODAY - ANCHOR)/7);
+  var view = CURW;
+
+  function mondayOf(w){
+    var dt = new Date((ANCHOR + w*7)*86400000);
+    return { y:dt.getUTCFullYear(), m:dt.getUTCMonth(), d:dt.getUTCDate() };
+  }
+  function personForChore(j,w){ return PEOPLE[(((j - w) % 4) + 4) % 4]; }
+
+  var $ = function(id){ return document.getElementById(id); };
+
+  function render(){
+    var mon = mondayOf(view);
+
+    $('todaypill').textContent = '今天 ' + (now.getMonth()+1) + '月' + now.getDate() + '日 ' + WK[(now.getDay()+6)%7];
+
+    var rel = view - CURW, wt;
+    if(rel === 0) wt = '本周';
+    else if(rel === 1) wt = '下周';
+    else if(rel === -1) wt = '上周';
+    else wt = rel > 0 ? (rel + ' 周后') : ((-rel) + ' 周前');
+    $('wt').textContent = wt;
+
+    var s = mon, e = new Date((ANCHOR + view*7 + 6)*86400000);
+    var ey = e.getUTCFullYear(), em = e.getUTCMonth()+1, ed = e.getUTCDate();
+    var yr = (s.y !== now.getFullYear()) ? (s.y + '年') : '';
+    var yr2 = (ey !== s.y) ? (ey + '年') : '';
+    $('wr').textContent = yr + (s.m+1) + '月' + s.d + '日 – ' + yr2 + em + '月' + ed + '日';
+
+    $('back').className = 'back' + (view === CURW ? ' hide' : '');
+
+    var dh = '';
+    for(var k=0;k<7;k++){
+      var n = ANCHOR + view*7 + k;
+      var dt = new Date(n*86400000);
+      dh += '<div class="day' + (n === TODAY ? ' on' : '') + '">'
+          +   '<div class="dw">' + WK[k] + '</div>'
+          +   '<div class="dd">' + dt.getUTCDate() + '</div>'
+          + '</div>';
+    }
+    $('days').innerHTML = dh;
+
+    $('sechead').textContent = (view === CURW ? '这一周的分工' : wt + '的分工');
+
+    var ch = '';
+    for(var j=0;j<4;j++){
+      ch += '<div class="card">'
+          +   '<div class="chore"><span class="dot" style="background:' + CHORES[j].c + '"></span>'
+          +     CHORES[j].e + ' ' + CHORES[j].n + '</div>'
+          +   '<div class="who">' + personForChore(j, view) + '</div>'
+          + '</div>';
+    }
+    $('cards').innerHTML = ch;
+
+    $('nexthead').textContent = (view === CURW ? '下周谁接手' : wt + '的下一周');
+    var cp = '';
+    for(var j2=0;j2<4;j2++){
+      cp += '<div class="chip">' + CHORES[j2].n + '<span>·</span>' + personForChore(j2, view+1) + '</div>';
+    }
+    $('chips').innerHTML = cp;
+  }
+
+  $('prev').addEventListener('click', function(){ view--; render(); });
+  $('next').addEventListener('click', function(){ view++; render(); });
+  $('back').addEventListener('click', function(){ view = CURW; render(); });
+
+  var sx=0, sy=0;
+  var w = $('wrap');
+  w.addEventListener('touchstart', function(ev){
+    if(ev.touches.length !== 1) return;
+    sx = ev.touches[0].clientX; sy = ev.touches[0].clientY;
+  }, {passive:true});
+  w.addEventListener('touchend', function(ev){
+    var t = ev.changedTouches[0];
+    var dx = t.clientX - sx, dy = t.clientY - sy;
+    if(Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.4){
+      view += (dx < 0 ? 1 : -1);
+      render();
+    }
+  }, {passive:true});
+
+  render();
+})();
+</script>
+</body>
+</html>

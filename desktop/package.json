@@ -1,0 +1,78 @@
+{
+  "name": "personal-ai-secretary-desktop",
+  "version": "0.2.0",
+  "private": true,
+  "description": "家庭管家 —— 桌面端（数据全部留在本机）",
+  "license": "AGPL-3.0-or-later",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yangxunj/personal-ai-secretary"
+  },
+  "productName": "家庭管家",
+  "main": "main.js",
+  "scripts": {
+    "prepare-app": "node scripts/prepare.mjs",
+    "start": "npm run prepare-app && electron .",
+    "dev": "electron .",
+    "dist": "node scripts/prepare.mjs --no-key && electron-builder --win --x64"
+  },
+  "devDependencies": {
+    "electron": "^38.0.0",
+    "electron-builder": "^26.0.0"
+  },
+  "build": {
+    "appId": "com.aisecretary.desktop",
+    "copyright": "Copyright © 2026 yangxunj · AGPL-3.0",
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "main.js",
+      "lan.js",
+      "lan.html",
+      "lan-preload.js",
+      "runtime/**/*",
+      "!runtime/**/*.map"
+    ],
+    "asar": false,
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build/icon.png"
+    },
+    "portable": {
+      "artifactName": "家庭管家-免安装-${version}.exe",
+      "requestExecutionLevel": "user"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "perMachine": false,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "家庭管家"
+    }
+  },
+  "dependencies": {
+    "qrcode": "^1.5.4"
+  }
+}

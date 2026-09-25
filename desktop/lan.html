@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:">
+<title>用手机访问</title>
+<style>
+  :root {
+    --bg: #f6f7fb; --card: #fff; --ink: #1c2230; --muted: #667085; --line: #e4e7ee;
+    --brand: #4f6bed; --ok: #12a150; --warn: #d9443a;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #10141c; --card: #1a1f2b; --ink: #e6e9f0; --muted: #98a1b3; --line: #2a3140; --brand: #7089ff; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.65 "Microsoft YaHei", "PingFang SC", system-ui, sans-serif; }
+  main { padding: 20px; display: grid; gap: 14px; }
+  section { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 16px 18px; }
+  h1 { font-size: 17px; margin: 0; }
+  h2 { font-size: 14px; margin: 0 0 8px; }
+  p { margin: 0; }
+  .muted { color: var(--muted); font-size: 12.5px; }
+  .row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  .switch { position: relative; width: 46px; height: 26px; flex: none; }
+  .switch input { opacity: 0; width: 0; height: 0; }
+  .switch span { position: absolute; inset: 0; border-radius: 99px; background: var(--line); transition: .2s; cursor: pointer; }
+  .switch span::after { content: ""; position: absolute; left: 3px; top: 3px; width: 20px; height: 20px; border-radius: 50%; background: #fff; transition: .2s; box-shadow: 0 1px 3px rgba(0,0,0,.25); }
+  .switch input:checked + span { background: var(--brand); }
+  .switch input:checked + span::after { transform: translateX(20px); }
+  html, body { overflow-x: hidden; }
+  .pair { display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 18px; align-items: center; }
+  .qr { width: 200px; height: 200px; background: #fff; border-radius: 10px; padding: 8px; }
+  .qr svg { display: block; width: 100%; height: 100%; }
+  .url { font-family: Consolas, monospace; font-size: 12px; word-break: break-all; color: var(--muted); }
+  ol { margin: 6px 0 0; padding-left: 1.2em; }
+  li { margin: 2px 0; }
+  button, select { font: inherit; font-size: 13px; color: var(--ink); background: transparent; border: 1px solid var(--line); border-radius: 8px; padding: 4px 10px; cursor: pointer; }
+  button:hover { border-color: var(--brand); color: var(--brand); }
+  select { width: 100%; margin-top: 4px; }
+  .dev { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-top: 1px solid var(--line); }
+  .dev:first-of-type { border-top: 0; }
+  .err { color: var(--warn); }
+  .on { color: var(--ok); }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<main>
+  <section>
+    <div class="row">
+      <div>
+        <h1>用手机访问</h1>
+        <p class="muted" id="status">读取中…</p>
+      </div>
+      <label class="switch" title="允许同一个 WiFi 下配对过的手机访问">
+        <input type="checkbox" id="toggle">
+        <span></span>
+      </label>
+    </div>
+  </section>
+
+  <section id="pairBox" hidden>
+    <h2>配对一台手机</h2>
+    <div class="pair">
+      <div class="qr" id="qr"></div>
+      <div>
+        <ol>
+          <li>手机连上<b>跟这台电脑同一个 WiFi</b></li>
+          <li>用手机相机或微信扫左边的二维码</li>
+          <li>打开后点浏览器的「添加到主屏幕」，以后就像 App 一样点开</li>
+        </ol>
+        <p class="muted" style="margin-top:10px">二维码只能用一次，扫完自动换新的，可以接着配下一台。<span id="expires"></span></p>
+        <p class="url" id="url" style="margin-top:8px"></p>
+        <div id="addrRow" style="margin-top:8px" hidden>
+          <span class="muted">扫了打不开？换个地址试试：</span>
+          <select id="addr"></select>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="devBox" hidden>
+    <h2>已配对的设备</h2>
+    <div id="devices"></div>
+    <p class="muted" style="margin-top:6px">手机丢了或者换了，在这里移除，它就再也打不开了。</p>
+  </section>
+
+  <section>
+    <h2>打不开？</h2>
+    <ul class="muted" style="margin:0;padding-left:1.2em">
+      <li>第一次打开开关时 Windows 会问要不要允许联网 —— 选<b>允许</b>，<b>「专用网络」和「公用网络」都勾上</b>。Windows 11 常把家里的 WiFi 也标成「公用网络」，只勾专用的话手机照样连不上。</li>
+      <li>当时点了「取消」、或者只勾了一个：到 Windows 安全中心 → 防火墙和网络保护 → 允许应用通过防火墙 → 更改设置，找到「家庭管家」，两个框都勾上。</li>
+      <li>电脑睡眠或者关掉了这个软件，手机就连不上。</li>
+      <li>公司、酒店、商场的 WiFi 常常不让设备之间互相访问，那种网络下用不了；家里的路由器一般没问题。</li>
+      <li>出了家门、用手机流量是连不上的 —— 只在同一个 WiFi 里有效。</li>
+    </ul>
+  </section>
+</main>
+
+<script>
+  const $ = (id) => document.getElementById(id);
+  const fmt = (iso) => {
+    const d = new Date(iso);
+    const p = (n) => String(n).padStart(2, '0');
+    return `${d.getMonth() + 1}月${d.getDate()}日 ${p(d.getHours())}:${p(d.getMinutes())}`;
+  };
+  let busy = false;
+
+  async function render() {
+    const s = await window.lan.state();
+    $('toggle').checked = s.enabled;
+
+    if (!s.enabled) {
+      $('status').textContent = '关着。同一个 WiFi 下谁都连不进来。';
+      $('status').className = 'muted';
+    } else if (s.error) {
+      $('status').textContent = s.error;
+      $('status').className = 'muted err';
+    } else if (s.running) {
+      $('status').textContent = `开着，端口 ${s.port}。只有配对过的设备能打开。`;
+      $('status').className = 'muted on';
+    }
+
+    $('pairBox').hidden = !(s.running && s.url);
+    if (s.running && s.url) {
+      $('qr').innerHTML = s.qr;
+      $('url').textContent = s.url.replace(/\/__pair\/.*/, '');
+      const left = Math.max(0, Math.round((s.codeExpires - Date.now()) / 60000));
+      $('expires').textContent = ` 这一张 ${left} 分钟后失效。`;
+      const addrs = s.addresses;
+      $('addrRow').hidden = addrs.length < 2;
+      const cur = s.url.match(/^http:\/\/([^:]+)/)[1];
+      $('addr').innerHTML = addrs
+        .map((a) => `<option value="${a.address}" ${a.address === cur ? 'selected' : ''}>${a.address}（${a.tailscale ? 'Tailscale' : a.iface}）</option>`)
+        .join('');
+    }
+
+    $('devBox').hidden = !s.devices.length;
+    $('devices').innerHTML = s.devices
+      .map(
+        (d) => `<div class="dev"><div><div>${d.name.replace(/[<>&]/g, '')}</div>
+        <div class="muted">配对于 ${fmt(d.createdAt)} · 最近用过 ${fmt(d.lastSeen)}</div></div>
+        <button data-id="${d.id}">移除</button></div>`
+      )
+      .join('');
+  }
+
+  $('toggle').addEventListener('change', async (e) => {
+    if (busy) return;
+    busy = true;
+    $('status').textContent = e.target.checked ? '正在打开…' : '正在关闭…';
+    try { await window.lan.setEnabled(e.target.checked); } finally { busy = false; render(); }
+  });
+  $('addr').addEventListener('change', (e) => window.lan.setAddress(e.target.value));
+  $('devices').addEventListener('click', (e) => {
+    const id = e.target.dataset?.id;
+    if (id) window.lan.removeDevice(id);
+  });
+  window.lan.onChange(render);
+  // 二维码 10 分钟过期，主进程查状态时会换新；每分钟刷一下，窗口一直开着也不会显示一张死码
+  setInterval(render, 60 * 1000);
+  render();
+</script>
+</body>
+</html>

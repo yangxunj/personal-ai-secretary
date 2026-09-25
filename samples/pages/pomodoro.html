@@ -1,0 +1,260 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>番茄钟</title>
+<style>
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;padding:0}
+:root{
+  --bg:#f4f5f7;--card:#ffffff;--text:#1b1e23;--muted:#6b7280;--line:#e6e8ec;
+  --focus:#e0553f;--short:#1f9d78;--long:#2f6fd0;--accent:var(--focus);
+  --shadow:0 1px 2px rgba(16,24,40,.06),0 10px 28px rgba(16,24,40,.07);
+}
+@media (prefers-color-scheme:dark){
+  :root{--bg:#0f1114;--card:#181b20;--text:#e9ecef;--muted:#98a1ad;--line:#272c33;
+    --focus:#f2705a;--short:#35b894;--long:#5b95e8;
+    --shadow:0 1px 2px rgba(0,0,0,.45),0 10px 28px rgba(0,0,0,.4);}
+}
+body{
+  background:var(--bg);color:var(--text);
+  font-family:system-ui,-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;
+  padding:20px 16px 40px;line-height:1.5;
+  transition:background .3s;
+}
+body[data-mode="focus"]{--accent:var(--focus)}
+body[data-mode="short"]{--accent:var(--short)}
+body[data-mode="long"]{--accent:var(--long)}
+.wrap{max-width:420px;margin:0 auto;display:flex;flex-direction:column;gap:16px}
+header{text-align:center;padding:4px 0 0}
+h1{margin:0;font-size:22px;font-weight:650;letter-spacing:.5px}
+.sub{margin:6px 0 0;font-size:12.5px;color:var(--muted)}
+.card{background:var(--card);border-radius:22px;box-shadow:var(--shadow);padding:22px 20px 18px}
+.ring-wrap{position:relative;width:100%;max-width:258px;margin:0 auto}
+.ring{width:100%;height:auto;display:block;transform:rotate(-90deg)}
+.ring circle{fill:none;stroke-width:11;stroke-linecap:round}
+.track{stroke:var(--line)}
+.prog{stroke:var(--accent);transition:stroke-dashoffset .25s linear,stroke .3s}
+.center{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px}
+.mode{font-size:13px;font-weight:600;color:var(--accent);letter-spacing:1.5px}
+.time{font-size:52px;font-weight:600;letter-spacing:-1px;font-variant-numeric:tabular-nums}
+.dots{display:flex;gap:8px;justify-content:center;margin:16px 0 2px}
+.dot{width:11px;height:11px;border-radius:50%;background:var(--line);transition:background .2s}
+.dot.on{background:var(--focus)}
+.actions{display:flex;gap:10px;margin-top:14px}
+button{font-family:inherit;font-size:15px;border:none;border-radius:14px;cursor:pointer}
+.btn{min-height:52px;padding:0 18px;font-weight:600;transition:transform .08s,opacity .15s}
+.btn:active{transform:scale(.97)}
+.primary{flex:1;background:var(--accent);color:#fff;font-size:17px;box-shadow:0 6px 16px -6px var(--accent)}
+.ghost{background:transparent;color:var(--muted);border:1px solid var(--line);min-width:62px;padding:0 14px}
+.hint{margin:14px 0 0;font-size:13px;color:var(--muted);text-align:center;min-height:20px}
+.foot{display:flex;justify-content:center;margin-top:10px}
+.mini{background:none;border:none;color:var(--muted);font-size:12.5px;text-decoration:underline;padding:6px}
+.stats{display:flex;flex-direction:column;align-items:center;gap:2px;padding:18px 20px}
+.big{font-size:46px;font-weight:700;color:var(--focus);font-variant-numeric:tabular-nums;line-height:1.15}
+.lbl{font-size:13px;color:var(--muted)}
+.note{font-size:11.5px;color:var(--muted);margin:8px 0 0;text-align:center;opacity:.85}
+.toast{position:fixed;left:50%;bottom:26px;transform:translate(-50%,calc(100% + 60px));background:var(--accent);color:#fff;padding:12px 20px;border-radius:999px;font-size:14.5px;font-weight:600;box-shadow:0 10px 30px rgba(0,0,0,.25);transition:transform .28s cubic-bezier(.2,.8,.3,1);z-index:9;max-width:88vw;text-align:center}
+.toast.show{transform:translate(-50%,0)}
+</style>
+</head>
+<body data-mode="focus">
+<div class="wrap">
+  <header>
+    <h1>🍅 番茄钟</h1>
+    <p class="sub">专注 25 分钟 · 休息 5 分钟 · 每 4 个番茄长休息 15 分钟</p>
+  </header>
+
+  <div class="card">
+    <div class="ring-wrap">
+      <svg class="ring" viewBox="0 0 220 220" aria-hidden="true">
+        <circle class="track" cx="110" cy="110" r="96"></circle>
+        <circle class="prog" id="prog" cx="110" cy="110" r="96"></circle>
+      </svg>
+      <div class="center">
+        <div class="mode" id="modeLabel">专注</div>
+        <div class="time" id="time">25:00</div>
+      </div>
+    </div>
+    <div class="dots" id="dots"></div>
+    <div class="actions">
+      <button class="btn primary" id="primary">开始专注</button>
+      <button class="btn ghost" id="skip">跳过</button>
+      <button class="btn ghost" id="reset">重置</button>
+    </div>
+    <p class="hint" id="hint">按「开始专注」，25 分钟后响铃提醒你。</p>
+    <div class="foot"><button class="mini" id="mute">🔔 提示音：开</button></div>
+  </div>
+
+  <div class="card stats">
+    <div class="big" id="count">0</div>
+    <div class="lbl">今天完成的番茄</div>
+    <p class="note">计数只在本次打开页面期间保留，关掉页面会清零。</p>
+    <div class="foot"><button class="mini" id="clear">清零重来</button></div>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+<script>
+(function(){
+  var DUR={focus:1500,short:300,long:900};
+  var LABEL={focus:'专注',short:'短休息',long:'长休息'};
+  var C=2*Math.PI*96;
+
+  var el={
+    time:document.getElementById('time'),
+    modeLabel:document.getElementById('modeLabel'),
+    prog:document.getElementById('prog'),
+    dots:document.getElementById('dots'),
+    count:document.getElementById('count'),
+    hint:document.getElementById('hint'),
+    primary:document.getElementById('primary'),
+    skip:document.getElementById('skip'),
+    reset:document.getElementById('reset'),
+    mute:document.getElementById('mute'),
+    clear:document.getElementById('clear'),
+    toast:document.getElementById('toast')
+  };
+  el.prog.style.strokeDasharray=C;
+
+  var mode='focus', remaining=DUR.focus, running=false, endAt=0,
+      completed=0, hint='', muted=false, toastTimer=null, ac=null;
+
+  function fmt(s){ s=Math.max(0,Math.ceil(s)); return Math.floor(s/60)+':'+String(s%60).padStart(2,'0'); }
+
+  function render(){
+    document.body.dataset.mode=mode;
+    el.modeLabel.textContent=LABEL[mode];
+    el.time.textContent=fmt(remaining);
+    var dur=DUR[mode];
+    var elapsed=Math.min(dur, dur-remaining);
+    el.prog.style.strokeDashoffset=C*(1-elapsed/dur);
+    el.count.textContent=completed;
+    el.primary.textContent = running ? '暂停'
+      : (remaining<dur-0.5 ? '继续'
+      : (mode==='focus' ? '开始专注' : (mode==='long' ? '开始长休息' : '开始休息')));
+    el.hint.textContent=hint;
+    document.title = (running ? fmt(remaining)+' · ' : '') + '番茄钟';
+
+    var filled=completed%4;
+    if(filled===0 && completed>0 && mode==='long') filled=4;
+    el.dots.innerHTML='';
+    for(var i=0;i<4;i++){
+      var d=document.createElement('span');
+      d.className='dot'+(i<filled?' on':'');
+      el.dots.appendChild(d);
+    }
+  }
+
+  function toast(msg){
+    el.toast.textContent=msg;
+    el.toast.classList.add('show');
+    if(toastTimer) clearTimeout(toastTimer);
+    toastTimer=setTimeout(function(){ el.toast.classList.remove('show'); },4200);
+  }
+
+  function ensureAudio(){
+    try{
+      if(!ac) ac=new (window.AudioContext||window.webkitAudioContext)();
+      if(ac.state==='suspended') ac.resume();
+    }catch(e){}
+  }
+
+  function beep(times,freq){
+    if(muted) return;
+    ensureAudio();
+    if(!ac) return;
+    var t0=ac.currentTime+0.02;
+    for(var i=0;i<times;i++){
+      var t=t0+i*0.28;
+      var o=ac.createOscillator(), g=ac.createGain();
+      o.type='sine';
+      o.frequency.setValueAtTime(freq,t);
+      g.gain.setValueAtTime(0.0001,t);
+      g.gain.exponentialRampToValueAtTime(0.34,t+0.015);
+      g.gain.exponentialRampToValueAtTime(0.0001,t+0.22);
+      o.connect(g); g.connect(ac.destination);
+      o.start(t); o.stop(t+0.25);
+    }
+  }
+
+  function buzz(){ if(navigator.vibrate) navigator.vibrate([180,90,180]); }
+
+  function tick(){
+    if(!running) return;
+    remaining=(endAt-Date.now())/1000;
+    if(remaining<=0.001){ finish(); return; }
+    render();
+  }
+  setInterval(tick,200);
+  document.addEventListener('visibilitychange',function(){ if(!document.hidden) tick(); });
+
+  function finish(){
+    running=false; endAt=0; remaining=0;
+    var finished=mode;
+    if(finished==='focus'){
+      completed++;
+      var next=(completed%4===0)?'long':'short';
+      mode=next; remaining=DUR[next];
+      hint=(next==='long') ? '连做 4 个了，长休息 15 分钟。' : '休息 5 分钟，起来走两步、喝口水。';
+      beep(3,880); buzz();
+      toast('🍅 番茄 +1，休息一下吧');
+    } else {
+      mode='focus'; remaining=DUR.focus;
+      hint='休息结束，开始下一个番茄。';
+      beep(2,660); buzz();
+      toast('休息结束，继续专注');
+    }
+    render();
+  }
+
+  function toggle(){
+    ensureAudio();
+    if(running){
+      running=false; endAt=0;
+      hint='已暂停，按「继续」接着走。';
+    } else {
+      if(remaining<=0.5) remaining=DUR[mode];
+      running=true; endAt=Date.now()+remaining*1000;
+      hint = mode==='focus' ? '专注中，别碰手机。' : '休息中，放松一下。';
+    }
+    render();
+  }
+
+  function skip(){
+    running=false; endAt=0;
+    if(mode==='focus'){
+      mode='short'; remaining=DUR.short;
+      hint='已跳过这个番茄（不计入完成数），先休息 5 分钟。';
+    } else {
+      mode='focus'; remaining=DUR.focus;
+      hint='已跳过休息，开始下一个番茄。';
+    }
+    render();
+  }
+
+  function resetPhase(){
+    running=false; endAt=0; remaining=DUR[mode];
+    hint='本段已重置。';
+    render();
+  }
+
+  el.primary.addEventListener('click',toggle);
+  el.skip.addEventListener('click',skip);
+  el.reset.addEventListener('click',resetPhase);
+  el.mute.addEventListener('click',function(){
+    muted=!muted;
+    el.mute.textContent = muted ? '🔕 提示音：关' : '🔔 提示音：开';
+    if(!muted){ ensureAudio(); beep(1,880); }
+  });
+  el.clear.addEventListener('click',function(){
+    completed=0; running=false; endAt=0; mode='focus'; remaining=DUR.focus;
+    hint='已清零，从第一个番茄开始。';
+    render();
+  });
+
+  render();
+})();
+</script>
+</body>
+</html>

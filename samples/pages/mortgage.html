@@ -1,0 +1,282 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>房贷计算器</title>
+<style>
+  :root{
+    --bg:#f4f5f7; --card:#ffffff; --text:#171a1d; --muted:#6b7280; --line:#e5e7eb;
+    --accent:#2563eb; --accent-soft:#e8efff; --warn:#dd7a33; --warn-soft:#fdeee1;
+    --shadow:0 1px 2px rgba(16,24,40,.05),0 1px 3px rgba(16,24,40,.04);
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --bg:#0f1114; --card:#181b1f; --text:#eceef1; --muted:#98a0aa; --line:#272b31;
+      --accent:#7aa2ff; --accent-soft:#1c2740; --warn:#eda36a; --warn-soft:#372619;
+      --shadow:none;
+    }
+  }
+  *{box-sizing:border-box}
+  html{-webkit-text-size-adjust:100%}
+  body{
+    margin:0;padding:20px 14px 44px;background:var(--bg);color:var(--text);
+    font-family:system-ui,-apple-system,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+    font-size:15px;line-height:1.55;
+  }
+  .wrap{max-width:720px;margin:0 auto;display:flex;flex-direction:column;gap:14px}
+  header h1{font-size:22px;margin:0 0 3px;letter-spacing:-.01em}
+  header p{margin:0;color:var(--muted);font-size:13.5px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:16px;box-shadow:var(--shadow)}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
+  .field{display:flex;flex-direction:column;gap:6px}
+  .field span{font-size:12.5px;color:var(--muted)}
+  input[type=number]{
+    width:100%;padding:11px 12px;font-size:17px;font-variant-numeric:tabular-nums;
+    color:var(--text);background:var(--bg);border:1px solid var(--line);border-radius:10px;
+    font-family:inherit;-webkit-appearance:none;appearance:none;
+  }
+  input[type=number]:focus{outline:2px solid var(--accent);outline-offset:1px;border-color:transparent}
+  .hint{margin:12px 0 0;font-size:12.5px;color:var(--muted)}
+  .compare{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px}
+  .method{border:1px solid var(--line);border-radius:14px;padding:14px;background:var(--bg)}
+  .method h2{font-size:14px;margin:0 0 8px;display:flex;align-items:center;gap:7px;font-weight:600}
+  .dot{width:9px;height:9px;border-radius:50%;display:inline-block}
+  .dot-a{background:var(--accent)} .dot-b{background:var(--warn)}
+  .big{font-size:26px;font-weight:650;font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+  .big .unit{font-size:12.5px;color:var(--muted);font-weight:400;margin-left:5px}
+  .kv{list-style:none;margin:12px 0 0;padding:0;display:flex;flex-direction:column;gap:7px}
+  .kv li{display:flex;justify-content:space-between;gap:10px;font-size:13.5px}
+  .kv span{color:var(--muted)}
+  .kv b{font-weight:500;font-variant-numeric:tabular-nums}
+  .tip{margin:14px 0 0;padding:11px 13px;border-radius:11px;background:var(--accent-soft);font-size:13.5px}
+  .bars-title{font-size:13.5px;margin:18px 0 8px;font-weight:600}
+  .legend{display:flex;gap:16px;font-size:12.5px;color:var(--muted);margin-bottom:9px;align-items:center}
+  .k{width:10px;height:10px;border-radius:3px;display:inline-block;margin-right:5px}
+  .k-p{background:var(--accent)} .k-i{background:var(--warn)}
+  .barrow{display:grid;grid-template-columns:74px 1fr;gap:10px;align-items:center;margin-bottom:8px}
+  .barrow .bl{font-size:12.5px;color:var(--muted)}
+  .bar{display:flex;height:22px;border-radius:6px;overflow:hidden;background:var(--line)}
+  .seg{height:100%}
+  .seg-p{background:var(--accent)} .seg-i{background:var(--warn)}
+  .card-title{font-size:15px;margin:0 0 12px;font-weight:600}
+  .tabs{display:flex;gap:8px;margin-bottom:12px}
+  .tab{
+    flex:1;min-height:44px;padding:9px;font-size:13.5px;font-family:inherit;
+    border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--muted);cursor:pointer;
+  }
+  .tab.active{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600}
+  @media (prefers-color-scheme: dark){ .tab.active{color:#0f1114} }
+  .tablewrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
+  table{width:100%;border-collapse:collapse;font-size:13.5px}
+  th,td{padding:9px 8px;text-align:right;white-space:nowrap;border-bottom:1px solid var(--line)}
+  th:first-child,td:first-child{text-align:left}
+  thead th{font-size:12px;color:var(--muted);font-weight:500}
+  .num{font-variant-numeric:tabular-nums}
+  tfoot td{font-weight:600;border-bottom:none;border-top:1px solid var(--line);color:var(--text)}
+  tbody tr:last-child td{border-bottom:none}
+  .hidden{display:none}
+  .empty{margin:0;color:var(--muted);font-size:14px}
+  .foot{margin:2px 0 0;text-align:center;font-size:12px;color:var(--muted);line-height:1.6}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>房贷计算器</h1>
+    <p>等额本息 vs 等额本金 · 前 12 个月还款明细</p>
+  </header>
+
+  <section class="card">
+    <div class="grid">
+      <label class="field">
+        <span>贷款金额（万元）</span>
+        <input id="amount" type="number" inputmode="decimal" min="0" step="1" value="100">
+      </label>
+      <label class="field">
+        <span>贷款年限（年）</span>
+        <input id="years" type="number" inputmode="numeric" min="1" max="40" step="1" value="30">
+      </label>
+      <label class="field">
+        <span>年利率（%）</span>
+        <input id="rate" type="number" inputmode="decimal" min="0" step="0.01" value="3.5">
+      </label>
+    </div>
+    <p class="hint" id="hint"></p>
+  </section>
+
+  <div id="result"></div>
+
+  <p class="foot">
+    默认利率 3.5% 只是个示例，按你的贷款合同或银行给的利率改。<br>
+    测算按单利等额还款，结果仅供参考，以银行最终审批为准。
+  </p>
+</div>
+
+<script>
+(function(){
+  var $ = function(id){ return document.getElementById(id); };
+  var el = $('result');
+
+  function fmt(v){
+    var x = Math.round(v * 100) / 100;
+    return x.toLocaleString('zh-CN', {minimumFractionDigits:2, maximumFractionDigits:2});
+  }
+  function money(v){ return '¥' + fmt(v); }
+
+  function compute(){
+    var amountWan = parseFloat($('amount').value);
+    var years = parseFloat($('years').value);
+    var ratePct = parseFloat($('rate').value);
+    if(!isFinite(amountWan) || !isFinite(years) || !isFinite(ratePct)) return null;
+    var P = amountWan * 10000;
+    var n = Math.round(years * 12);
+    var r = ratePct / 100 / 12;
+    if(P <= 0 || n <= 0 || ratePct < 0) return null;
+
+    // 等额本息
+    var pow = Math.pow(1 + r, n);
+    var M = (r === 0) ? P / n : P * r * pow / (pow - 1);
+    var bal = P, totalIntA = 0, rowsA = [], k, interest, principal, pay;
+    for(k = 1; k <= n; k++){
+      interest = bal * r;
+      principal = (k === n) ? bal : M - interest;
+      pay = principal + interest;
+      bal -= principal;
+      if(bal < 0.005) bal = 0;
+      totalIntA += interest;
+      rowsA.push({k:k, pay:pay, principal:principal, interest:interest, bal:bal});
+    }
+
+    // 等额本金
+    var fixP = P / n;
+    var bal2 = P, totalIntB = 0, rowsB = [];
+    for(k = 1; k <= n; k++){
+      interest = bal2 * r;
+      principal = (k === n) ? bal2 : fixP;
+      pay = principal + interest;
+      bal2 -= principal;
+      if(bal2 < 0.005) bal2 = 0;
+      totalIntB += interest;
+      rowsB.push({k:k, pay:pay, principal:principal, interest:interest, bal:bal2});
+    }
+
+    return {
+      P:P, n:n, r:r, M:M, rowsA:rowsA, totalIntA:totalIntA, totalA:P + totalIntA,
+      rowsB:rowsB, totalIntB:totalIntB, totalB:P + totalIntB
+    };
+  }
+
+  function tableHtml(rows){
+    var head = rows.slice(0, 12);
+    var sp = 0, spr = 0, si = 0;
+    head.forEach(function(x){ sp += x.pay; spr += x.principal; si += x.interest; });
+    var body = head.map(function(x){
+      return '<tr><td>' + x.k + '</td>' +
+        '<td class="num">' + fmt(x.pay) + '</td>' +
+        '<td class="num">' + fmt(x.principal) + '</td>' +
+        '<td class="num">' + fmt(x.interest) + '</td>' +
+        '<td class="num">' + fmt(x.bal) + '</td></tr>';
+    }).join('');
+    return '<table><thead><tr><th>期数</th><th class="num">月供</th><th class="num">本金</th><th class="num">利息</th><th class="num">剩余本金</th></tr></thead>' +
+      '<tbody>' + body + '</tbody>' +
+      '<tfoot><tr><td>前 12 期合计</td><td class="num">' + fmt(sp) + '</td><td class="num">' + fmt(spr) + '</td><td class="num">' + fmt(si) + '</td><td>—</td></tr></tfoot></table>';
+  }
+
+  function render(){
+    var d = compute();
+    var hint = $('hint');
+    if(!d){
+      hint.textContent = '';
+      el.innerHTML = '<section class="card"><p class="empty">请输入贷款金额、年限和年利率。</p></section>';
+      return;
+    }
+    hint.textContent = '贷款 ' + money(d.P) + ' · 共 ' + d.n + ' 期 · 月利率 ' + (d.r * 100).toFixed(4) + '%';
+
+    var firstB = d.rowsB[0].pay;
+    var lastB = d.rowsB[d.rowsB.length - 1].pay;
+    var stepB = d.rowsB.length > 1 ? (d.rowsB[0].pay - d.rowsB[1].pay) : 0;
+    var saved = d.totalIntA - d.totalIntB;
+    var ratioA = d.totalIntA / d.totalA * 100;
+    var ratioB = d.totalIntB / d.totalB * 100;
+    var maxTotal = Math.max(d.totalA, d.totalB);
+    var segAp = d.P / maxTotal * 100, segAi = d.totalIntA / maxTotal * 100;
+    var segBp = d.P / maxTotal * 100, segBi = d.totalIntB / maxTotal * 100;
+
+    var tip = saved > 0.5
+      ? '等额本金总利息少 <b>' + money(saved) + '</b>，但首月月供要多 <b>' + money(firstB - d.M) + '</b>；等额本息月供固定 ' + money(d.M) + '，前期压力小、总利息高。'
+      : '利率为 0 时两种方式的总利息相同，只比本金摊还节奏。';
+
+    var html = '' +
+      '<section class="card">' +
+        '<div class="compare">' +
+          '<div class="method">' +
+            '<h2><span class="dot dot-a"></span>等额本息</h2>' +
+            '<div class="big">' + money(d.M) + '<span class="unit">/月</span></div>' +
+            '<ul class="kv">' +
+              '<li><span>每月月供</span><b>固定 ' + money(d.M) + '</b></li>' +
+              '<li><span>总利息</span><b>' + money(d.totalIntA) + '</b></li>' +
+              '<li><span>还款总额</span><b>' + money(d.totalA) + '</b></li>' +
+              '<li><span>利息占还款额</span><b>' + ratioA.toFixed(1) + '%</b></li>' +
+            '</ul>' +
+          '</div>' +
+          '<div class="method">' +
+            '<h2><span class="dot dot-b"></span>等额本金</h2>' +
+            '<div class="big">' + money(firstB) + '<span class="unit">/首月</span></div>' +
+            '<ul class="kv">' +
+              '<li><span>每月递减</span><b>' + money(stepB) + '</b></li>' +
+              '<li><span>末月月供</span><b>' + money(lastB) + '</b></li>' +
+              '<li><span>总利息</span><b>' + money(d.totalIntB) + '</b></li>' +
+              '<li><span>还款总额</span><b>' + money(d.totalB) + '</b></li>' +
+              '<li><span>利息占还款额</span><b>' + ratioB.toFixed(1) + '%</b></li>' +
+            '</ul>' +
+          '</div>' +
+        '</div>' +
+        '<p class="tip">' + tip + '</p>' +
+        '<h3 class="bars-title">本金与利息构成</h3>' +
+        '<div class="legend"><span><i class="k k-p"></i>本金</span><span><i class="k k-i"></i>利息</span></div>' +
+        '<div class="barrow"><span class="bl">等额本息</span><div class="bar">' +
+          '<div class="seg seg-p" style="width:' + segAp.toFixed(2) + '%"></div>' +
+          '<div class="seg seg-i" style="width:' + segAi.toFixed(2) + '%"></div>' +
+        '</div></div>' +
+        '<div class="barrow"><span class="bl">等额本金</span><div class="bar">' +
+          '<div class="seg seg-p" style="width:' + segBp.toFixed(2) + '%"></div>' +
+          '<div class="seg seg-i" style="width:' + segBi.toFixed(2) + '%"></div>' +
+        '</div></div>' +
+      '</section>' +
+      '<section class="card">' +
+        '<h2 class="card-title">前 12 个月还款明细（元）</h2>' +
+        '<div class="tabs">' +
+          '<button class="tab active" data-t="A">等额本息</button>' +
+          '<button class="tab" data-t="B">等额本金</button>' +
+        '</div>' +
+        '<div class="tablewrap" id="tblA">' + tableHtml(d.rowsA) + '</div>' +
+        '<div class="tablewrap hidden" id="tblB">' + tableHtml(d.rowsB) + '</div>' +
+        '<p class="hint">只列前 12 期，全部共 ' + d.n + ' 期。</p>' +
+      '</section>';
+
+    el.innerHTML = html;
+  }
+
+  // 切换明细表
+  el.addEventListener('click', function(e){
+    var btn = e.target.closest ? e.target.closest('.tab') : null;
+    if(!btn) return;
+    var t = btn.getAttribute('data-t');
+    el.querySelectorAll('.tab').forEach(function(b){
+      b.classList.toggle('active', b === btn);
+    });
+    var a = el.querySelector('#tblA'), b2 = el.querySelector('#tblB');
+    if(a) a.classList.toggle('hidden', t !== 'A');
+    if(b2) b2.classList.toggle('hidden', t !== 'B');
+  });
+
+  ['amount','years','rate'].forEach(function(id){
+    $(id).addEventListener('input', render);
+  });
+
+  render();
+})();
+</script>
+</body>
+</html>

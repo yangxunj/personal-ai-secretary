@@ -1,0 +1,92 @@
+@import "tailwindcss";
+
+@theme {
+  --color-ink-50:  #f6f7f9;
+  --color-ink-100: #eceef2;
+  --color-ink-200: #d9dde5;
+  --color-ink-400: #8b93a3;
+  --color-ink-600: #4e5666;
+  --color-ink-800: #232934;
+  --color-ink-900: #151920;
+  --color-brand-50:  #eef4ff;
+  --color-brand-100: #dbe6fe;
+  /* ⚠ 300 / 400 / 800 是补上的：代码里一直在用 dark:text-brand-300、
+     dark:text-brand-400，但色阶没定义，Tailwind 直接不生成那条规则 ——
+     深色下这些字就悄悄退回继承色，看着「差不多」所以一直没被发现。
+     加主题开关时才逮到。**用了哪一档就得在这里定义哪一档。** */
+  --color-brand-300: #a9bcfb;
+  --color-brand-400: #7d93f9;
+  --color-brand-500: #4f6ef7;
+  --color-brand-600: #3d55d6;
+  --color-brand-700: #2f42a8;
+  --color-brand-800: #26357f;
+}
+
+/* 深色由 <html data-theme="dark"> 决定，不再直接跟 prefers-color-scheme 走。
+   layout 里有一段在 <head> 里同步执行的脚本：读 localStorage 的偏好
+   （light / dark / system），system 就当场用 matchMedia 解析成 light 或 dark，
+   **总是写一个明确的值**上去。
+   这样做的好处是主题只有一个来源 —— 下面的 dark: 变体只认这个属性，
+   不用同时维护「媒体查询」和「手动选择」两套规则，两套迟早会打架。 */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
+:root {
+  color-scheme: light;
+  --bg: #f6f7f9;
+  --surface: #ffffff;
+  --border: #e6e9ef;
+  --text: #232934;
+  --muted: #767e8f;
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #12151b;
+  --surface: #1a1e26;
+  --border: #2a2f3a;
+  --text: #e7eaf0;
+  --muted: #929aab;
+}
+
+/* 没有 JS 时（或脚本还没跑到）的兜底：跟系统。
+   ⚠ 必须限定 :not([data-theme])，否则手动选了浅色的人在深色系统下还是深色。 */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) {
+    color-scheme: dark;
+    --bg: #12151b;
+    --surface: #1a1e26;
+    --border: #2a2f3a;
+    --text: #e7eaf0;
+    --muted: #929aab;
+  }
+}
+
+html, body {
+  background: var(--bg);
+  color: var(--text);
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior-y: none;
+}
+
+body {
+  font-family: system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", "Segoe UI", sans-serif;
+}
+
+/* 移动端安全区 */
+.pb-safe { padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 0.5rem); }
+.pt-safe { padding-top: env(safe-area-inset-top, 0px); }
+
+.surface { background: var(--surface); border-color: var(--border); }
+.muted { color: var(--muted); }
+
+/* 输入框在 iOS 上不缩放 */
+input, textarea, select { font-size: 16px; }
+
+/* 卡片上的负责人下拉。全局 select 是 16px（防 iOS 聚焦时缩放），
+   但那条规则是给文本输入框用的 —— <select> 在 iOS 上弹的是选择器滚轮，不触发缩放，
+   所以这里可以放心用小字号，跟旁边那排小按钮对齐。 */
+.chip-select {
+  font-size: 12px;
+  appearance: none;
+  -webkit-appearance: none;
+}

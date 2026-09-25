@@ -1,0 +1,17 @@
+node_modules/
+.next/
+out/
+*.tsbuildinfo
+next-env.d.ts
+
+# 数据：数据库、上传的原件、备份 —— 永远不进 git
+/data/
+
+# 本地配置（API key 在里面）
+.env
+.env.*
+!.env.example
+
+*.log
+.DS_Store
+Thumbs.db

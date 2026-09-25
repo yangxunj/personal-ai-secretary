@@ -1,0 +1,604 @@
+// AI 生活秘书 —— 数据模型
+// 四条主线：消息(沟通) / 任务(待办) / 资料库(结构化信息) / 文件(附件)
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+/// 你我之间的每一条沟通记录
+model Message {
+  id        String   @id @default(cuid())
+  /// "user" = 你发的；"secretary" = 我回的
+  role      String
+  /// 谁说的话。role=user 时才有意义 —— 平台不做登录，所以「是谁在留言」
+  /// 只能靠发的时候自己选（默认取任务负责人）。没选就是 null，当成主人。
+  /// 加它是因为代办人也开始在平台上提问了，而我回她和回主人，答案是不一样的。
+  sender    String?
+  content   String
+  /// user 消息：pending(待我处理) / handled(已处理)
+  /// secretary 消息：unread(你还没看) / read(已读)
+  status    String   @default("pending")
+  createdAt DateTime @default(now())
+  /// 只在对话页产生的 secretary 消息上有：这一轮发给模型之后，模型那边的完整往来
+  /// （工具调用、工具结果、最后的回复），AI SDK 的 ModelMessage[] 序列化成 JSON。
+  /// content 只是给人看的那段话 —— 下一轮要让模型记得「刚才调了 createTask、返回了
+  /// 什么 id」，靠的是这个字段。推理过程已剔除（见 lib/chat-context.ts）。
+  modelJson String?
+
+  taskId String?
+  task   Task?   @relation(fields: [taskId], references: [id], onDelete: SetNull)
+  topicId String?
+  topic   Topic?  @relation(fields: [topicId], references: [id], onDelete: SetNull)
+
+  /// 属于哪个对话。对话页里说的话都有它；任务页上的留言没有（那些只在任务页看）。
+  /// 2026-09-24 之前的记录统一归进一个「以前的对话」（见 lib/schema-upgrade.ts）
+  conversationId String?
+  conversation   Conversation? @relation(fields: [conversationId], references: [id], onDelete: SetNull)
+
+  attachments Attachment[]
+
+  @@index([createdAt])
+  @@index([status])
+  @@index([conversationId, createdAt])
+}
+
+// ---------- 对话 ----------
+//
+// 原来对话页是一条不断开的长线。现在像 ChatGPT 那样可以开好几个，按话题分开聊。
+//
+// **长期记忆不靠对话**：待办、账号、账单、体检都在各自的表里，新开一个对话，
+// AI 查一下就有。每个对话只管「这件事聊到哪了」—— 所以上下文、压缩摘要都按对话分开算。
+// 会丢的只有「只在聊天里说过、没进任何表」的东西（偏好之类），第一版先不管。
+
+model Conversation {
+  id    String  @id @default(cuid())
+  /// 第一轮聊完由 AI 起一个；还没起的时候列表上显示第一句话
+  title String?
+
+  createdAt DateTime @default(now())
+  /// 最后一次有人说话的时间。列表按它排，所以每轮都要 touch 一下
+  updatedAt DateTime @updatedAt
+
+  messages Message[]
+
+  @@index([updatedAt])
+}
+
+/// 一件我们一起跟进的事：洗牙、买小狗、报税……
+///
+/// 判据是**要不要建表**：不用建表的归这里；哪天某个专题长出了真的数据模型
+/// （比如「宠物」要疫苗记录、看诊记录、体重曲线），那才是它毕业成独立模块、
+/// 去底栏占一格的时候。财务和健康就是这么来的 —— 底栏那格是「有了数据模型」
+/// 的结果，不是「重要」的奖励。
+model Topic {
+  id       String  @id @default(cuid())
+  title    String
+  /// 卡片上那一句
+  summary  String?
+  /// 生活 / 家庭 / 教育 / 财务 / 健康 …… 沿用任务那套分类
+  category String  @default("其他")
+  /// active(在进行) / settled(有结论) / parked(搁置)
+  /// **第一版就要有它**：建十几个专题、荒废一大半、页面变噪音，
+  /// 是任务页已经得过的病，不等它发作再补。
+  status   String  @default("active")
+  /// 现状说明，Markdown。每轮更新它，不是追加。
+  body     String?
+  /// 呈现页面，整段 HTML。**存在这里而不是走附件** ——
+  /// 附件是 file:add，改一次多一条记录、换一个地址；存这儿改就是 UPDATE，
+  /// 地址固定成 /topics/<id>/page，可以加书签、加主屏幕。
+  /// 附件仍然留着，但用来放**别人给的东西**（底稿 PDF、报价单、照片）。
+  page     String?
+  /// 还没搞清楚的事。JSON 数组 [{q, note, done}]，跟 VaultItem.fields 一个路子。
+  /// **这是专题的核心指标** —— 主人要的是「不再有任何疑问」，
+  /// 所以未解决数归零就是完成条件，卡片上显示的就是它。
+  questions String?
+  tags      String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tasks       Task[]
+  messages    Message[]
+  attachments Attachment[]
+
+  @@index([status])
+  @@index([updatedAt])
+}
+
+/// 需要我去办的事
+model Task {
+  id       String    @id @default(cuid())
+  title    String
+  detail   String?
+  /// 健康 / 保险 / 出行 / 教育 / 财务 / 证件 / 居家 / 其他
+  category String    @default("其他")
+  /// todo(待办) / doing(进行中) / blocked(卡住了) / done(已完成) / cancelled(取消)
+  status   String    @default("todo")
+  /// 1=高 2=中 3=低
+  priority Int       @default(2)
+  /// 谁去办这件事。空 = 还没指派（多半是我自己跟进）。
+  /// 家里是两个人在办事，不写清楚就会两个人都以为对方在办。
+  owner    String?
+  dueDate  DateTime?
+  /// 我的处理结果 / 交付说明
+  result    String?
+  /// 自动生成的任务在这里留一个来源标记，例如
+  /// `health:<报告id>:复查尿酮体`。重导同一份报告时**按它认领已有任务去更新，
+  /// 而不是再建一条** —— 没有它，每重导一次待办就翻一倍。
+  /// 手工建的任务这里是 null。
+  sourceKey String?  @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  topicId String?
+  topic   Topic?  @relation(fields: [topicId], references: [id], onDelete: SetNull)
+
+  /// 前置任务：这件事要等它做完。**单个指针，不是依赖图** —— 我们的链条
+  /// 最长三节（调研需求 → 拿名单 → 联系 → 咨询），够用了。
+  ///
+  /// ⚠ 「被挡住」这个状态是**派生**的，不存库：前置没 done 就算被挡，
+  /// 前置一 done 自动放行。手工标 blocked 的通病是前置做完了没人回去解锁，
+  /// 那条就永远显示被挡 —— 派生法零维护。
+  ///
+  /// ⚠ 而且是**软提示不是硬门禁**：照样能标完成。我们的依赖大多是
+  /// 「不能定稿」而不是「不能开始」（现在就能问价，只是签约要等前置结果），
+  /// 硬挡会拦住本可以并行的事，还会把逼近的截止日藏起来。
+  blocksOn String?
+  blocker  Task?  @relation("TaskChain", fields: [blocksOn], references: [id], onDelete: SetNull)
+  blocked  Task[] @relation("TaskChain")
+
+  /// 指向一份文稿（操作指引、话术、调研任务书）。
+  /// 以前只能在 detail 里写「见平台文稿页《…》」—— 手机上点不动，
+  /// 得退出来自己去文稿页翻，几步之后就懒得看了。
+  docId String?
+  doc   Document? @relation(fields: [docId], references: [id], onDelete: SetNull)
+
+  messages    Message[]
+  attachments Attachment[]
+
+  @@index([status])
+  @@index([category])
+  @@index([owner])
+}
+
+/// 资料库：银行账号、学校账号、住址、证件号等需要随时查的结构化信息
+model VaultItem {
+  id       String @id @default(cuid())
+  /// 银行 / 学校 / 证件 / 住址 / 公用事业 / 税务 / 保险 / 医疗 / 会员 / 工作 / 其他
+  category String
+  title    String
+  /// JSON 数组：[{"label":"账号","value":"123","secret":true}]
+  fields   String @default("[]")
+  notes    String?
+  /// 逗号分隔的标签
+  tags     String @default("")
+  /// 含敏感信息，列表页默认打码
+  sensitive Boolean @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  attachments Attachment[]
+
+  @@index([category])
+}
+
+/// 上传或生成的文件：账单、税单、保单、体检报告……
+model Attachment {
+  id         String  @id @default(cuid())
+  filename   String
+  storedPath String
+  mimeType   String  @default("application/octet-stream")
+  size       Int     @default(0)
+  /// 账单 / 税单 / 保单 / 医疗 / 教育 / 合同 / 交付物 / 其他
+  category   String?
+  note       String?
+  /// 谁上传的：user / secretary
+  uploadedBy String  @default("user")
+  createdAt  DateTime @default(now())
+
+  messageId   String?
+  message     Message?   @relation(fields: [messageId], references: [id], onDelete: SetNull)
+  taskId      String?
+  task        Task?      @relation(fields: [taskId], references: [id], onDelete: SetNull)
+  vaultItemId String?
+  vaultItem   VaultItem? @relation(fields: [vaultItemId], references: [id], onDelete: SetNull)
+  documentId  String?
+  document    Document?  @relation(fields: [documentId], references: [id], onDelete: SetNull)
+  topicId     String?
+  topic       Topic?     @relation(fields: [topicId], references: [id], onDelete: SetNull)
+  statementId String?
+  statement   Statement? @relation(fields: [statementId], references: [id], onDelete: SetNull)
+  healthReportId String?
+  healthReport   HealthReport? @relation(fields: [healthReportId], references: [id], onDelete: SetNull)
+
+  @@index([createdAt])
+  @@index([category])
+}
+
+/// 主人写的成篇文字：发言稿、文章、信件。
+/// 和 VaultItem 的区别是「读」而不是「查」—— 定稿后不再改，打开是从头看到尾，
+/// 所以正文整段存 Markdown，不拆成 label-value 字段。
+model Document {
+  id       String  @id @default(cuid())
+  title    String
+  /// 发言稿 / 文章 / 信件 / 随笔 / 其他
+  category String?
+  /// 正文，Markdown
+  body     String
+  /// 列表页显示的一句话说明
+  summary  String?
+  /// 场合、出处，例如「某某社团周年晚会」
+  occasion String?
+  /// 这份文字产生的日期，不是入库日期 —— 列表按它排序
+  date     DateTime?
+  tags     String?
+  /// 源文件，例如 writings/2026-03-11-xxx.md。数据库那份负责好看，git 那份负责不丢。
+  sourcePath String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  attachments Attachment[]
+  tasks       Task[]
+
+  @@index([date])
+  @@index([category])
+}
+
+/// 银行月结单，一份 PDF 一条。
+///
+/// 金额一律存「分」的整数。浮点数做加总会出误差 —— 一个月七十多笔累计下来
+/// 就能对不上账，而账目对不上就没人信了。展示时再除以 100。
+model Statement {
+  id      String @id @default(cuid())
+  /// 银行名，AI 读账单时照抄上面印的（"招商银行"）。**不设默认** ——
+  /// 主平台写死了自己那家银行，用哪家是每个人自己的事。
+  bank    String
+  /// 户口。一家银行可能有多个户口，只有一本就用 main。
+  account String @default("main")
+  /// 形如 2026-04。跨月对比按它排序，所以要能字典序排。
+  period  String
+  statementDate DateTime?
+
+  /// 资产总值（月初 / 月末），来自月结单抬头
+  openingTotalCents Int?
+  closingTotalCents Int?
+  /// 主账户的期末余额
+  closingBalanceCents Int?
+
+  /// 导入时的提醒：哪几笔看不清、金额存疑、余额勾稽对不上之类。
+  /// AI 读图难免有读不准的地方，**读不准要说出来**，不能默默填一个数。
+  note      String?
+  /// 源文件（上传的账单原件路径）
+  sourcePath String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  transactions Transaction[]
+  attachments  Attachment[]
+
+  /// 同一个账户同一个月只该有一份，重复导入直接覆盖而不是叠加
+  @@unique([bank, account, period])
+  @@index([period])
+}
+
+/// 月结单里的一笔交易。
+model Transaction {
+  id          String    @id @default(cuid())
+  statementId String
+  statement   Statement @relation(fields: [statementId], references: [id], onDelete: Cascade)
+
+  date        DateTime
+  /// debit（钱出去）/ credit（钱进来）
+  direction   String
+  amountCents Int
+  /// 该笔之后的账户余额
+  balanceCents Int?
+  currency    String  @default("CNY")
+  /// 哪一本户口。一份账单里可能有多本账（储蓄 / 往来 / 信用卡），
+  /// AI 按账单实际情况填，只有一本就留 main。
+  account     String  @default("main")
+  /// 本位币等值（分）。本币行等于 amountCents；外币行按当期汇率折算。
+  /// 有它才能跨币种加总 —— 否则 USD 2,172 和 ¥2,172 会被加成一样大。
+  baseCents   Int?
+  counterparty String?
+  /// 原始类型：transfer / card / interest / opening_balance …
+  kind        String?
+
+  /// 我们的口径分类，不是银行官方分类：
+  /// fixed_cost 固定成本 · daily_life 日常生活 · self_transfer 本人账户调拨
+  /// tools_subscription 工具订阅 · other_income 其他收入 · balance 余额项
+  /// uncategorized 待确认
+  category    String
+  /// 人能看懂的标签：固定月租 / 交通卡自动充值 / 第三方支付渠道日常开销
+  label       String?
+  /// 账单原文那一行。分类存疑时回查用 —— 没有它就只能翻原件。
+  rawText     String?
+
+  createdAt DateTime @default(now())
+
+  @@index([statementId])
+  @@index([category])
+  @@index([date])
+}
+
+// ---------- 健康 ----------
+//
+// 形状照抄 Statement + Transaction：一份报告一条 HealthReport，报告里每个指标
+// 一条 HealthMetric。那套在 29 个月账单上验证过了。
+//
+// **刻意没有照抄 familyHealthManager 的做法**：那边把指标塞进 Document.parsedData
+// 这个 JSON blob，结果是查不了趋势 —— 想看「三年血糖走势」得把每份报告的 JSON
+// 拆开在应用层拼。一行一个指标，那才是一条 SQL 的事。
+
+model Member {
+  id   String @id @default(cuid())
+  name String
+  /// 本人 / 配偶 / 父亲 / 母亲 / 岳母 / 女儿…
+  /// 用自由文本不用 enum —— SQLite 没有 enum，而且家庭关系本来就说不全
+  relation String
+  /// male / female
+  gender    String?
+  birthDate DateTime?
+  bloodType String?
+  heightCm  Float?
+  weightKg  Float?
+  /// 慢性病，逗号分隔。SQLite 没有 String[]，跟 VaultItem.tags 一个套路
+  chronicDiseases String  @default("")
+  allergies       String?
+  notes           String?
+  /// 列表排序，小的在前。按年龄或亲疏排都行，别让顺序随 createdAt 乱跳
+  sort Int @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  reports HealthReport[]
+
+  @@index([sort])
+}
+
+model HealthReport {
+  id       String @id @default(cuid())
+  memberId String
+  member   Member @relation(fields: [memberId], references: [id], onDelete: Cascade)
+
+  /// 体检报告 / 检验报告 / 影像报告 / 病历 / 处方 / 其他
+  type  String @default("体检报告")
+  title String
+  /// 体检那天，不是入库那天 —— 列表和趋势都按它排
+  checkDate   DateTime
+  institution String?
+  /// 报告的结论与建议，整段 Markdown（体检报告最有价值的部分往往是这段话，
+  /// 不是那一堆数字）
+  summary String?
+  notes   String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  metrics     HealthMetric[]
+  attachments Attachment[]
+
+  @@index([memberId, checkDate])
+  @@index([checkDate])
+}
+
+model HealthMetric {
+  id       String       @id @default(cuid())
+  reportId String
+  report   HealthReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
+
+  /// 血常规 / 肝功能 / 肾功能 / 血脂 / 血糖 / 尿常规 / 影像 / 一般检查 / 其他
+  category String @default("其他")
+  name     String
+  /// 原样保留。「阴性」「未见异常」也是结果，不是所有指标都有数字
+  value String
+  /// 能转成数字的额外存一份 —— 趋势和跨年比较只认这个
+  numValue Float?
+  unit     String?
+  /// 参考范围原文，例如 "3.9 - 6.1"
+  referenceRange String?
+  /// normal 正常 / high 偏高 / low 偏低 / abnormal 异常（无高低之分）
+  status String  @default("normal")
+  note   String?
+
+  @@index([reportId])
+  @@index([name])
+}
+
+// ---------- 保险 ----------
+//
+// 2026-08-27 从「全家保险」专题里毕业出来的表 —— 但**没有去底栏占一格**。
+//
+// 判据是「要不要建表」，答案是要：11 份保单每份都是同样的十几个维度，而且
+// 「缴费日—到期日—红线日」是一条真时间序列。之前它们假装成 11 条 VaultItem
+// 的 label-value，代价是缴费日历、保障缺口表、年缴合计三张表全靠手工维护，
+// 加一份保单就要手改三处 —— 而手工表会**静默过期**：保费交了、保单续了，
+// HTML 还是旧的，页面看起来却一切正常。
+//
+// 但「建表」和「占底栏」是两个决定。财务和健康拿格子是因为高频（月月看），
+// 保险是一年想起几次的东西，入口留在专题页里就够。什么时候才真该毕业成
+// 一级页面：保单数过 20 份，或者主人开始每月都点进来看。
+//
+// 叙事分析（条款解读、红线为什么危险、告知瑕疵怎么处置）仍然留在
+// Topic.page —— 那些是文章，不是行。这张表只管「事实」，专题页只管「判断」。
+
+/// 一份保单。金额一律存整数「分」，跨币种加总走 premiumBaseCents。
+model Policy {
+  id       String @id @default(cuid())
+  /// 被保险人姓名
+  insured  String
+  /// 与主人的关系：本人 / 配偶 / 女儿 / 父亲 / 母亲 / 岳父 / 岳母
+  relation String
+  insurer  String
+  product  String
+  policyNo String @unique
+
+  /// medical 医疗 · critical 重疾 · life 寿险 · cancer 防癌 · rider 附加险
+  kind   String
+  /// cn 境内 · overseas 境外（香港/海外保单）。决定了在哪就医才赔、走哪边法律
+  region String @default("cn")
+  /// active 生效中 · lapsed 已断保 · ended 已期满
+  status String @default("active")
+
+  /// 保额（原币，**整数元**，不是分）。医疗险填年度总限额；重疾填基本保额。
+  /// 刻意偏离全库「一律存分」的约定：600 万元 = 6e10 分，撑爆 SQLite 的 INT32；
+  /// 而保额从来是整数（50 万 / 100 万 / 600 万），没有分位可存。
+  /// 保费仍然存分 —— 那个真有分位（￥7,261.65）。
+  sumInsured Int?
+  /// 年保费（原币，分）
+  premiumCents    Int
+  currency        String @default("CNY")
+  /// 本位币等值（分）。**加总只能用这个** —— 直接加 premiumCents 会把 USD 当 CNY
+  premiumBaseCents Int
+
+  /// 每年的缴费日，"MM-DD"。自动扣款的也要填，用来提前查账户
+  dueMonthDay String?
+  /// 当期保障起讫
+  coverStart  DateTime?
+  coverEnd    DateTime?
+  /// 首次投保日 —— 内地保单的健康告知按这一天核保，是「不能断保」的根由
+  firstIssued DateTime?
+
+  /// 保证续保？内地那几份大多是 false，这是它们最危险的地方
+  guaranteed      Boolean   @default(false)
+  /// 保证续保到哪天（有的到 100 岁、有的 20 年）
+  guaranteedUntil DateTime?
+
+  /// 超龄红线：过了这天一旦断保就永远买不回来。父亲那份是 2027-03-14
+  redLine     DateTime?
+  redLineNote String?
+
+  note String?
+
+  /// 指回资料库条目与专题（不建外键，避免动已有模型）
+  vaultItemId String?
+  topicId     String?
+
+  payments PolicyPayment[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([insured])
+  @@index([status])
+  @@index([dueMonthDay])
+}
+
+/// 一次保费缴纳。能对上银行流水的挂 transactionId，对不上的（现金、别的卡）
+/// 标 offBook —— 财务的「真实支出」口径漏掉的正是这一块。
+model PolicyPayment {
+  id       String @id @default(cuid())
+  policyId String
+  policy   Policy @relation(fields: [policyId], references: [id], onDelete: Cascade)
+
+  /// 应缴日
+  dueOn  DateTime
+  /// 实缴日。null = 还没缴（或还没确认缴没缴）
+  paidOn DateTime?
+
+  amountCents Int
+  currency    String @default("CNY")
+  baseCents   Int
+
+  /// 对得上的那笔银行流水。不建外键：Transaction 会随账单重导而重建
+  transactionId String?
+  /// true = 这笔缴费不经导入的那个账户（现金、别的卡），账上永远查不到
+  offBook       Boolean @default(false)
+
+  note String?
+
+  createdAt DateTime @default(now())
+
+  @@index([policyId])
+  @@index([dueOn])
+}
+
+/// 运行时可改的设置。目前只有认证那两项：密码哈希、密码版本号。
+///
+/// **为什么不继续放 .env**：.env 是进程启动时读进 process.env 的，运行时改了
+/// 不生效，得重启服务。而这一版是交给别人自己用的 —— 他改密码不可能去
+/// SSH 上服务器重启。所以密码搬进数据库，.env 里那个降级成「首次启动的
+/// 初始密码」，只在库里还没有的时候当种子用一次。
+model Setting {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt
+}
+
+/// 对话的压缩摘要。上下文快满时，把早期对话总结成一份，之后发给模型的是
+/// 「最新一份摘要 + firstKeptId 那条及以后的原文」。旧摘要不删：每次压缩都在上一份
+/// 基础上续写，留着能回查「当时总结成了什么」。算法移植自 pi-mono，见 lib/chat-context.ts
+model ChatSummary {
+  id           String   @id @default(cuid())
+  summary      String
+  /// 压缩后保留的第一条原文消息。它之前的都只剩摘要里那几句了
+  firstKeptId  String
+  /// 压缩前估算的上下文 token 数，看压缩效果用
+  tokensBefore Int
+  /// 哪个对话的摘要。每个对话各压各的
+  conversationId String?
+  createdAt    DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([conversationId, createdAt])
+}
+
+// ---------- AI 生成的页面 ----------
+//
+// 对话里说「做个页面看看今年钱花哪了」「做个贪吃蛇」，AI 写一整段 HTML 存这里，
+// 「页面」栏目里点开看。思路来自 livepage，但**只搬了「AI 写 HTML、容器来展示」
+// 这一半**：livepage 那张通用的 records 表没搬 —— 这边的数据已经在十几张定好
+// 结构的表里，再来一张 JSON 表就成了两份数据各自长，正是 docs 里那条红线。
+//
+// 所以这里的页面是**快照**：AI 先用只读工具查好数据、算好，连数字一起写进 HTML。
+// 过时了就点「按最新数据重新生成」—— 那就是把 request 再交给 AI 做一遍。
+//
+// ⚠ html 是 AI 写的，**一律在沙箱里展示**（/pages/<id>/raw 带 CSP sandbox 头），
+// 不能同源直出：AI 读过的上传文档、搜索结果里可能夹带指令，被带进页面脚本里，
+// 同源的话它就能调我们所有接口。
+
+model Page {
+  id      String  @id @default(cuid())
+  title   String
+  /// 一句话说明，页面墙卡片上显示
+  summary String?
+  /// 用户当初的要求。「重新生成」时原样交回给 AI
+  request String?
+  html    String
+  /// 数据快照（查数据、算数字写进去的）还是自带玩法的（游戏、小工具）。
+  /// 只有 snapshot 才显示「按最新数据重新生成」—— 贪吃蛇没有「最新数据」
+  kind    String  @default("snapshot")
+  /// 在哪个对话里做的。详情页据此链回去看「当初怎么说的」；对话删了就只是个悬空 id
+  conversationId String?
+  /// 装好就带的示例页面（绿色版是空库，「页面」栏目空着没人想得到能做什么）。
+  /// 值是类别：游戏 / 教育 / 生活 / 工作；null = 用户自己让 AI 做的。
+  /// 用户在对话里改过它就清掉 —— 改过就是他自己的了。见 lib/sample-pages.ts
+  sample String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  versions PageVersion[]
+
+  @@index([updatedAt])
+}
+
+/// 每次整页重写前，把旧的那版存一份。改坏了能退回去 —— 复杂页面来回改几轮是常态
+model PageVersion {
+  id     String @id @default(cuid())
+  pageId String
+  page   Page   @relation(fields: [pageId], references: [id], onDelete: Cascade)
+  title  String
+  html   String
+  createdAt DateTime @default(now())
+
+  @@index([pageId, createdAt])
+}

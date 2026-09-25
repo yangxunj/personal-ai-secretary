@@ -1,0 +1,344 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>今天吃什么</title>
+<style>
+:root{
+  --bg:#f5f6f8; --card:#ffffff; --text:#1b1e23; --muted:#6b7280;
+  --line:#e6e8ec; --chip:#f0f2f5; --accent:#e2604a; --on-accent:#fff;
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --bg:#131519; --card:#1c1f25; --text:#e9ebef; --muted:#98a0ab;
+    --line:#2b2f37; --chip:#252932; --accent:#e2604a; --on-accent:#fff;
+  }
+}
+*{box-sizing:border-box}
+body{
+  margin:0;background:var(--bg);color:var(--text);
+  font-family:system-ui,-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;
+  -webkit-tap-highlight-color:transparent;
+  padding:20px 16px 44px;display:flex;justify-content:center;
+  min-height:100vh;
+}
+.wrap{width:100%;max-width:420px}
+h1{font-size:21px;margin:0 0 4px;letter-spacing:.5px}
+.sub{color:var(--muted);font-size:13px;margin:0 0 20px}
+
+.wheelbox{position:relative;width:100%;max-width:330px;margin:0 auto}
+canvas{width:100%;display:block;border-radius:50%;box-shadow:0 8px 26px rgba(0,0,0,.12)}
+.pointer{
+  position:absolute;top:-6px;left:50%;transform:translateX(-50%);
+  width:0;height:0;border-left:11px solid transparent;border-right:11px solid transparent;
+  border-top:19px solid var(--accent);
+  filter:drop-shadow(0 2px 3px rgba(0,0,0,.28));z-index:3;
+}
+.hub{
+  position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
+  width:24%;height:24%;border-radius:50%;
+  background:var(--card);border:3px solid var(--accent);
+  display:flex;align-items:center;justify-content:center;
+  font-size:12px;font-weight:700;color:var(--muted);
+  pointer-events:none;z-index:2;
+}
+
+.result{
+  min-height:64px;margin:20px 0 14px;border-radius:16px;background:var(--card);
+  border:1px solid var(--line);display:flex;align-items:center;justify-content:center;
+  padding:12px 16px;text-align:center;font-size:15px;color:var(--muted);
+  transition:border-color .2s;
+}
+.result.win{color:var(--text);border-color:var(--accent);animation:pop .38s ease}
+.result b{font-size:23px;margin-left:6px;letter-spacing:.5px}
+@keyframes pop{0%{transform:scale(.94);opacity:.4}100%{transform:scale(1);opacity:1}}
+
+button{font-family:inherit;cursor:pointer;border:none;background:none;color:inherit}
+.spin{
+  width:100%;height:56px;border-radius:16px;background:var(--accent);color:var(--on-accent);
+  font-size:17px;font-weight:700;letter-spacing:2px;
+  box-shadow:0 6px 18px rgba(226,96,74,.32);transition:transform .12s,opacity .2s;
+}
+.spin:active:not(:disabled){transform:scale(.975)}
+.spin:disabled{opacity:.45;box-shadow:none;cursor:default}
+
+.card{
+  margin-top:22px;background:var(--card);border:1px solid var(--line);
+  border-radius:16px;padding:16px 14px 14px;
+}
+.row{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+.label{font-size:13px;color:var(--muted);font-weight:600}
+.link{font-size:13px;color:var(--accent);padding:6px 2px;min-height:32px}
+.chips{list-style:none;display:flex;flex-wrap:wrap;gap:8px;padding:0;margin:0 0 14px}
+.chips:empty::after{content:"还没加菜，下面加一个吧";font-size:13px;color:var(--muted)}
+.chip{
+  display:flex;align-items:center;gap:2px;
+  background:var(--chip);border-radius:10px;padding:0 2px 0 12px;
+  font-size:14px;height:40px;
+}
+.chip span{line-height:1;max-width:11em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.del{
+  width:32px;height:32px;border-radius:8px;font-size:17px;color:var(--muted);
+  display:flex;align-items:center;justify-content:center;line-height:1;
+}
+.del:active:not(:disabled){background:rgba(128,128,128,.18)}
+.del:disabled{opacity:.3}
+.addrow{display:flex;gap:8px}
+input{
+  flex:1;min-width:0;height:44px;border-radius:11px;border:1px solid var(--line);
+  background:var(--bg);color:var(--text);padding:0 12px;font-size:15px;font-family:inherit;
+}
+input:focus{outline:2px solid var(--accent);outline-offset:-1px}
+#addBtn{
+  height:44px;padding:0 18px;border-radius:11px;background:var(--accent);
+  color:var(--on-accent);font-size:15px;font-weight:600;
+}
+#addBtn:disabled{opacity:.45}
+
+.toast{
+  position:fixed;left:50%;bottom:26px;transform:translate(-50%,20px);
+  background:rgba(28,30,35,.92);color:#fff;font-size:13.5px;
+  padding:10px 16px;border-radius:11px;opacity:0;pointer-events:none;
+  transition:opacity .22s,transform .22s;z-index:99;max-width:80vw;
+}
+.toast.show{opacity:1;transform:translate(-50%,0)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>今天吃什么</h1>
+  <p class="sub">拿不定主意就转一下，菜色随你加减</p>
+
+  <div class="wheelbox">
+    <canvas id="cv"></canvas>
+    <div class="pointer"></div>
+    <div class="hub" id="hub">转</div>
+  </div>
+
+  <div class="result" id="result">点下面按钮开转</div>
+  <button class="spin" id="spinBtn">转 一 下</button>
+
+  <div class="card">
+    <div class="row">
+      <span class="label">备选菜 <span id="count">8</span> 道</span>
+      <button class="link" id="resetBtn">恢复默认</button>
+    </div>
+    <ul class="chips" id="list"></ul>
+    <div class="addrow">
+      <input id="newItem" maxlength="10" placeholder="再加一道…" autocomplete="off">
+      <button id="addBtn">添加</button>
+    </div>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+const DEFAULT_ITEMS = ['番茄炒蛋','红烧排骨','青椒土豆丝','麻婆豆腐','宫保鸡丁','清蒸鲈鱼','蒜蓉西兰花','玉米排骨汤'];
+const COLORS_LIGHT = ['#ef6f6c','#f5a05a','#eec84a','#84c66f','#4fbfc9','#6b8ce0','#a97bd6','#e07bb0','#d98a5c','#57a89f'];
+const COLORS_DARK  = ['#c9564f','#cc8244','#c4a53c','#5f9c53','#3f97a1','#5470bb','#8760ad','#b5608c','#b06f48','#438076'];
+const MAX_ITEMS = 20;
+const TAU = Math.PI * 2;
+
+const mqDark = window.matchMedia('(prefers-color-scheme: dark)');
+const palette = () => mqDark.matches ? COLORS_DARK : COLORS_LIGHT;
+
+let items = DEFAULT_ITEMS.slice();
+let rotation = 0;
+let spinning = false;
+
+const cv = document.getElementById('cv');
+const ctx = cv.getContext('2d');
+const listEl = document.getElementById('list');
+const countEl = document.getElementById('count');
+const spinBtn = document.getElementById('spinBtn');
+const addBtn = document.getElementById('addBtn');
+const inputEl = document.getElementById('newItem');
+const resultEl = document.getElementById('result');
+const hubEl = document.getElementById('hub');
+const toastEl = document.getElementById('toast');
+
+let toastTimer = null;
+function toast(msg){
+  toastEl.textContent = msg;
+  toastEl.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => toastEl.classList.remove('show'), 1800);
+}
+
+/* ---------- 绘制 ---------- */
+function fit(){
+  const size = cv.clientWidth || 320;
+  const dpr = window.devicePixelRatio || 1;
+  cv.width = Math.round(size * dpr);
+  cv.height = Math.round(size * dpr);
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  draw();
+}
+
+function draw(){
+  const size = cv.clientWidth || 320;
+  if (size < 10) return;
+  const cx = size / 2, cy = size / 2, R = size / 2 - 1;
+  const n = items.length;
+  const seg = TAU / n;
+  const cols = palette();
+  ctx.clearRect(0, 0, size, size);
+
+  for (let i = 0; i < n; i++){
+    const a0 = i * seg + rotation;
+    ctx.beginPath();
+    ctx.moveTo(cx, cy);
+    ctx.arc(cx, cy, R, a0, a0 + seg);
+    ctx.closePath();
+    ctx.fillStyle = cols[i % cols.length];
+    ctx.fill();
+    if (n > 1){
+      ctx.lineWidth = 1.5;
+      ctx.strokeStyle = 'rgba(255,255,255,.55)';
+      ctx.stroke();
+    }
+  }
+
+  // 文字
+  if (n > 1){
+    const fs = Math.max(10, Math.min(16, seg * R * 0.5));
+    ctx.font = '600 ' + fs + 'px system-ui, -apple-system, "PingFang SC", sans-serif';
+    ctx.textBaseline = 'middle';
+    for (let i = 0; i < n; i++){
+      const mid = i * seg + seg / 2 + rotation;
+      const raw = items[i];
+      const label = raw.length > 7 ? raw.slice(0, 7) + '…' : raw;
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.rotate(mid);
+      ctx.fillStyle = '#fff';
+      ctx.shadowColor = 'rgba(0,0,0,.3)';
+      ctx.shadowBlur = 3;
+      ctx.shadowOffsetY = 1;
+      if (Math.cos(mid) < 0){
+        ctx.rotate(Math.PI);
+        ctx.textAlign = 'left';
+        ctx.fillText(label, -(R - 14), 0);
+      } else {
+        ctx.textAlign = 'right';
+        ctx.fillText(label, R - 14, 0);
+      }
+      ctx.restore();
+    }
+  }
+}
+
+/* ---------- 列表 ---------- */
+function renderList(){
+  listEl.innerHTML = '';
+  items.forEach((it, i) => {
+    const li = document.createElement('li');
+    li.className = 'chip';
+    const span = document.createElement('span');
+    span.textContent = it;
+    const b = document.createElement('button');
+    b.className = 'del';
+    b.textContent = '×';
+    b.setAttribute('aria-label', '删除 ' + it);
+    b.disabled = spinning;
+    b.addEventListener('click', () => removeItem(i));
+    li.appendChild(span);
+    li.appendChild(b);
+    listEl.appendChild(li);
+  });
+  countEl.textContent = items.length;
+  addBtn.disabled = spinning;
+  inputEl.disabled = spinning;
+  spinBtn.disabled = spinning || items.length < 2;
+  draw();
+}
+
+function addItem(){
+  if (spinning) return;
+  const v = inputEl.value.trim().replace(/\s+/g, '');
+  if (!v){ toast('先写个菜名'); return; }
+  if (items.indexOf(v) >= 0){ toast('「' + v + '」已经在转盘上啦'); inputEl.value = ''; return; }
+  if (items.length >= MAX_ITEMS){ toast('最多 ' + MAX_ITEMS + ' 道，够纠结了'); return; }
+  items.push(v);
+  inputEl.value = '';
+  inputEl.focus();
+  renderList();
+}
+
+function removeItem(i){
+  if (spinning) return;
+  if (items.length <= 2){ toast('至少留两道才有得选'); return; }
+  items.splice(i, 1);
+  resultEl.className = 'result';
+  resultEl.textContent = '点下面按钮开转';
+  hubEl.textContent = '转';
+  renderList();
+}
+
+/* ---------- 转 ---------- */
+function spin(){
+  if (spinning || items.length < 2) return;
+  spinning = true;
+  resultEl.className = 'result';
+  resultEl.textContent = '转着呢…';
+  hubEl.textContent = '…';
+  renderList();
+
+  const n = items.length;
+  const seg = TAU / n;
+  const idx = Math.floor(Math.random() * n);
+  const jitter = (Math.random() - 0.5) * seg * 0.62;
+  const targetMid = idx * seg + seg / 2 + jitter;
+  // 指针在正上方（-90°），要让该扇区中心转到这里
+  const targetRot = -Math.PI / 2 - targetMid;
+  const from = rotation;
+  let delta = ((targetRot - from) % TAU + TAU) % TAU;
+  const turns = 5 + Math.floor(Math.random() * 2);
+  const total = delta + turns * TAU;
+  const dur = 3400 + Math.random() * 600;
+  const t0 = performance.now();
+
+  function frame(now){
+    const t = Math.min(1, (now - t0) / dur);
+    const e = 1 - Math.pow(1 - t, 3);
+    rotation = from + total * e;
+    draw();
+    if (t < 1){
+      requestAnimationFrame(frame);
+    } else {
+      rotation = ((rotation % TAU) + TAU) % TAU;
+      spinning = false;
+      renderList();
+      hubEl.textContent = '吃';
+      resultEl.className = 'result win';
+      resultEl.innerHTML = '今晚吃 <b></b>';
+      resultEl.querySelector('b').textContent = items[idx];
+    }
+  }
+  requestAnimationFrame(frame);
+}
+
+/* ---------- 事件 ---------- */
+spinBtn.addEventListener('click', spin);
+addBtn.addEventListener('click', addItem);
+inputEl.addEventListener('keydown', e => { if (e.key === 'Enter') addItem(); });
+document.getElementById('resetBtn').addEventListener('click', () => {
+  if (spinning) return;
+  items = DEFAULT_ITEMS.slice();
+  rotation = 0;
+  resultEl.className = 'result';
+  resultEl.textContent = '点下面按钮开转';
+  hubEl.textContent = '转';
+  renderList();
+  toast('已恢复默认 8 道菜');
+});
+window.addEventListener('resize', fit);
+window.addEventListener('orientationchange', () => setTimeout(fit, 200));
+if (mqDark.addEventListener) mqDark.addEventListener('change', draw);
+
+renderList();
+fit();
+</script>
+</body>
+</html>

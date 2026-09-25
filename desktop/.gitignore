@@ -1,0 +1,9 @@
+runtime/
+dist/
+node_modules/
+.smoke-data/
+.verify-data/
+
+# 根 .gitignore 里有一条 build/（针对前端构建产物），会连带把图标挡掉。
+# 这里的 build/ 是 electron-builder 的 buildResources，图标在里面，必须进 git。
+!build/
