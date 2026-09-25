@@ -60,6 +60,14 @@ Electron 自己的目录也搬到 exe 旁边（`appdata/`）。
 
 ⚠ `setPath` 必须在 app ready 之前调用，所以那段代码在模块顶层，别往函数里挪。
 
+传到 GitHub Releases 时改成英文文件名（`personal-ai-secretary-Setup-<版本>.exe`、
+`-<版本>-win.zip`、`-portable-<版本>.exe`）—— 附件名里的中文和空格在 GitHub
+上会被改写，下载链接也难看，英文名最稳。
+
+```bash
+gh release create v<版本> --title "<版本> …" --notes-file notes.md <三个改好名的文件>
+```
+
 ## 构建
 
 ```bash

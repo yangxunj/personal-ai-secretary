@@ -37,12 +37,15 @@
 
 ## 下载安装（Windows）
 
-到 [Releases](../../releases) 下载，两种挑一种：
+到 [Releases](../../releases) 下载，挑一个：
 
 | 文件 | 数据放在哪 | 适合 |
 | --- | --- | --- |
-| `家庭管家 Setup <版本>.exe` | `%APPDATA%\家庭管家\data\` | 大多数人。装一次，桌面和开始菜单有图标 |
-| `家庭管家-<版本>-win.zip` | 解压目录里的 `data\` | 免安装。解压即用，整个文件夹拷到 U 盘能带走 |
+| `personal-ai-secretary-Setup-<版本>.exe` | `%APPDATA%\家庭管家\data\` | 大多数人。装一次，桌面和开始菜单有图标 |
+| `personal-ai-secretary-<版本>-win.zip` | 解压目录里的 `data\` | 免安装。解压即用，整个文件夹拷到 U 盘能带走 |
+| `personal-ai-secretary-portable-<版本>.exe` | exe 同目录的 `data\` | 单文件免安装。每次启动要先解压，冷启动慢 |
+
+软件装好后叫「家庭管家」。
 
 安装包没有代码签名，Windows 会提示「已保护你的电脑」—— 点 **更多信息 → 仍要运行**。
 不放心的话可以按下面「从源码构建」自己打包。
