@@ -7,6 +7,8 @@ import { checkThrottle, recordFailure, recordSuccess, sleep, clientKey } from '@
 import { setAiConfig, clearAiConfig, testAiConfig, getAiConfig } from '@/lib/ai-config';
 import { parseOwners, setOwners } from '@/lib/owners';
 import { revalidatePath } from 'next/cache';
+import { setLocale } from '@/lib/i18n/server';
+import { isLocale } from '@/lib/i18n/core';
 
 /**
  * 改密码。
@@ -96,4 +98,15 @@ export async function saveOwnersAction(formData: FormData) {
   await setOwners(r.owners);
   revalidatePath('/tasks', 'layout');
   redirect('/settings?mOk=' + encodeURIComponent(`已保存：${r.owners.join('、')}`) + '#members');
+}
+
+/**
+ * 界面语言。存库不存 cookie（见 lib/i18n/server.ts）。
+ * 整个布局都要按新语言重渲，所以 revalidate 根 layout。
+ */
+export async function setLocaleAction(formData: FormData) {
+  const v = formData.get('locale');
+  if (isLocale(v)) await setLocale(v);
+  revalidatePath('/', 'layout');
+  redirect('/settings');
 }

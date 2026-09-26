@@ -9,7 +9,10 @@ import {
   testAiConfigAction,
   resetAiConfigAction,
   saveOwnersAction,
+  setLocaleAction,
 } from './actions';
+import { getLocale } from '@/lib/i18n/server';
+import { LOCALES, LOCALE_NAMES } from '@/lib/i18n/core';
 import { getOwners } from '@/lib/owners';
 
 export const dynamic = 'force-dynamic';
@@ -32,12 +35,36 @@ export default async function SettingsPage({
   const authOn = process.env.AUTH_ENABLED === 'true';
   const ai = await getAiConfig();
   const owners = await getOwners();
+  const locale = await getLocale();
 
   return (
     <>
       <PageHeader title="设置" back="/" settings={false} />
 
       <div className="px-4 py-4 space-y-4">
+        {/* ---------- 界面语言 ----------
+            标题固定写两种语言、不过 t()：切错了语言的人，得在一堆看不懂的字里
+            认得出这一块。 */}
+        <section id="language" className="surface border rounded-2xl p-4" style={{ borderColor: 'var(--border)' }}>
+          <h2 className="text-[15px] font-semibold mb-3">界面语言 · Language</h2>
+          <form action={setLocaleAction} className="grid grid-cols-2 gap-2">
+            {LOCALES.map((l) => (
+              <button
+                key={l}
+                name="locale"
+                value={l}
+                aria-pressed={l === locale}
+                className={`rounded-xl border py-2 text-[14px] transition ${
+                  l === locale ? 'border-brand-500 text-brand-500 bg-brand-500/10 font-medium' : 'active:opacity-60'
+                }`}
+                style={l === locale ? undefined : { borderColor: 'var(--border)' }}
+              >
+                {LOCALE_NAMES[l]}
+              </button>
+            ))}
+          </form>
+        </section>
+
         {/* ---------- 模型 ---------- */}
         <section className="surface border rounded-2xl p-4" style={{ borderColor: 'var(--border)' }}>
           <h2 className="text-[15px] font-semibold mb-1">AI 模型</h2>

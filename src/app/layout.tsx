@@ -1,12 +1,17 @@
 import type { Metadata, Viewport } from 'next';
 import './globals.css';
+import { I18nProvider } from '@/lib/i18n/client';
+import { clientDict, getLocale, getT } from '@/lib/i18n/server';
 
-export const metadata: Metadata = {
-  title: '家庭管家',
-  description: '私人生活秘书平台',
-  manifest: '/manifest.webmanifest',
-  appleWebApp: { capable: true, statusBarStyle: 'default', title: '家庭管家' },
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getT();
+  return {
+    title: t('家庭管家'),
+    description: t('私人生活秘书平台'),
+    manifest: '/manifest.webmanifest',
+    appleWebApp: { capable: true, statusBarStyle: 'default', title: t('家庭管家') },
+  };
+}
 
 export const viewport: Viewport = {
   width: 'device-width',
@@ -35,13 +40,18 @@ var d=p==='dark'||(p==='system'&&matchMedia('(prefers-color-scheme: dark)').matc
 document.documentElement.dataset.theme=d?'dark':'light';
 }catch(e){document.documentElement.dataset.theme='light'}})()`;
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  const locale = await getLocale();
   return (
-    <html lang="zh-CN" suppressHydrationWarning>
+    <html lang={locale === 'en' ? 'en' : 'zh-CN'} suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: THEME_INIT }} />
       </head>
-      <body className="min-h-dvh antialiased">{children}</body>
+      <body className="min-h-dvh antialiased">
+        <I18nProvider locale={locale} dict={await clientDict()}>
+          {children}
+        </I18nProvider>
+      </body>
     </html>
   );
 }

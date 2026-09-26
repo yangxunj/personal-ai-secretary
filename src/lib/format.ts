@@ -1,17 +1,28 @@
-const CN_DATE = new Intl.DateTimeFormat('zh-CN', {
-  month: 'numeric',
-  day: 'numeric',
-  hour: '2-digit',
-  minute: '2-digit',
-});
+import { intlTag, type Locale } from './i18n/core';
 
-export function formatTime(d: Date | string) {
+/**
+ * 日期显示。★ 都带一个 locale 参数（默认中文）：服务端组件从 getLocale() 拿，
+ * 客户端组件从 useLocale() 拿。这里不能自己去读 —— 这个模块两边都要用。
+ */
+export function formatTime(d: Date | string, locale: Locale = 'zh') {
   const date = typeof d === 'string' ? new Date(d) : d;
   const diff = Date.now() - date.getTime();
-  if (diff < 60_000) return '刚刚';
-  if (diff < 3_600_000) return `${Math.floor(diff / 60_000)} 分钟前`;
-  if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)} 小时前`;
-  return CN_DATE.format(date);
+  const en = locale === 'en';
+  if (diff < 60_000) return en ? 'just now' : '刚刚';
+  if (diff < 3_600_000) {
+    const n = Math.floor(diff / 60_000);
+    return en ? `${n} min ago` : `${n} 分钟前`;
+  }
+  if (diff < 86_400_000) {
+    const n = Math.floor(diff / 3_600_000);
+    return en ? `${n} ${n === 1 ? 'hour' : 'hours'} ago` : `${n} 小时前`;
+  }
+  return new Intl.DateTimeFormat(intlTag(locale), {
+    month: en ? 'short' : 'numeric',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(date);
 }
 
 export function sameDay(a: Date | string, b: Date | string) {
@@ -21,28 +32,32 @@ export function sameDay(a: Date | string, b: Date | string) {
 }
 
 /** 记录页的日期分隔标签：今天 / 昨天 / 8月20日 */
-export function dayLabel(d: Date | string) {
+export function dayLabel(d: Date | string, locale: Locale = 'zh') {
   const date = typeof d === 'string' ? new Date(d) : d;
   const today = new Date();
   const yesterday = new Date(today);
   yesterday.setDate(today.getDate() - 1);
+  const en = locale === 'en';
 
-  if (sameDay(date, today)) return '今天';
-  if (sameDay(date, yesterday)) return '昨天';
+  if (sameDay(date, today)) return en ? 'Today' : '今天';
+  if (sameDay(date, yesterday)) return en ? 'Yesterday' : '昨天';
   const sameYear = date.getFullYear() === today.getFullYear();
-  return new Intl.DateTimeFormat('zh-CN', {
+  return new Intl.DateTimeFormat(intlTag(locale), {
     ...(sameYear ? {} : { year: 'numeric' }),
     month: 'long',
     day: 'numeric',
   }).format(date);
 }
 
-export function formatDate(d: Date | string | null) {
+export function formatDate(d: Date | string | null, locale: Locale = 'zh') {
   if (!d) return '';
   const date = typeof d === 'string' ? new Date(d) : d;
-  return new Intl.DateTimeFormat('zh-CN', { year: 'numeric', month: 'numeric', day: 'numeric' }).format(date);
+  return new Intl.DateTimeFormat(intlTag(locale), locale === 'en'
+    ? { year: 'numeric', month: 'short', day: 'numeric' }
+    : { year: 'numeric', month: 'numeric', day: 'numeric' }).format(date);
 }
 
+/** label 是中文原文，显示时过一遍 t() */
 export const TASK_STATUS: Record<string, { label: string; cls: string }> = {
   todo: { label: '待办', cls: 'bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-400' },
   doing: { label: '进行中', cls: 'bg-blue-100 text-blue-700 dark:bg-blue-500/15 dark:text-blue-400' },
@@ -51,6 +66,7 @@ export const TASK_STATUS: Record<string, { label: string; cls: string }> = {
   cancelled: { label: '已取消', cls: 'bg-gray-100 text-gray-500 dark:bg-gray-500/15 dark:text-gray-400' },
 };
 
+/** 存进库里的是这些中文值，显示时过一遍 t() —— 换语言不改库 */
 export const CATEGORIES = ['健康', '保险', '出行', '教育', '财务', '证件', '居家', '其他'] as const;
 
 // 任务负责人的候选名单不在这里 —— 在设置页改，存库里，见 lib/owners.ts
