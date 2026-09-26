@@ -49,7 +49,7 @@ if (!existsSync(STANDALONE)) {
 }
 
 // ---------- 2. 搬运 ----------
-say('搬运产物 → desktop/app/');
+say('搬运产物 → desktop/runtime/');
 rmSync(OUT, { recursive: true, force: true });
 mkdirSync(OUT, { recursive: true });
 cpSync(STANDALONE, OUT, { recursive: true });
