@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { useT } from '@/lib/i18n/client';
 
 /**
  * 页头上的「总览」按钮 + 弹窗。内容（TaskOverview）是服务端组件，
@@ -27,6 +28,7 @@ export default function OverviewDialog({
   alert?: number;
 }) {
   const [open, setOpen] = useState(false);
+  const t = useT();
 
   useEffect(() => {
     if (!open) return;
@@ -54,11 +56,11 @@ export default function OverviewDialog({
         <svg viewBox="0 0 24 24" className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <path d="M4 20V10M10 20V4M16 20v-7M22 20H2" />
         </svg>
-        任务总览
+        {t('任务总览')}
         {alert > 0 && (
           <span
             className="absolute -top-2 -right-2 min-w-5 h-5 px-1.5 rounded-full bg-red-500 text-white text-[11px] leading-5 text-center shadow"
-            aria-label={`${alert} 条已逾期`}
+            aria-label={t('{n} 条已逾期', { n: alert })}
           >
             {alert}
           </span>
@@ -72,7 +74,7 @@ export default function OverviewDialog({
           onClick={() => setOpen(false)}
           role="dialog"
           aria-modal="true"
-          aria-label="任务总览"
+          aria-label={t('任务总览')}
         >
           <div
             className="surface relative w-full sm:max-w-4xl max-h-dvh sm:max-h-[88dvh] overflow-y-auto sm:rounded-2xl shadow-xl"
@@ -84,7 +86,7 @@ export default function OverviewDialog({
             <button
               type="button"
               onClick={() => setOpen(false)}
-              aria-label="关闭"
+              aria-label={t('关闭')}
               className="absolute top-4 right-4 h-8 w-8 rounded-full flex items-center justify-center muted hover:opacity-70"
             >
               <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">

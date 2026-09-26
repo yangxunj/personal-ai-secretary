@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { sessionIsCurrent } from '@/lib/auth';
 import { SANDBOX_CSP, downloadName, withShim } from '@/lib/pages';
+import { getT } from '@/lib/i18n/server';
 
 /**
  * AI 生成的页面本体。详情页用 iframe 嵌它，「全屏打开」直接在新标签页开它。
@@ -16,13 +17,14 @@ import { SANDBOX_CSP, downloadName, withShim } from '@/lib/pages';
 export const dynamic = 'force-dynamic';
 
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const t = await getT();
   // 路由处理器不走 (app) 的 layout，登录态得自己再验一次，
   // 否则知道 id 就能绕过页面直接把内容取走
-  if (!(await sessionIsCurrent())) return new NextResponse('未授权', { status: 401 });
+  if (!(await sessionIsCurrent())) return new NextResponse(t('未授权'), { status: 401 });
 
   const { id } = await params;
   const page = await db.page.findUnique({ where: { id }, select: { title: true, html: true } });
-  if (!page) return new NextResponse('页面不存在', { status: 404 });
+  if (!page) return new NextResponse(t('页面不存在'), { status: 404 });
 
   if (new URL(req.url).searchParams.get('download')) {
     const name = downloadName(page.title);

@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from 'react';
 import { deletePage, restorePage } from '../actions';
+import { useT } from '@/lib/i18n/client';
 
 /**
  * 详情页底下：历史版本 + 删除。
@@ -18,13 +19,14 @@ export default function PageManage({
 }) {
   const [confirming, setConfirming] = useState(false);
   const [pending, start] = useTransition();
+  const t = useT();
 
   return (
     <div className="space-y-4">
       {versions.length > 0 && (
         <details className="surface border rounded-2xl" style={{ borderColor: 'var(--border)' }}>
           <summary className="px-4 py-3 text-sm cursor-pointer select-none">
-            历史版本 <span className="muted">（{versions.length}）</span>
+            {t('历史版本')} <span className="muted">{t('（{n}）', { n: versions.length })}</span>
           </summary>
           <ul className="px-2 pb-2">
             {versions.map((v, i) => (
@@ -32,7 +34,7 @@ export default function PageManage({
                 <span className="min-w-0 truncate">
                   <span className="muted text-[12px] mr-2">{v.at}</span>
                   {v.title}
-                  {i === 0 && <span className="muted text-[11px] ml-1.5">上一版</span>}
+                  {i === 0 && <span className="muted text-[11px] ml-1.5">{t('上一版')}</span>}
                 </span>
                 <button
                   disabled={pending}
@@ -40,7 +42,7 @@ export default function PageManage({
                   className="shrink-0 text-[12px] px-2.5 py-1 rounded-lg border active:opacity-60 disabled:opacity-50"
                   style={{ borderColor: 'var(--border)' }}
                 >
-                  恢复这版
+                  {t('恢复这版')}
                 </button>
               </li>
             ))}
@@ -55,15 +57,15 @@ export default function PageManage({
             onClick={() => start(() => deletePage(id))}
             className="text-[12px] px-3 py-1.5 rounded-lg bg-red-500/10 text-red-600 dark:text-red-400 font-medium active:opacity-60 disabled:opacity-50"
           >
-            {pending ? '删除中…' : '确定删除（连同历史版本）'}
+            {pending ? t('删除中…') : t('确定删除（连同历史版本）')}
           </button>
           <button onClick={() => setConfirming(false)} className="text-[12px] px-2 py-1.5 muted">
-            取消
+            {t('取消')}
           </button>
         </div>
       ) : (
         <button onClick={() => setConfirming(true)} className="text-[12px] muted hover:text-red-500 transition">
-          删除这个页面
+          {t('删除这个页面')}
         </button>
       )}
     </div>

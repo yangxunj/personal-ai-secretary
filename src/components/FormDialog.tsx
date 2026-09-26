@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { useT } from '@/lib/i18n/client';
 
 /**
  * 页头上的「+ 新建」按钮 + 居中弹窗，里面放一张表单。
@@ -26,6 +27,7 @@ export default function FormDialog({
   children: React.ReactNode;
 }) {
   const [open, setOpen] = useState(false);
+  const t = useT();
 
   useEffect(() => {
     if (!open) return;
@@ -68,7 +70,7 @@ export default function FormDialog({
                 <button
                   type="button"
                   onClick={() => setOpen(false)}
-                  aria-label="关闭"
+                  aria-label={t('关闭')}
                   className="h-8 w-8 -mr-2 rounded-full flex items-center justify-center muted hover:opacity-70"
                 >
                   <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">

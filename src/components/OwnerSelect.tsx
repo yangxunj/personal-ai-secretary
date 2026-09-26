@@ -1,9 +1,13 @@
 'use client';
 import { useTransition } from 'react';
 import { updateTaskOwner } from '@/app/(app)/actions';
+import { useT } from '@/lib/i18n/client';
 
-/** 「待定」就是 owner 为 null —— 不另立一个状态值，否则筛选那边要认两种「没人」。 */
-const UNASSIGNED = '待定';
+/**
+ * 「待定」就是 owner 为 null —— 不另立一个状态值，否则筛选那边要认两种「没人」。
+ * 下拉里它的 value 是空串（人名不可能是空的），显示的字按界面语言给。
+ */
+const UNASSIGNED = '';
 
 /**
  * 任务卡片上的负责人下拉。
@@ -28,6 +32,7 @@ export default function OwnerSelect({
   className?: string;
 }) {
   const [pending, start] = useTransition();
+  const t = useT();
   const value = owner ?? UNASSIGNED;
 
   return (
@@ -41,7 +46,7 @@ export default function OwnerSelect({
             updateTaskOwner(taskId, v === UNASSIGNED ? null : v);
           });
         }}
-        aria-label="负责人"
+        aria-label={t('负责人')}
         className={`chip-select rounded-lg border pl-6 pr-6 py-1.5 active:opacity-60 disabled:opacity-50 ${
           owner
             ? 'bg-brand-500/10 text-brand-700 dark:text-brand-300 font-medium'
@@ -53,7 +58,7 @@ export default function OwnerSelect({
             否则 <select> 找不到这个值，就显示成第一项，看上去像是派给了别人。 */}
         {[...new Set([...members, ...(owner ? [owner] : []), UNASSIGNED])].map((n) => (
           <option key={n} value={n}>
-            {n}
+            {n === UNASSIGNED ? t('待定') : n}
           </option>
         ))}
       </select>

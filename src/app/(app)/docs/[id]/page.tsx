@@ -5,6 +5,8 @@ import { formatDate } from '@/lib/format';
 import { humanSize } from '@/lib/format';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
+import { getLocale, getT } from '@/lib/i18n/server';
+import { intlTag } from '@/lib/i18n/core';
 
 export const dynamic = 'force-dynamic';
 
@@ -17,6 +19,8 @@ export default async function DocPage({
 }) {
   const { id } = await params;
   const { from } = await searchParams;
+  const t = await getT();
+  const locale = await getLocale();
 
   /**
    * 返回按钮去哪，由来路决定。
@@ -29,11 +33,11 @@ export default async function DocPage({
    */
   const safeFrom = from && /^\/(?!\/)/.test(from) ? from : null;
   const backTo = safeFrom ?? '/docs';
-  const backLabel = safeFrom?.startsWith('/tasks') ? '返回任务' : '返回文稿列表';
+  const backLabel = safeFrom?.startsWith('/tasks') ? t('返回任务') : t('返回文稿列表');
   const doc = await db.document.findUnique({ where: { id }, include: { attachments: true } });
   if (!doc) notFound();
 
-  const tags = doc.tags?.split(',').map((t) => t.trim()).filter(Boolean) ?? [];
+  const tags = doc.tags?.split(',').map((x) => x.trim()).filter(Boolean) ?? [];
 
   return (
     <>
@@ -69,9 +73,9 @@ export default async function DocPage({
         <div className="muted text-xs mt-2.5 leading-relaxed space-y-0.5">
           {doc.occasion && <p>{doc.occasion}</p>}
           <p>
-            {doc.date && formatDate(doc.date)}
-            {doc.category && `${doc.date ? ' · ' : ''}${doc.category}`}
-            {` · ${doc.body.length.toLocaleString('zh-CN')} 字`}
+            {doc.date && formatDate(doc.date, locale)}
+            {doc.category && `${doc.date ? ' · ' : ''}${t(doc.category)}`}
+            {` · ${t('{chars} 字', { chars: doc.body.length.toLocaleString(intlTag(locale)) })}`}
           </p>
         </div>
 
@@ -83,7 +87,7 @@ export default async function DocPage({
 
         {doc.attachments.length > 0 && (
           <div className="mt-10 space-y-2">
-            <p className="muted text-[11px]">附件</p>
+            <p className="muted text-[11px]">{t('附件')}</p>
             {doc.attachments.map((a) => (
               <a
                 key={a.id}
@@ -119,20 +123,20 @@ export default async function DocPage({
 
         {tags.length > 0 && (
           <div className="mt-10 flex flex-wrap gap-1.5">
-            {tags.map((t) => (
+            {tags.map((tag) => (
               <span
-                key={t}
+                key={tag}
                 className="muted text-[11px] px-2 py-1 rounded-md"
                 style={{ background: 'var(--bg)' }}
               >
-                {t}
+                {tag}
               </span>
             ))}
           </div>
         )}
 
         {doc.sourcePath && (
-          <p className="muted text-[11px] mt-6 break-all">源文件：{doc.sourcePath}</p>
+          <p className="muted text-[11px] mt-6 break-all">{t('源文件：')}{doc.sourcePath}</p>
         )}
       </article>
     </>

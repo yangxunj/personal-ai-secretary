@@ -6,6 +6,8 @@ import { useEffect, useRef, useState } from 'react';
 import { listConversations } from '@/app/(app)/chat/actions';
 import type { ConversationItem } from '@/lib/conversations';
 import { CONV_EVENT, type ConvEventDetail } from './events';
+import { useT } from '@/lib/i18n/client';
+import type { T } from '@/lib/i18n/core';
 
 /**
  * 对话列表：按最后说话的时间分组（今天 / 昨天 / 7 天内 / 30 天内 / 更早），
@@ -23,6 +25,7 @@ export default function ConversationList({
   onNavigate?: () => void;
 }) {
   const [items, setItems] = useState(initial);
+  const t = useT();
   /**
    * 乐观加上去、服务端还没建出来的新对话。
    * 第一句话一发出去就通知列表，可那时服务端多半还没 upsert 这个对话 ——
@@ -76,7 +79,7 @@ export default function ConversationList({
     return () => window.removeEventListener(CONV_EVENT, on);
   }, []);
 
-  const groups = group(items);
+  const groups = group(items, t);
 
   return (
     <div className="flex flex-col h-full">
@@ -90,12 +93,12 @@ export default function ConversationList({
           <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
             <path d="M12 5v14M5 12h14" />
           </svg>
-          新对话
+          {t('新对话')}
         </Link>
       </div>
 
       <div className="flex-1 overflow-y-auto px-2 pb-4">
-        {items.length === 0 && <p className="muted text-[12px] text-center py-8">还没有对话</p>}
+        {items.length === 0 && <p className="muted text-[12px] text-center py-8">{t('还没有对话')}</p>}
         {groups.map(([label, xs]) => (
           <div key={label} className="mt-3 first:mt-1">
             <p className="muted text-[11px] font-medium px-2.5 mb-1">{label}</p>
@@ -122,21 +125,21 @@ export default function ConversationList({
   );
 }
 
-function group(items: ConversationItem[]): [string, ConversationItem[]][] {
+function group(items: ConversationItem[], t: T): [string, ConversationItem[]][] {
   const now = new Date();
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
   const DAY = 86_400_000;
   const buckets: [string, (t: number) => boolean][] = [
-    ['今天', (t) => t >= today],
-    ['昨天', (t) => t >= today - DAY],
-    ['7 天内', (t) => t >= today - 6 * DAY],
-    ['30 天内', (t) => t >= today - 29 * DAY],
-    ['更早', () => true],
+    [t('今天'), (ts) => ts >= today],
+    [t('昨天'), (ts) => ts >= today - DAY],
+    [t('7 天内'), (ts) => ts >= today - 6 * DAY],
+    [t('30 天内'), (ts) => ts >= today - 29 * DAY],
+    [t('更早'), () => true],
   ];
   const out = new Map<string, ConversationItem[]>();
   for (const c of items) {
-    const t = new Date(c.updatedAt).getTime();
-    const label = buckets.find(([, f]) => f(t))![0];
+    const ts = new Date(c.updatedAt).getTime();
+    const label = buckets.find(([, f]) => f(ts))![0];
     out.set(label, [...(out.get(label) ?? []), c]);
   }
   return buckets.map(([l]) => l).filter((l) => out.has(l)).map((l) => [l, out.get(l)!]);

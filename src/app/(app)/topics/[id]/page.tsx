@@ -5,13 +5,14 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { formatDate, formatTime, TASK_STATUS } from '@/lib/format';
 import { TOPIC_STATUS, parseQuestions } from '@/lib/topic';
+import { getLocale, getT } from '@/lib/i18n/server';
 
 export const dynamic = 'force-dynamic';
 
 export default async function TopicDetail({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
 
-  const t = await db.topic.findUnique({
+  const topic = await db.topic.findUnique({
     where: { id },
     include: {
       tasks: { orderBy: { updatedAt: 'desc' } },
@@ -19,28 +20,30 @@ export default async function TopicDetail({ params }: { params: Promise<{ id: st
       messages: { orderBy: { createdAt: 'desc' }, take: 8 },
     },
   });
-  if (!t) notFound();
+  if (!topic) notFound();
+  const t = await getT();
+  const locale = await getLocale();
 
-  const qs = parseQuestions(t.questions);
+  const qs = parseQuestions(topic.questions);
   const open = qs.filter((q) => !q.done);
   const done = qs.filter((q) => q.done);
 
   return (
     <>
-      <PageHeader title={t.title} subtitle={`${TOPIC_STATUS[t.status]} · ${t.category}`} back="/topics" />
+      <PageHeader title={topic.title} subtitle={`${t(TOPIC_STATUS[topic.status])} · ${t(topic.category)}`} back="/topics" />
 
       <div className="px-4 py-4 space-y-6">
         {/* 呈现页入口放最上面 —— 这是主人最常点的东西 */}
-        {t.page && (
+        {topic.page && (
           <a
-            href={`/topics/${t.id}/page`}
+            href={`/topics/${topic.id}/page`}
             target="_blank"
             rel="noreferrer"
             className="flex items-center justify-between gap-3 rounded-2xl p-4 bg-brand-500 text-white active:opacity-80"
           >
             <div>
-              <div className="font-medium">打开呈现页</div>
-              <div className="text-[12px] opacity-80 mt-0.5">图文并茂的完整版，可以加到主屏幕</div>
+              <div className="font-medium">{t('打开呈现页')}</div>
+              <div className="text-[12px] opacity-80 mt-0.5">{t('图文并茂的完整版，可以加到主屏幕')}</div>
             </div>
             <svg viewBox="0 0 24 24" className="h-5 w-5 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
               <path d="M7 17 17 7M9 7h8v8" />
@@ -48,11 +51,11 @@ export default async function TopicDetail({ params }: { params: Promise<{ id: st
           </a>
         )}
 
-        {t.body && (
+        {topic.body && (
           <section>
-            <h2 className="muted text-xs font-medium mb-2 px-1">现状</h2>
+            <h2 className="muted text-xs font-medium mb-2 px-1">{t('现状')}</h2>
             <div className="surface border rounded-2xl p-4 text-sm" style={{ borderColor: 'var(--border)' }}>
-              <MessageBody>{t.body}</MessageBody>
+              <MessageBody>{topic.body}</MessageBody>
             </div>
           </section>
         )}
@@ -60,7 +63,7 @@ export default async function TopicDetail({ params }: { params: Promise<{ id: st
         {qs.length > 0 && (
           <section>
             <h2 className="muted text-xs font-medium mb-2 px-1">
-              还没搞清楚的 · {open.length}/{qs.length}
+              {t('还没搞清楚的')} · {open.length}/{qs.length}
             </h2>
             <div className="surface border rounded-2xl p-4 space-y-3" style={{ borderColor: 'var(--border)' }}>
               {open.map((q, i) => (
@@ -83,18 +86,18 @@ export default async function TopicDetail({ params }: { params: Promise<{ id: st
               ))}
               {open.length === 0 && (
                 <p className="text-emerald-700 dark:text-emerald-400 text-sm font-medium">
-                  都弄清楚了 —— 这个专题可以标成「有结论」了。
+                  {t('都弄清楚了 —— 这个专题可以标成「有结论」了。')}
                 </p>
               )}
             </div>
           </section>
         )}
 
-        {t.tasks.length > 0 && (
+        {topic.tasks.length > 0 && (
           <section>
-            <h2 className="muted text-xs font-medium mb-2 px-1">相关任务</h2>
+            <h2 className="muted text-xs font-medium mb-2 px-1">{t('相关任务')}</h2>
             <div className="space-y-2">
-              {t.tasks.map((x) => (
+              {topic.tasks.map((x) => (
                 <Link
                   key={x.id}
                   href="/tasks"
@@ -106,7 +109,7 @@ export default async function TopicDetail({ params }: { params: Promise<{ id: st
                       {x.title}
                     </span>
                     <span className={`shrink-0 text-[11px] px-2 py-0.5 rounded-full ${TASK_STATUS[x.status].cls}`}>
-                      {TASK_STATUS[x.status].label}
+                      {t(TASK_STATUS[x.status].label)}
                     </span>
                   </div>
                 </Link>
@@ -115,13 +118,13 @@ export default async function TopicDetail({ params }: { params: Promise<{ id: st
           </section>
         )}
 
-        {t.attachments.length > 0 && (
+        {topic.attachments.length > 0 && (
           <section>
             {/* 附件放**别人给的东西**（底稿、报价单、照片）。
                 我生成的呈现页存在 topic.page 里，不走这里 —— 否则改一次多一份。 */}
-            <h2 className="muted text-xs font-medium mb-2 px-1">原始材料</h2>
+            <h2 className="muted text-xs font-medium mb-2 px-1">{t('原始材料')}</h2>
             <div className="space-y-2">
-              {t.attachments.map((a) => (
+              {topic.attachments.map((a) => (
                 <a
                   key={a.id}
                   href={`/api/files/${a.id}`}
@@ -138,20 +141,20 @@ export default async function TopicDetail({ params }: { params: Promise<{ id: st
           </section>
         )}
 
-        {t.messages.length > 0 && (
+        {topic.messages.length > 0 && (
           <section>
             {/* 只读地把相关记录聚过来。**不做输入框** —— 沟通在 Claude Code 里进行，
                 平台是结果呈现层，加了输入框它就开始变成聊天软件。 */}
-            <h2 className="muted text-xs font-medium mb-2 px-1">相关记录</h2>
+            <h2 className="muted text-xs font-medium mb-2 px-1">{t('相关记录')}</h2>
             <div className="space-y-2">
-              {t.messages.map((m) => (
+              {topic.messages.map((m) => (
                 <div
                   key={m.id}
                   className="surface border rounded-2xl p-3.5"
                   style={{ borderColor: 'var(--border)' }}
                 >
                   <div className="muted text-[11px] mb-1">
-                    {m.role === 'user' ? '主人' : '管家'} · {formatTime(m.createdAt)}
+                    {m.role === 'user' ? t('主人') : t('管家')} · {formatTime(m.createdAt, locale)}
                   </div>
                   <div className="text-sm line-clamp-4">
                     <MessageBody>{m.content}</MessageBody>
@@ -160,12 +163,12 @@ export default async function TopicDetail({ params }: { params: Promise<{ id: st
               ))}
             </div>
             <p className="muted text-[11px] mt-2 px-1">
-              完整对话在「记录」里 —— 这里只是把跟这个专题有关的聚过来。
+              {t('完整对话在「记录」里 —— 这里只是把跟这个专题有关的聚过来。')}
             </p>
           </section>
         )}
 
-        <p className="muted text-[11px] text-center pt-2">更新于 {formatDate(t.updatedAt)}</p>
+        <p className="muted text-[11px] text-center pt-2">{t('更新于 {date}', { date: formatDate(topic.updatedAt, locale) })}</p>
       </div>
     </>
   );

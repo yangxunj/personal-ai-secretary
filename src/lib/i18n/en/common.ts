@@ -37,10 +37,19 @@ export const common: Dict = {
   医疗: 'Medical',
   会员: 'Memberships',
   工作: 'Work',
+  // 常见的自填分类（任务、资料都会出现）
+  车辆: 'Vehicles',
+  网络: 'Internet',
+  生活: 'Life',
   // lib/format.ts 里中英分支直接写死了，这三条只是让对账脚本认得
   刚刚: 'just now',
   今天: 'Today',
   昨天: 'Yesterday',
+  // 几组都用到、曾经译法打架的，统一在这
+  文稿: 'Writings',
+  管家: 'Steward',
+  /** 消息的署名：用户自己那一方。「You」比「Me」读着顺（对方视角的署名） */
+  主人: 'You',
   // 通用按钮
   保存: 'Save',
   取消: 'Cancel',

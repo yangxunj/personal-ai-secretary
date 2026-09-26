@@ -8,9 +8,11 @@ import AttachmentRow from '@/components/AttachmentRow';
 import { TASK_STATUS, formatDate, formatTime } from '@/lib/format';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
+import { getLocale, getT } from '@/lib/i18n/server';
+import type { Locale, T } from '@/lib/i18n/core';
 
 const OPEN = ['todo', 'doing', 'blocked'];
-const PRIORITY = { 1: '高', 2: '中', 3: '低' } as const;
+const priorityLabel = (t: T, p: number) => (p === 1 ? t('高') : p === 3 ? t('低') : t('中'));
 
 /** 折叠阈值：超过这么多字就默认收起。管家的回复通常 700-1100 字，会收；
  *  代办人那种「好的。」「已經詢問，記錄如下」不会收。 */
@@ -18,12 +20,13 @@ const FOLD_OVER = 320;
 
 /** 收起状态下显示的一句话。把 markdown 记号去掉，否则摘要里全是星号和井号。 */
 function gist(s: string, n = 46) {
-  const t = s
-    .replace(/```[\s\S]*?```/g, '')
-    .replace(/[#>*_`★|-]/g, ' ')
+  // \x60 是反引号 —— 写成字面量的话，i18n-check 的扫描器会把它当成模板字符串的开头
+  const plain = s
+    .replace(/\x60{3}[\s\S]*?\x60{3}/g, '')
+    .replace(/[#>*_\x60★|-]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
-  return t.length > n ? t.slice(0, n) + '…' : t;
+  return plain.length > n ? plain.slice(0, n) + '…' : plain;
 }
 
 /**
@@ -79,7 +82,7 @@ export default async function TaskDetail({
    */
   markRead?: boolean;
 }) {
-  const t = await db.task.findUnique({
+  const task = await db.task.findUnique({
     where: { id },
     include: {
       attachments: true,
@@ -92,25 +95,28 @@ export default async function TaskDetail({
       blocked: { select: { id: true, title: true, status: true, owner: true } },
     },
   });
-  if (!t) notFound();
+  if (!task) notFound();
+  const t = await getT();
+  const locale = await getLocale();
 
   // 打开详情页 = 看过了。见 actions.ts 里对「GET 写库」的说明。
   if (markRead) await markTaskRepliesRead(id);
 
-  const ownAttachments = t.attachments.filter((a) => !a.messageId);
+  const ownAttachments = task.attachments.filter((a) => !a.messageId);
 
-  const isBlocked = !!t.blocker && !['done', 'cancelled'].includes(t.blocker.status);
+  const isBlocked = !!task.blocker && !['done', 'cancelled'].includes(task.blocker.status);
   const today = new Date();
   today.setHours(0, 0, 0, 0);
-  const overdue = t.dueDate
-    ? Math.max(0, Math.floor((today.getTime() - new Date(t.dueDate).setHours(0, 0, 0, 0)) / 86_400_000))
+  const overdue = task.dueDate
+    ? Math.max(0, Math.floor((today.getTime() - new Date(task.dueDate).setHours(0, 0, 0, 0)) / 86_400_000))
     : 0;
-  const late = OPEN.includes(t.status) && overdue > 0;
+  const late = OPEN.includes(task.status) && overdue > 0;
 
-  const last = t.messages.length > 0 ? t.messages[t.messages.length - 1] : null;
+  const last = task.messages.length > 0 ? task.messages[task.messages.length - 1] : null;
   // 现在轮到谁：最后一句是管家说的 → 等他们；是他们说的 → 等管家。
   // 这是翻开这一页最想知道的一件事，而它以前只能自己数到底部。
-  const waitingOn = !last ? null : last.role === 'secretary' ? (t.owner ?? '你') : '管家';
+  const waitingSecretary = !!last && last.role !== 'secretary';
+  const waitingOn = !last ? null : waitingSecretary ? t('管家') : (task.owner ?? t('你'));
 
   const detail = (
     <>
@@ -120,33 +126,33 @@ export default async function TaskDetail({
           <Link
             href={backTo}
             className="h-10 w-10 shrink-0 flex items-center justify-center rounded-full active:opacity-60"
-            aria-label="返回任务"
+            aria-label={t('返回任务')}
           >
             <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
               <path d="m15 18-6-6 6-6" />
             </svg>
           </Link>
-          <p className="text-sm font-medium truncate">{t.title}</p>
+          <p className="text-sm font-medium truncate">{task.title}</p>
         </div>
       </header>
 
       <article className="px-4 pt-6 pb-8">
         <div className="flex items-start justify-between gap-3">
-          <h1 className={`text-[21px] font-semibold leading-snug ${['done', 'cancelled'].includes(t.status) ? 'line-through muted' : ''}`}>
-            {t.title}
+          <h1 className={`text-[21px] font-semibold leading-snug ${['done', 'cancelled'].includes(task.status) ? 'line-through muted' : ''}`}>
+            {task.title}
           </h1>
-          <span className={`shrink-0 mt-1 text-[11px] px-2 py-0.5 rounded-full ${TASK_STATUS[t.status].cls}`}>
-            {TASK_STATUS[t.status].label}
+          <span className={`shrink-0 mt-1 text-[11px] px-2 py-0.5 rounded-full ${TASK_STATUS[task.status].cls}`}>
+            {t(TASK_STATUS[task.status].label)}
           </span>
         </div>
 
         <div className="flex items-center gap-2 mt-3 muted text-[11px] flex-wrap">
-          <span className="px-2 py-0.5 rounded-md" style={{ background: 'var(--bg)' }}>{t.category}</span>
-          <span>优先级 {PRIORITY[t.priority as 1 | 2 | 3] ?? '中'}</span>
-          {t.dueDate && (
+          <span className="px-2 py-0.5 rounded-md" style={{ background: 'var(--bg)' }}>{t(task.category)}</span>
+          <span>{t('优先级 {p}', { p: priorityLabel(t, task.priority) })}</span>
+          {task.dueDate && (
             <span className={late ? 'text-red-600 dark:text-red-400 font-medium' : ''}>
-              截止 {formatDate(t.dueDate)}
-              {late && `（已过期 ${overdue} 天）`}
+              {t('截止 {date}', { date: formatDate(task.dueDate, locale) })}
+              {late && t('（已过期 {n} 天）', { n: overdue })}
             </span>
           )}
         </div>
@@ -155,22 +161,22 @@ export default async function TaskDetail({
             只在真的有来回、且任务还没完的时候出现
             —— 一条留言都没有的那 83 条任务，页面跟以前一样。
             「现在等谁」是翻开这一页最想知道的事，以前只能自己数到底部。 */}
-        {last && OPEN.includes(t.status) && (
+        {last && OPEN.includes(task.status) && (
           <div className="mt-4 flex items-center gap-2 flex-wrap text-[12px] rounded-xl px-3 py-2" style={{ background: 'var(--bg)' }}>
-            <span className="muted">来回 {t.messages.length} 条</span>
+            <span className="muted">{t('来回 {n} 条', { n: task.messages.length })}</span>
             <span className="muted">·</span>
-            <span className="muted">最新 {formatDate(last.createdAt)}</span>
+            <span className="muted">{t('最新 {date}', { date: formatDate(last.createdAt, locale) })}</span>
             <span className="muted">·</span>
-            <span className={waitingOn === '管家' ? 'text-amber-700 dark:text-amber-400 font-medium' : 'text-brand-700 dark:text-brand-300 font-medium'}>
-              现在等 {waitingOn}
+            <span className={waitingSecretary ? 'text-amber-700 dark:text-amber-400 font-medium' : 'text-brand-700 dark:text-brand-300 font-medium'}>
+              {t('现在等 {who}', { who: waitingOn ?? '' })}
             </span>
           </div>
         )}
 
         {/* 依赖：往前看在等谁，往后看谁在等它。 */}
-        {(t.blocker || t.blocked.length > 0) && (
+        {(task.blocker || task.blocked.length > 0) && (
           <div className="mt-3 space-y-1.5">
-            {t.blocker && (
+            {task.blocker && (
               <div
                 className={`flex items-start gap-2 rounded-xl px-3 py-2 text-[12px] leading-relaxed ${
                   isBlocked ? 'bg-amber-500/10 text-amber-700 dark:text-amber-400' : 'muted'
@@ -178,29 +184,29 @@ export default async function TaskDetail({
                 style={isBlocked ? undefined : { background: 'var(--bg)' }}
               >
                 <span className="shrink-0">{isBlocked ? '⏳' : '✅'}</span>
-                <Link href={`/tasks/${t.blocker.id}`} className="min-w-0 underline decoration-dotted underline-offset-2">
-                  {isBlocked ? '等：' : '前置已完成：'}
-                  {t.blocker.title}
-                  {t.blocker.owner && `（${t.blocker.owner}）`}
+                <Link href={`/tasks/${task.blocker.id}`} className="min-w-0 underline decoration-dotted underline-offset-2">
+                  {isBlocked ? t('等：') : t('前置已完成：')}
+                  {task.blocker.title}
+                  {task.blocker.owner && t('（{who}）', { who: task.blocker.owner })}
                 </Link>
               </div>
             )}
-            {t.blocked.map((b) => (
+            {task.blocked.map((b) => (
               <div key={b.id} className="flex items-start gap-2 rounded-xl px-3 py-2 text-[12px] leading-relaxed muted" style={{ background: 'var(--bg)' }}>
                 <span className="shrink-0">→</span>
                 <Link href={`/tasks/${b.id}`} className="min-w-0 underline decoration-dotted underline-offset-2">
-                  这条做完才轮到：{b.title}
-                  {b.owner && `（${b.owner}）`}
+                  {t('这条做完才轮到：')}{b.title}
+                  {b.owner && t('（{who}）', { who: b.owner })}
                 </Link>
               </div>
             ))}
           </div>
         )}
 
-        {t.result && (
+        {task.result && (
           <div className="mt-5 rounded-xl bg-emerald-50 dark:bg-emerald-500/10 p-4">
-            <p className="text-[11px] font-medium text-emerald-700 dark:text-emerald-400 mb-1">处理结果</p>
-            <Prose>{t.result}</Prose>
+            <p className="text-[11px] font-medium text-emerald-700 dark:text-emerald-400 mb-1">{t('处理结果')}</p>
+            <Prose>{task.result}</Prose>
           </div>
         )}
 
@@ -209,11 +215,11 @@ export default async function TaskDetail({
             那两篇分别 3377 字、3214 字 —— 整篇铺在这里，等于在
             「这件事到哪了」和「我要说句话」之间垫了三千字。
             折叠起来，标题和「复制全文」还在手边，要读点一下就开。 */}
-        {(t.doc || ownAttachments.length > 0) && (
+        {(task.doc || ownAttachments.length > 0) && (
           <section className="mt-6">
-            <h2 className="text-[13px] font-medium muted mb-2">参考资料</h2>
+            <h2 className="text-[13px] font-medium muted mb-2">{t('参考资料')}</h2>
 
-            {t.doc && (
+            {task.doc && (
               <details className="surface border rounded-2xl overflow-hidden" style={{ borderColor: 'var(--border)' }}>
                 <summary className="list-none [&::-webkit-details-marker]:hidden cursor-pointer px-3.5 py-3 active:opacity-60">
                   <div className="flex items-center gap-3">
@@ -224,26 +230,26 @@ export default async function TaskDetail({
                       </svg>
                     </div>
                     <div className="min-w-0 flex-1">
-                      <p className="text-sm truncate">{t.doc.title}</p>
+                      <p className="text-sm truncate">{task.doc.title}</p>
                       <p className="muted text-[11px]">
-                        {t.doc.category ? `${t.doc.category} · ` : ''}
-                        {t.doc.body.length} 字 · 点开读
+                        {task.doc.category ? `${t(task.doc.category)} · ` : ''}
+                        {t('{n} 字 · 点开读', { n: task.doc.body.length })}
                       </p>
                     </div>
                   </div>
                 </summary>
                 <div className="px-3.5 pb-4">
-                  <CopyDoc body={t.doc.body} title={t.doc.title} />
+                  <CopyDoc body={task.doc.body} title={task.doc.title} />
                   <div className="flex justify-end mt-1">
                     <Link
-                      href={`/docs/${t.doc.id}?from=${encodeURIComponent(`/tasks/${t.id}`)}`}
+                      href={`/docs/${task.doc.id}?from=${encodeURIComponent(`/tasks/${task.id}`)}`}
                       className="text-[11px] muted underline decoration-dotted underline-offset-2"
                     >
-                      单独打开
+                      {t('单独打开')}
                     </Link>
                   </div>
                   <hr className="my-4 border-0 border-t" style={{ borderColor: 'var(--border)' }} />
-                  <Prose>{t.doc.body}</Prose>
+                  <Prose>{task.doc.body}</Prose>
                 </div>
               </details>
             )}
@@ -252,7 +258,7 @@ export default async function TaskDetail({
                 照单全列的话同一个文件在这页上会出现两次。
                 留言里的附件跟着它那句话显示，上下文更全。 */}
             {ownAttachments.length > 0 && (
-              <div className={`space-y-2 ${t.doc ? 'mt-2' : ''}`}>
+              <div className={`space-y-2 ${task.doc ? 'mt-2' : ''}`}>
                 {ownAttachments.map((a) => (
                   <AttachmentRow key={a.id} id={a.id} filename={a.filename} size={a.size} />
                 ))}
@@ -267,47 +273,50 @@ export default async function TaskDetail({
             回头翻是偶尔的事。收起来之后，十条往来大约一屏，看得见全貌。 */}
         <section className="mt-8">
           <div className="flex items-baseline justify-between gap-3">
-            <h2 className="text-[13px] font-medium muted">经过</h2>
-            <span className="muted text-[11px] shrink-0">管家不在线上，回复要等下一次</span>
+            <h2 className="text-[13px] font-medium muted">{t('经过')}</h2>
+            <span className="muted text-[11px] shrink-0">{t('管家不在线上，回复要等下一次')}</span>
           </div>
 
           <div className="mt-3 space-y-2">
             {/* 第 0 条：最初的要求。**创建时写下的，之后不改** ——
                 每一轮的新要求走留言，这样「当初是怎么交代的」永远还在。 */}
-            {t.detail && (
+            {task.detail && (
               <TimelineItem
-                who="最初的要求"
+                who={t('最初的要求')}
                 mine={false}
                 main
-                when={t.createdAt}
-                body={t.detail}
-                open={t.messages.length === 0}
+                when={task.createdAt}
+                body={task.detail}
+                open={task.messages.length === 0}
+                t={t}
+                locale={locale}
               />
             )}
 
-            {t.messages.map((m, i) => (
+            {task.messages.map((m, i) => (
               <TimelineItem
                 key={m.id}
                 floor={i + 1}
-                who={m.role === 'secretary' ? '管家' : (m.sender ?? '主人')}
+                who={m.role === 'secretary' ? t('管家') : (m.sender ?? t('主人'))}
                 mine={m.role === 'secretary'}
                 when={m.createdAt}
                 body={m.content}
-                open={i === t.messages.length - 1}
+                open={i === task.messages.length - 1}
                 pending={m.role !== 'secretary' && m.status === 'pending'}
                 attachments={m.attachments}
+                t={t}
+                locale={locale}
               />
             ))}
           </div>
 
-          {t.messages.length === 0 && !t.detail && (
+          {task.messages.length === 0 && !task.detail && (
             <p className="muted text-[12px] mt-3 leading-relaxed">
-              还没有往来。有想问的、办事时发现的情况，都可以写在下面 ——
-              管家下次会看到，回复也会出现在这里。
+              {t('还没有往来。有想问的、办事时发现的情况，都可以写在下面 —— 管家下次会看到，回复也会出现在这里。')}
             </p>
           )}
 
-          <TaskComposer taskId={t.id} defaultSender={t.owner} members={await getOwners()} />
+          <TaskComposer taskId={task.id} defaultSender={task.owner} members={await getOwners()} />
         </section>
       </article>
     </>
@@ -335,6 +344,8 @@ function TimelineItem({
   open,
   pending,
   attachments,
+  t,
+  locale,
 }: {
   who: string;
   mine: boolean;
@@ -347,6 +358,8 @@ function TimelineItem({
   open: boolean;
   pending?: boolean;
   attachments?: { id: string; filename: string; size: number }[];
+  t: T;
+  locale: Locale;
 }) {
   // ★ 主楼是卡片，楼层是竖线条目 —— 两者长得一样的时候，
   // 「当初怎么交代的」和「后来聊了什么」在视觉上是平的，一眼分不出。
@@ -371,10 +384,10 @@ function TimelineItem({
       <span className={`text-[11px] font-medium ${mine ? 'text-brand-700 dark:text-brand-300' : ''}`}>
         {who}
       </span>
-      <span className="muted text-[11px]">{formatTime(when)}</span>
-      {pending && <span className="text-[11px] text-amber-700 dark:text-amber-400">待管家处理</span>}
+      <span className="muted text-[11px]">{formatTime(when, locale)}</span>
+      {pending && <span className="text-[11px] text-amber-700 dark:text-amber-400">{t('待管家处理')}</span>}
       {attachments && attachments.length > 0 && (
-        <span className="muted text-[11px]">附件 {attachments.length}</span>
+        <span className="muted text-[11px]">{t('附件 {n}', { n: attachments.length })}</span>
       )}
     </div>
   );
@@ -403,8 +416,8 @@ function TimelineItem({
         {head}
         {/* 收起时显示头一句；展开后这两行让位给正文 */}
         <p className="muted text-[12px] mt-0.5 group-open:hidden leading-relaxed">{gist(body)}</p>
-        <span className="text-[11px] text-brand-700 dark:text-brand-300 group-open:hidden">展开</span>
-        <span className="muted text-[11px] hidden group-open:inline">收起</span>
+        <span className="text-[11px] text-brand-700 dark:text-brand-300 group-open:hidden">{t('展开')}</span>
+        <span className="muted text-[11px] hidden group-open:inline">{t('收起')}</span>
       </summary>
       <Prose>{body}</Prose>
       {files}

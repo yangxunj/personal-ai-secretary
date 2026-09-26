@@ -2,6 +2,7 @@
 import { useState, useTransition } from 'react';
 import { deleteAttachment } from '@/app/(app)/actions';
 import { humanSize } from '@/lib/format';
+import { useT } from '@/lib/i18n/client';
 
 /**
  * 详情页上的一个附件：点开看，右边一个删除。
@@ -24,6 +25,7 @@ export default function AttachmentRow({
   hint?: string;
 }) {
   const [confirming, setConfirming] = useState(false);
+  const t = useT();
   const [pending, start] = useTransition();
 
   return (
@@ -53,20 +55,20 @@ export default function AttachmentRow({
             onClick={() => start(() => void deleteAttachment(id))}
             className="text-[11px] px-2.5 py-1.5 rounded-lg bg-red-500/10 text-red-600 dark:text-red-400 font-medium active:opacity-60 disabled:opacity-50"
           >
-            {pending ? '删除中…' : '确定删除'}
+            {pending ? t('删除中…') : t('确定删除')}
           </button>
           <button
             disabled={pending}
             onClick={() => setConfirming(false)}
             className="text-[11px] px-2 py-1.5 rounded-lg muted active:opacity-60"
           >
-            取消
+            {t('取消')}
           </button>
         </div>
       ) : (
         <button
           onClick={() => setConfirming(true)}
-          aria-label={`删除 ${filename}`}
+          aria-label={t('删除 {name}', { name: filename })}
           className="shrink-0 h-8 w-8 flex items-center justify-center rounded-lg muted active:opacity-60"
         >
           <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">

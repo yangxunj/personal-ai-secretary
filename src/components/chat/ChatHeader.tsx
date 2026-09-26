@@ -10,6 +10,7 @@ import { deleteConversation, renameConversation } from '@/app/(app)/chat/actions
 import type { ConversationItem } from '@/lib/conversations';
 import ConversationList from './ConversationList';
 import { CONV_EVENT, emitConversations, type ConvEventDetail } from './events';
+import { useT } from '@/lib/i18n/client';
 
 /**
  * 对话页的页头：标题 + 「⋯」（改名、删除）+ 新对话。
@@ -37,6 +38,7 @@ export default function ChatHeader({
   const [title, setTitle] = useState(initialTitle);
   const [exists, setExists] = useState(initialExists);
   const [drawer, setDrawer] = useState(false);
+  const t = useT();
   // 服务端重新给了一份（后退后 Chat 里那次 refresh）就跟上
   useEffect(() => setTitle(initialTitle), [initialTitle]);
   useEffect(() => setExists(initialExists), [initialExists]);
@@ -58,7 +60,7 @@ export default function ChatHeader({
         <div className="flex items-center gap-1 min-w-0">
           <button
             onClick={() => setDrawer(true)}
-            aria-label="对话列表"
+            aria-label={t('对话列表')}
             className="lg:hidden h-9 w-9 shrink-0 flex items-center justify-center rounded-lg muted active:opacity-60"
           >
             <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
@@ -66,7 +68,7 @@ export default function ChatHeader({
             </svg>
           </button>
           <div className="min-w-0">
-            <h1 className="font-semibold truncate">{title ?? '新对话'}</h1>
+            <h1 className="font-semibold truncate">{title ?? t('新对话')}</h1>
             <p className="muted text-[11px] -mt-0.5 truncate">{subtitle}</p>
           </div>
         </div>
@@ -78,14 +80,14 @@ export default function ChatHeader({
               className="muted text-xs px-2.5 py-1.5 rounded-lg border"
               style={{ borderColor: 'var(--border)' }}
             >
-              回到最新
+              {t('回到最新')}
             </Link>
           )}
           {exists && <ConversationMenu id={conversationId} title={title ?? ''} onRenamed={setTitle} />}
           <Link
             href="/chat"
-            aria-label="新对话"
-            title="新对话"
+            aria-label={t('新对话')}
+            title={t('新对话')}
             className="lg:hidden h-9 w-9 flex items-center justify-center rounded-lg muted active:opacity-60"
           >
             <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -127,6 +129,7 @@ function ConversationMenu({ id, title, onRenamed }: { id: string; title: string;
   const [pending, start] = useTransition();
   const router = useRouter();
   const box = useRef<HTMLDivElement>(null);
+  const t = useT();
 
   useEffect(() => {
     if (!open) return;
@@ -147,7 +150,7 @@ function ConversationMenu({ id, title, onRenamed }: { id: string; title: string;
           setMode('menu');
           setDraft(title);
         }}
-        aria-label="对话操作"
+        aria-label={t('对话操作')}
         className="h-9 w-9 flex items-center justify-center rounded-lg muted active:opacity-60 hover:bg-brand-500/5"
       >
         <svg viewBox="0 0 24 24" className="h-5 w-5" fill="currentColor">
@@ -165,10 +168,10 @@ function ConversationMenu({ id, title, onRenamed }: { id: string; title: string;
           {mode === 'menu' && (
             <>
               <button className={item} onClick={() => setMode('rename')}>
-                改个名字
+                {t('改个名字')}
               </button>
               <button className={`${item} text-red-600 dark:text-red-400`} onClick={() => setMode('confirm')}>
-                删除这个对话
+                {t('删除这个对话')}
               </button>
             </>
           )}
@@ -178,12 +181,12 @@ function ConversationMenu({ id, title, onRenamed }: { id: string; title: string;
               className="p-1.5 space-y-2"
               onSubmit={(e) => {
                 e.preventDefault();
-                const t = draft.trim();
-                if (!t) return;
+                const name = draft.trim();
+                if (!name) return;
                 start(async () => {
-                  await renameConversation(id, t);
-                  onRenamed(t);
-                  emitConversations({ id, title: t });
+                  await renameConversation(id, name);
+                  onRenamed(name);
+                  emitConversations({ id, title: name });
                   setOpen(false);
                 });
               }}
@@ -198,13 +201,13 @@ function ConversationMenu({ id, title, onRenamed }: { id: string; title: string;
               />
               <div className="flex justify-end gap-1.5">
                 <button type="button" onClick={() => setOpen(false)} className="text-[12px] px-2.5 py-1 muted">
-                  取消
+                  {t('取消')}
                 </button>
                 <button
                   disabled={pending}
                   className="text-[12px] px-3 py-1 rounded-lg bg-brand-500 text-white disabled:opacity-50"
                 >
-                  保存
+                  {t('保存')}
                 </button>
               </div>
             </form>
@@ -213,11 +216,11 @@ function ConversationMenu({ id, title, onRenamed }: { id: string; title: string;
           {mode === 'confirm' && (
             <div className="p-2 space-y-2">
               <p className="text-[12px] leading-relaxed muted">
-                聊天记录会删掉。在对话里建的任务、存的资料、传的文件、做的页面都还在。
+                {t('聊天记录会删掉。在对话里建的任务、存的资料、传的文件、做的页面都还在。')}
               </p>
               <div className="flex justify-end gap-1.5">
                 <button onClick={() => setOpen(false)} className="text-[12px] px-2.5 py-1 muted">
-                  取消
+                  {t('取消')}
                 </button>
                 <button
                   disabled={pending}
@@ -230,7 +233,7 @@ function ConversationMenu({ id, title, onRenamed }: { id: string; title: string;
                   }
                   className="text-[12px] px-3 py-1 rounded-lg bg-red-500/10 text-red-600 dark:text-red-400 font-medium disabled:opacity-50"
                 >
-                  {pending ? '删除中…' : '确定删除'}
+                  {pending ? t('删除中…') : t('确定删除')}
                 </button>
               </div>
             </div>

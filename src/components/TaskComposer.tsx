@@ -1,6 +1,7 @@
 'use client';
 import { useRef, useState, useTransition } from 'react';
 import { postTaskMessage } from '@/app/(app)/actions';
+import { useT } from '@/lib/i18n/client';
 
 /**
  * 任务留言框 —— 这一页上**唯一**跟管家说话的地方。
@@ -28,6 +29,7 @@ export default function TaskComposer({
   members: string[];
 }) {
   const [pending, start] = useTransition();
+  const t = useT();
   const [done, setDone] = useState(false);
   const [files, setFiles] = useState(0);
   const formRef = useRef<HTMLFormElement>(null);
@@ -53,7 +55,7 @@ export default function TaskComposer({
         rows={3}
         disabled={pending}
         onInput={() => setDone(false)}
-        placeholder="想问的、想说的、办事时发现的情况，写在这里。也可以只传文件。"
+        placeholder={t('想问的、想说的、办事时发现的情况，写在这里。也可以只传文件。')}
         className="w-full bg-transparent outline-none resize-y leading-relaxed placeholder:opacity-50 disabled:opacity-50"
       />
 
@@ -66,7 +68,7 @@ export default function TaskComposer({
           <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" />
           </svg>
-          {files > 0 ? `已选 ${files} 个文件` : '加文件'}
+          {files > 0 ? t('已选 {n} 个文件', { n: files }) : t('加文件')}
           <input
             type="file"
             name="files"
@@ -83,7 +85,7 @@ export default function TaskComposer({
 
       <div className="flex items-center justify-between gap-2 mt-2">
         <label className="flex items-center gap-1.5 muted text-[11px]">
-          <span className="shrink-0">留言人</span>
+          <span className="shrink-0">{t('留言人')}</span>
           <select
             name="sender"
             defaultValue={defaultSender ?? members[0]}
@@ -101,14 +103,14 @@ export default function TaskComposer({
         <div className="flex items-center gap-2">
           {done && !pending && (
             <span className="text-[11px] text-emerald-700 dark:text-emerald-400">
-              已留言，管家下次会看到
+              {t('已留言，管家下次会看到')}
             </span>
           )}
           <button
             disabled={pending}
             className="text-xs px-3.5 py-1.5 rounded-lg bg-brand-500/10 text-brand-700 dark:text-brand-300 font-medium active:opacity-60 disabled:opacity-50"
           >
-            {pending ? (files > 0 ? '上传中…' : '发送中…') : '留言'}
+            {pending ? (files > 0 ? t('上传中…') : t('发送中…')) : t('留言')}
           </button>
         </div>
       </div>

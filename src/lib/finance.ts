@@ -9,12 +9,15 @@
  * 都不用改。
  */
 
+import { intlTag, type Locale } from './i18n/core';
+
 /** 货币符号。这一版是人民币，主平台是港币，靠环境变量区分 */
 export const CURRENCY = process.env.NEXT_PUBLIC_CURRENCY_SYMBOL ?? '¥';
 
 /** 本位币代码。交易的 currency 不等于它才算外币，才需要显示原币那一行 */
 export const BASE_CURRENCY = process.env.NEXT_PUBLIC_BASE_CURRENCY ?? 'CNY';
 
+/** 值是中文原文，界面显示时过 t()；data-tools 直接拿中文给模型看 */
 export const CATEGORY_LABELS: Record<string, string> = {
   fixed_cost: '固定成本',
   daily_life: '日常生活',
@@ -163,8 +166,14 @@ export function moneyRound(cents: number | null | undefined) {
   return `${CURRENCY} ${Math.round(cents / 100).toLocaleString('en-US')}`;
 }
 
-/** 2026-04 → 2026 年 4 月 */
-export function periodLabel(period: string) {
+/** 2026-04 → 2026 年 4 月 / April 2026 */
+export function periodLabel(period: string, locale: Locale = 'zh') {
   const m = period.match(/^(\d{4})-(\d{2})$/);
-  return m ? `${m[1]} 年 ${Number(m[2])} 月` : period;
+  if (!m) return period;
+  if (locale === 'en') {
+    return new Intl.DateTimeFormat(intlTag(locale), { year: 'numeric', month: 'long' }).format(
+      new Date(Number(m[1]), Number(m[2]) - 1, 1),
+    );
+  }
+  return `${m[1]} 年 ${Number(m[2])} 月`;
 }

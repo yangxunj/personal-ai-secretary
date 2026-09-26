@@ -3,6 +3,7 @@ import { db } from '@/lib/db';
 import { verifySessionValue } from '@/lib/session-edge';
 import { SESSION_COOKIE } from '@/lib/instance';
 import { cookies } from 'next/headers';
+import { getT } from '@/lib/i18n/server';
 
 /**
  * 专题的呈现页 —— 把 `Topic.page` 里那整段 HTML 原样吐出来。
@@ -17,6 +18,7 @@ import { cookies } from 'next/headers';
 export const dynamic = 'force-dynamic';
 
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const t = await getT();
   // 跟 /api/files 一致：启用鉴权时这里也要单独校验一次，
   // 否则知道 id 就能绕过页面直接把内容取走。
   if (process.env.AUTH_ENABLED === 'true') {
@@ -25,14 +27,14 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
       jar.get(SESSION_COOKIE)?.value,
       process.env.SESSION_SECRET ?? ''
     );
-    if (!ok) return new NextResponse('未授权', { status: 401 });
+    if (!ok) return new NextResponse(t('未授权'), { status: 401 });
   }
 
   const { id } = await params;
   const topic = await db.topic.findUnique({ where: { id }, select: { page: true, title: true } });
-  if (!topic) return new NextResponse('专题不存在', { status: 404 });
+  if (!topic) return new NextResponse(t('专题不存在'), { status: 404 });
   if (!topic.page) {
-    return new NextResponse(`「${topic.title}」还没有呈现页`, {
+    return new NextResponse(t('「{title}」还没有呈现页', { title: topic.title }), {
       status: 404,
       headers: { 'Content-Type': 'text/plain; charset=utf-8' },
     });

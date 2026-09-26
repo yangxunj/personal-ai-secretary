@@ -1,6 +1,7 @@
 'use client';
 import { useState } from 'react';
 import { copyText } from '@/lib/clipboard';
+import { useT } from '@/lib/i18n/client';
 
 type Feedback = 'idle' | 'copied' | 'failed';
 
@@ -16,6 +17,7 @@ type Feedback = 'idle' | 'copied' | 'failed';
  */
 export default function CopyDoc({ body, title }: { body: string; title: string }) {
   const [feedback, setFeedback] = useState<Feedback>('idle');
+  const t = useT();
 
   async function handleCopy() {
     const ok = await copyText(body);
@@ -48,13 +50,13 @@ export default function CopyDoc({ body, title }: { body: string; title: string }
             <rect x="9" y="9" width="12" height="12" rx="2" />
             <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
           </svg>
-          {feedback === 'copied' ? '已复制全文' : feedback === 'failed' ? '复制失败，长按下方正文' : '复制全文'}
+          {feedback === 'copied' ? t('已复制全文') : feedback === 'failed' ? t('复制失败，长按下方正文') : t('复制全文')}
         </button>
         <button
           onClick={handleDownload}
           className="shrink-0 flex items-center justify-center gap-2 rounded-xl border text-sm muted px-4 py-2.5 active:opacity-60"
           style={{ borderColor: 'var(--border)' }}
-          aria-label="下载 Markdown 文件"
+          aria-label={t('下载 Markdown 文件')}
         >
           <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3" />
@@ -63,7 +65,7 @@ export default function CopyDoc({ body, title }: { body: string; title: string }
         </button>
       </div>
       <p className="muted text-[11px] mt-1.5">
-        复制的是 Markdown 原文，粘到别的 AI 那边标题和表格都还在。
+        {t('复制的是 Markdown 原文，粘到别的 AI 那边标题和表格都还在。')}
       </p>
     </div>
   );

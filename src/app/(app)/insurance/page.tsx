@@ -2,6 +2,8 @@ import { db } from '@/lib/db';
 import { BASE_CURRENCY } from '@/lib/finance';
 import PageHeader from '@/components/PageHeader';
 import Link from 'next/link';
+import { getLocale, getT } from '@/lib/i18n/server';
+import type { Locale, T } from '@/lib/i18n/core';
 
 export const dynamic = 'force-dynamic';
 
@@ -22,17 +24,29 @@ export const dynamic = 'force-dynamic';
  * 页面还是旧的，看上去却一切正常。
  */
 
-const KIND: Record<string, { label: string; cls: string }> = {
-  medical: { label: '医疗', cls: 'bg-blue-100 text-blue-700 dark:bg-blue-500/15 dark:text-blue-400' },
-  critical: { label: '重疾', cls: 'bg-purple-100 text-purple-700 dark:bg-purple-500/15 dark:text-purple-400' },
-  life: { label: '寿险', cls: 'bg-slate-200 text-slate-700 dark:bg-slate-500/20 dark:text-slate-300' },
-  cancer: { label: '防癌', cls: 'bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-400' },
+const KIND_CLS: Record<string, string> = {
+  medical: 'bg-blue-100 text-blue-700 dark:bg-blue-500/15 dark:text-blue-400',
+  critical: 'bg-purple-100 text-purple-700 dark:bg-purple-500/15 dark:text-purple-400',
+  life: 'bg-slate-200 text-slate-700 dark:bg-slate-500/20 dark:text-slate-300',
+  cancer: 'bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-400',
 };
+
+function kindLabel(kind: string, t: T) {
+  const labels: Record<string, string> = {
+    medical: t('医疗'),
+    critical: t('重疾'),
+    life: t('寿险'),
+    cancer: t('防癌'),
+  };
+  return labels[kind];
+}
 
 const money = (cents: number, cur: string) =>
   `${cur} ${(cents / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const base = (cents: number) => `${BASE_CURRENCY} ${Math.round(cents / 100).toLocaleString('en-US')}`;
-const wan = (n: number | null) => (n == null ? null : n >= 10000 ? `${n / 10000} 万` : n.toLocaleString('en-US'));
+/** 保额：中文按「万」，英文就是带千分位的整数 */
+const wan = (n: number | null, locale: Locale, t: T) =>
+  n == null ? null : locale === 'zh' && n >= 10000 ? t('{n} 万', { n: n / 10000 }) : n.toLocaleString('en-US');
 const iso = (d: Date | null) => (d ? d.toISOString().slice(0, 10) : '');
 
 /**
@@ -82,6 +96,8 @@ function daysTo(d: Date | null) {
 }
 
 export default async function InsurancePage() {
+  const t = await getT();
+  const locale = await getLocale();
   const policies = await db.policy.findMany({
     where: { status: 'active' },
     orderBy: { premiumBaseCents: 'desc' },
@@ -121,8 +137,8 @@ export default async function InsurancePage() {
   return (
     <>
       <PageHeader
-        title="保险"
-        subtitle={`${policies.length} 份保单 · ${people.length} 个人 · 年缴 ${base(total)}`}
+        title={t('保险')}
+        subtitle={t('{n} 份保单 · {p} 个人 · 年缴 {total}', { n: policies.length, p: people.length, total: base(total) })}
         back="/topics"
       />
 
@@ -132,26 +148,27 @@ export default async function InsurancePage() {
           <div className="grid grid-cols-3 gap-2 text-center">
             <div>
               <div className="text-lg font-semibold tabular-nums">{base(total)}</div>
-              <div className="muted text-[11px] mt-0.5">年缴合计</div>
+              <div className="muted text-[11px] mt-0.5">{t('年缴合计')}</div>
             </div>
             <div>
               <div className="text-lg font-semibold tabular-nums">{base(cnTotal)}</div>
-              <div className="muted text-[11px] mt-0.5">境内 {policies.filter((p) => p.region === 'cn').length} 份</div>
+              <div className="muted text-[11px] mt-0.5">{t('境内 {n} 份', { n: policies.filter((p) => p.region === 'cn').length })}</div>
             </div>
             <div>
               <div className="text-lg font-semibold tabular-nums">{base(overseasTotal)}</div>
-              <div className="muted text-[11px] mt-0.5">境外 {policies.filter((p) => p.region === 'overseas').length} 份</div>
+              <div className="muted text-[11px] mt-0.5">{t('境外 {n} 份', { n: policies.filter((p) => p.region === 'overseas').length })}</div>
             </div>
           </div>
           <p className="muted text-[11px] mt-3 leading-relaxed">
-            外币按粗略汇率折算，只用来排序和汇总，对账以原币为准。标了
-            <b>账外</b>的那几笔不经导入的银行账单 —— 财务页的「真实支出」看不到它们。
+            {t('外币按粗略汇率折算，只用来排序和汇总，对账以原币为准。标了')}
+            <b>{t('账外')}</b>
+            {t('的那几笔不经导入的银行账单 —— 财务页的「真实支出」看不到它们。')}
           </p>
         </section>
 
         {/* ---------- 缴费日历 ---------- */}
         <section>
-          <h2 className="text-[13px] font-semibold mb-2 px-0.5">接下来要交的</h2>
+          <h2 className="text-[13px] font-semibold mb-2 px-0.5">{t('接下来要交的')}</h2>
           <div className="space-y-1.5">
             {calendar.map(({ p, due }) => {
               // 已经过了缴费日 —— 但要先看这一期到底缴没缴。
@@ -188,18 +205,18 @@ export default async function InsurancePage() {
                       }`}
                     >
                       {paidThisCycle
-                        ? '已缴'
+                        ? t('已缴')
                         : due.days === 0
-                          ? '就是今天'
+                          ? t('就是今天')
                           : due.days < 0
-                            ? `已过 ${-due.days} 天`
-                            : `${due.days} 天后`}
+                            ? t('已过 {n} 天', { n: -due.days })
+                            : t('{n} 天后', { n: due.days })}
                     </div>
                   </div>
                   <div className="min-w-0 flex-1">
                     <div className="text-[13px] truncate">
-                      <span className={`inline-block text-[10px] px-1.5 py-0.5 rounded mr-1.5 align-middle ${KIND[p.kind]?.cls}`}>
-                        {KIND[p.kind]?.label}
+                      <span className={`inline-block text-[10px] px-1.5 py-0.5 rounded mr-1.5 align-middle ${KIND_CLS[p.kind]}`}>
+                        {kindLabel(p.kind, t)}
                       </span>
                       <b>{p.insured}</b>
                       <span className="muted"> · {p.insurer.replace(/（.*/, '')}</span>
@@ -210,12 +227,13 @@ export default async function InsurancePage() {
                       }`}
                     >
                       {passed
-                        ? '⚠ 缴费日已过，先确认扣款成功了没有'
+                        ? t('⚠ 缴费日已过，先确认扣款成功了没有')
                         : paidThisCycle
-                          ? `${last!.paidOn!.toISOString().slice(0, 10)} 已缴${last!.note ? ' · ' + last!.note.replace(/（.*/, '') : ''}`
+                          ? t('{date} 已缴', { date: last!.paidOn!.toISOString().slice(0, 10) }) +
+                            (last!.note ? ' · ' + last!.note.replace(/（.*/, '') : '')
                           : p.guaranteed
-                            ? '保证续保 —— 但保费还是要按时到账'
-                            : '⚠ 不保证续保，到期前必须主动去重新投保'}
+                            ? t('保证续保 —— 但保费还是要按时到账')
+                            : t('⚠ 不保证续保，到期前必须主动去重新投保')}
                     </div>
                   </div>
                   <div className="shrink-0 text-right">
@@ -231,7 +249,7 @@ export default async function InsurancePage() {
         {/* ---------- 红线 ---------- */}
         {redLines.length > 0 && (
           <section>
-            <h2 className="text-[13px] font-semibold mb-2 px-0.5">断了就买不回来的日子</h2>
+            <h2 className="text-[13px] font-semibold mb-2 px-0.5">{t('断了就买不回来的日子')}</h2>
             <div className="space-y-1.5">
               {redLines.map(({ p, days }) => (
                 <div
@@ -249,7 +267,7 @@ export default async function InsurancePage() {
                     </div>
                   </div>
                   <p className="muted text-[11px] mt-1 leading-relaxed">
-                    还有 {Math.floor(days / 30)} 个月 · {p.redLineNote}
+                    {t('还有 {n} 个月', { n: Math.floor(days / 30) })} · {p.redLineNote}
                   </p>
                 </div>
               ))}
@@ -260,23 +278,24 @@ export default async function InsurancePage() {
         {/* ---------- 不保证续保 ---------- */}
         <section>
           <h2 className="text-[13px] font-semibold mb-2 px-0.5">
-            不保证续保的 {notGuaranteed.length} 份 —— 每年都得自己去办
+            {t('不保证续保的 {n} 份 —— 每年都得自己去办', { n: notGuaranteed.length })}
           </h2>
           <div className="surface rounded-xl border p-3" style={{ borderColor: 'var(--border)' }}>
             <p className="text-[12px] leading-relaxed muted">
-              这几份到期不会自动延续：保险期间届满要重新申请、经保险人同意才成立新合同。
-              它们能一直保着，靠的是「对保障期间连续的保单，按照<b>首年投保时</b>的健康告知核保」——
-              断一次，这个保护就没了。
+              {t('这几份到期不会自动延续：保险期间届满要重新申请、经保险人同意才成立新合同。')}
+              {t('它们能一直保着，靠的是「对保障期间连续的保单，按照')}
+              <b>{t('首年投保时')}</b>
+              {t('的健康告知核保」—— 断一次，这个保护就没了。')}
             </p>
             <div className="mt-2.5 space-y-1">
               {notGuaranteed.map((p) => (
                 <div key={p.id} className="flex items-baseline justify-between gap-2 text-[12px]">
                   <span className="truncate">
                     <b>{p.insured}</b>
-                    <span className="muted"> · {p.dueMonthDay?.replace('-', '/')} 到期</span>
+                    <span className="muted"> · {t('{date} 到期', { date: p.dueMonthDay?.replace('-', '/') ?? '' })}</span>
                   </span>
                   <span className="muted tabular-nums shrink-0">
-                    首次投保 {iso(p.firstIssued)}
+                    {t('首次投保 {date}', { date: iso(p.firstIssued) })}
                   </span>
                 </div>
               ))}
@@ -286,7 +305,7 @@ export default async function InsurancePage() {
 
         {/* ---------- 按人 ---------- */}
         <section>
-          <h2 className="text-[13px] font-semibold mb-2 px-0.5">每个人保了什么</h2>
+          <h2 className="text-[13px] font-semibold mb-2 px-0.5">{t('每个人保了什么')}</h2>
           <div className="space-y-2">
             {people.map(([key, list]) => {
               const [name, relation] = key.split('|');
@@ -298,24 +317,24 @@ export default async function InsurancePage() {
                       {name}
                       <span className="muted font-normal text-[12px]"> · {relation}</span>
                     </div>
-                    <div className="muted text-[11px] tabular-nums shrink-0">{base(sum)} / 年</div>
+                    <div className="muted text-[11px] tabular-nums shrink-0">{t('{amount} / 年', { amount: base(sum) })}</div>
                   </div>
                   <div className="space-y-1.5">
                     {list.map((p) => (
                       <div key={p.id} className="text-[12px]">
                         <div className="flex items-baseline gap-1.5">
-                          <span className={`text-[10px] px-1.5 py-0.5 rounded shrink-0 ${KIND[p.kind]?.cls}`}>
-                            {KIND[p.kind]?.label}
+                          <span className={`text-[10px] px-1.5 py-0.5 rounded shrink-0 ${KIND_CLS[p.kind]}`}>
+                            {kindLabel(p.kind, t)}
                           </span>
                           <span className="truncate flex-1">{p.product}</span>
                           <span className="muted tabular-nums shrink-0">{money(p.premiumCents, p.currency)}</span>
                         </div>
                         <div className="muted text-[11px] mt-0.5 pl-0.5">
                           {p.insurer} · {p.policyNo}
-                          {p.sumInsured != null && ` · 保额 ${p.currency === 'CNY' ? wan(p.sumInsured) : wan(p.sumInsured)}`}
+                          {p.sumInsured != null && ` · ${t('保额 {amount}', { amount: wan(p.sumInsured, locale, t)! })}`}
                           {p.guaranteed
-                            ? ` · 保证续保${p.guaranteedUntil ? '至 ' + iso(p.guaranteedUntil) : ''}`
-                            : ' · ⚠ 不保证续保'}
+                            ? ` · ${p.guaranteedUntil ? t('保证续保至 {date}', { date: iso(p.guaranteedUntil) }) : t('保证续保')}`
+                            : ` · ${t('⚠ 不保证续保')}`}
                         </div>
                         {/* 资料库没有详情路由，只有 /vault?c= 分类视图 —— 用搜索页按保单号直达，
                             那是唯一能精确定位到一条的入口 */}
@@ -323,7 +342,7 @@ export default async function InsurancePage() {
                           href={`/search?q=${encodeURIComponent(p.policyNo)}`}
                           className="inline-block mt-1 text-[11px] text-brand-600 dark:text-brand-400 active:opacity-60"
                         >
-                          条款细节与原件 →
+                          {t('条款细节与原件')} →
                         </Link>
                       </div>
                     ))}
@@ -340,9 +359,9 @@ export default async function InsurancePage() {
             className="block surface rounded-xl border px-3 py-3 text-[13px] active:opacity-60"
             style={{ borderColor: 'var(--border)' }}
           >
-            条款解读、告知瑕疵、保障缺口的分析 → <b>「全家保险」专题</b>
+            {t('条款解读、告知瑕疵、保障缺口的分析')} → <b>{t('「全家保险」专题')}</b>
             <div className="muted text-[11px] mt-0.5">
-              这一页只列事实。为什么某条红线危险、某份保单哪里有敞口，都写在专题的呈现页里。
+              {t('这一页只列事实。为什么某条红线危险、某份保单哪里有敞口，都写在专题的呈现页里。')}
             </div>
           </Link>
         </div>

@@ -1,4 +1,5 @@
 import { db } from '@/lib/db';
+import { getT } from '@/lib/i18n/server';
 
 /**
  * 模型配置 —— 数据库优先，`.env` 兜底。
@@ -61,12 +62,13 @@ export async function setAiConfig(input: {
   apiKey?: string;
   model?: string;
 }): Promise<SaveResult> {
+  const t = await getT();
   const writes: { key: string; value: string }[] = [];
 
   const baseUrl = input.baseUrl?.trim();
   if (baseUrl !== undefined && baseUrl !== '') {
     if (!/^https?:\/\//i.test(baseUrl)) {
-      return { ok: false, error: '接口地址要以 http:// 或 https:// 开头' };
+      return { ok: false, error: t('接口地址要以 http:// 或 https:// 开头') };
     }
     writes.push({ key: KEYS.baseUrl, value: baseUrl });
   }
@@ -79,11 +81,11 @@ export async function setAiConfig(input: {
     // 手机上复制粘贴很容易带上空格或者换行，先清掉再校验，
     // 否则请求头里带个 \n 会报一个跟 key 完全无关的错
     const cleaned = apiKey.replace(/\s+/g, '');
-    if (cleaned.length < 8) return { ok: false, error: 'API Key 看起来不完整' };
+    if (cleaned.length < 8) return { ok: false, error: t('API Key 看起来不完整') };
     writes.push({ key: KEYS.apiKey, value: cleaned });
   }
 
-  if (!writes.length) return { ok: false, error: '没有要改的内容' };
+  if (!writes.length) return { ok: false, error: t('没有要改的内容') };
 
   await db.$transaction(
     writes.map((w) =>
@@ -121,9 +123,10 @@ export function maskKey(key: string): string {
  */
 export async function testAiConfig(cfg?: AiConfig): Promise<SaveResult> {
   const c = cfg ?? (await getAiConfig());
-  if (!c.apiKey) return { ok: false, error: '还没填 API Key' };
-  if (!c.baseUrl) return { ok: false, error: '还没填接口地址' };
-  if (!c.model) return { ok: false, error: '还没填模型名' };
+  const t = await getT();
+  if (!c.apiKey) return { ok: false, error: t('还没填 API Key') };
+  if (!c.baseUrl) return { ok: false, error: t('还没填接口地址') };
+  if (!c.model) return { ok: false, error: t('还没填模型名') };
 
   try {
     const res = await fetch(`${c.baseUrl.replace(/\/$/, '')}/chat/completions`, {
@@ -134,7 +137,8 @@ export async function testAiConfig(cfg?: AiConfig): Promise<SaveResult> {
       },
       body: JSON.stringify({
         model: c.model,
-        messages: [{ role: 'user', content: '回答一个字：好' }],
+        // 只是验通不通，回什么都行；用英文免得跟界面语言扯上关系
+        messages: [{ role: 'user', content: 'Reply with one word: OK' }],
         max_tokens: 16,
         stream: false,
       }),
@@ -148,23 +152,23 @@ export async function testAiConfig(cfg?: AiConfig): Promise<SaveResult> {
       // 「余额不足」和「key 写错了」就变成同一个提示了。
       const detail = body.slice(0, 300).replace(/\s+/g, ' ');
       if (res.status === 401 || res.status === 403) {
-        return { ok: false, error: `API Key 被拒绝（${res.status}）。${detail}` };
+        return { ok: false, error: t('API Key 被拒绝（{status}）。', { status: res.status }) + detail };
       }
       if (res.status === 404) {
-        return { ok: false, error: `接口地址或模型名不对（404）。${detail}` };
+        return { ok: false, error: t('接口地址或模型名不对（404）。') + detail };
       }
-      return { ok: false, error: `服务商返回 ${res.status}。${detail}` };
+      return { ok: false, error: t('服务商返回 {status}。', { status: res.status }) + detail };
     }
 
     const data = (await res.json()) as { choices?: { message?: { content?: string } }[] };
     const reply = data.choices?.[0]?.message?.content;
     if (typeof reply !== 'string') {
-      return { ok: false, error: '接口通了，但返回的格式看不懂 —— 确认这是 OpenAI 兼容接口' };
+      return { ok: false, error: t('接口通了，但返回的格式看不懂 —— 确认这是 OpenAI 兼容接口') };
     }
     return { ok: true };
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
-    if (/timeout|abort/i.test(msg)) return { ok: false, error: '30 秒没响应，检查网络或者接口地址' };
-    return { ok: false, error: `连不上：${msg}` };
+    if (/timeout|abort/i.test(msg)) return { ok: false, error: t('30 秒没响应，检查网络或者接口地址') };
+    return { ok: false, error: t('连不上：{msg}', { msg }) };
   }
 }

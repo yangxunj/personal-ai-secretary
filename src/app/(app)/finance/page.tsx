@@ -11,6 +11,7 @@ import {
   pending as pendingOf,
   spendByCategory,
 } from '@/lib/finance';
+import { getLocale, getT } from '@/lib/i18n/server';
 
 export const dynamic = 'force-dynamic';
 
@@ -23,6 +24,8 @@ export default async function FinancePage() {
     },
   });
 
+  const t = await getT();
+  const locale = await getLocale();
   const months = statements.map((st) => ({
     ...st,
     spend: realSpend(st.transactions),
@@ -33,16 +36,16 @@ export default async function FinancePage() {
   return (
     <>
       <PageHeader
-        title="财务"
-        subtitle={months.length > 0 ? `${months.length} 个月` : undefined}
+        title={t('财务')}
+        subtitle={months.length > 0 ? t('{n} 个月', { n: months.length }) : undefined}
       />
 
       <div className="px-4 pt-4 pb-4 space-y-3">
         {months.length === 0 && (
           <p className="muted text-sm text-center py-20 leading-relaxed">
-            还没有账单。
+            {t('还没有账单。')}
             <br />
-            把银行月结单 PDF 发给我，我解析后收进来。
+            {t('把银行月结单 PDF 发给我，我解析后收进来。')}
           </p>
         )}
 
@@ -58,17 +61,17 @@ export default async function FinancePage() {
             >
             <Link href={`/finance/${m.period}`} className="block p-4 active:opacity-70 transition">
               <div className="flex items-baseline justify-between gap-3">
-                <h2 className="text-[15px] font-medium">{periodLabel(m.period)}</h2>
+                <h2 className="text-[15px] font-medium">{periodLabel(m.period, locale)}</h2>
                 {m.pending.count > 0 && (
                   <span className="shrink-0 text-[11px] px-2 py-0.5 rounded-md bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-400">
-                    {m.pending.count} 笔待确认
+                    {t('{n} 笔待确认', { n: m.pending.count })}
                   </span>
                 )}
               </div>
 
               <div className="mt-2 flex items-baseline gap-2">
                 <span className="text-2xl font-semibold tracking-tight">{moneyRound(m.spend)}</span>
-                <span className="muted text-[11px]">真实支出</span>
+                <span className="muted text-[11px]">{t('真实支出')}</span>
                 {delta !== null && (
                   <span
                     className="text-[11px] ml-auto"
@@ -99,19 +102,26 @@ export default async function FinancePage() {
                       className="h-2 w-2 rounded-full inline-block"
                       style={{ background: CATEGORY_COLORS[cat] ?? '#94a3b8' }}
                     />
-                    {CATEGORY_LABELS[cat] ?? cat} {Math.round((cents / m.spend) * 100)}%
+                    {t(CATEGORY_LABELS[cat] ?? cat)} {Math.round((cents / m.spend) * 100)}%
                   </span>
                 ))}
               </div>
 
               <p className="muted text-[11px] mt-2.5">
-                {m.transactions.length} 笔 · 期末余额 {money(m.closingBalanceCents)}
+                {t('{n} 笔 · 期末余额 {balance}', { n: m.transactions.length, balance: money(m.closingBalanceCents) })}
                 {m.pending.count > 0 && (
                   <>
                     <br />
-                    另有 {m.pending.count} 笔待确认（支出 {money(m.pending.debitCents)}
-                    {m.pending.creditCents > 0 && `、收入 ${money(m.pending.creditCents)}`}
-                    ）未计入上面的支出
+                    {m.pending.creditCents > 0
+                      ? t('另有 {n} 笔待确认（支出 {out}、收入 {in}）未计入上面的支出', {
+                          n: m.pending.count,
+                          out: money(m.pending.debitCents),
+                          in: money(m.pending.creditCents),
+                        })
+                      : t('另有 {n} 笔待确认（支出 {out}）未计入上面的支出', {
+                          n: m.pending.count,
+                          out: money(m.pending.debitCents),
+                        })}
                   </>
                 )}
               </p>
@@ -128,7 +138,7 @@ export default async function FinancePage() {
                 <svg viewBox="0 0 24 24" className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8l-5-5Zm0 0v5h5" />
                 </svg>
-                查看原始月结单
+                {t('查看原始月结单')}
               </a>
             ))}
             </div>
@@ -137,8 +147,7 @@ export default async function FinancePage() {
 
         {months.length > 0 && (
           <p className="muted text-[11px] leading-relaxed px-1 pt-2">
-            「真实支出」已剔除本人账户之间的调拨和月初月末结余行 —— 自己把钱从一个户口搬到另一个，
-            不该算进花掉的钱。
+            {t('「真实支出」已剔除本人账户之间的调拨和月初月末结余行 —— 自己把钱从一个户口搬到另一个，不该算进花掉的钱。')}
           </p>
         )}
       </div>

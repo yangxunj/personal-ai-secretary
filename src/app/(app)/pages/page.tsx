@@ -4,16 +4,9 @@ import PageHeader from '@/components/PageHeader';
 import { formatTime } from '@/lib/format';
 import { PAGE_KINDS, type PageKind } from '@/lib/pages';
 import { SAMPLE_CATEGORIES } from '@/lib/sample-pages';
+import { getLocale, getT } from '@/lib/i18n/server';
 
 export const dynamic = 'force-dynamic';
-
-/** 空页面墙上给几句能直接点的话 —— 空白对不会写提示词的人是一堵墙（livepage 的教训） */
-const EXAMPLES = [
-  '做个页面，看看今年每个月钱都花在哪了',
-  '把全家的保单做成一张缴费日历',
-  '做个贪吃蛇小游戏，手机上能玩',
-  '做个页面，列出家里每个人最近一次体检的异常项',
-];
 
 type Card = {
   id: string;
@@ -26,6 +19,15 @@ type Card = {
 };
 
 export default async function PagesPage() {
+  const t = await getT();
+  // 空页面墙上给几句能直接点的话 —— 空白对不会写提示词的人是一堵墙（livepage 的教训）。
+  // 英文界面下显示和塞进输入框的都是英文那句
+  const EXAMPLES = [
+    t('做个页面，看看今年每个月钱都花在哪了'),
+    t('把全家的保单做成一张缴费日历'),
+    t('做个贪吃蛇小游戏，手机上能玩'),
+    t('做个页面，列出家里每个人最近一次体检的异常项'),
+  ];
   const all = await db.page.findMany({
     orderBy: { updatedAt: 'desc' },
     select: {
@@ -46,15 +48,18 @@ export default async function PagesPage() {
 
   return (
     <>
-      <PageHeader title="页面" subtitle={pages.length ? `${pages.length} 个 · 在对话里让 AI 做的` : '在对话里让 AI 做的'} />
+      <PageHeader
+        title={t('页面')}
+        subtitle={pages.length ? t('{n} 个 · 在对话里让 AI 做的', { n: pages.length }) : t('在对话里让 AI 做的')}
+      />
 
       <div className="px-4 py-4">
         {pages.length === 0 ? (
           <div className={samples.length ? 'py-6 text-center' : 'py-14 text-center'}>
             <p className="muted text-sm leading-relaxed">
-              {samples.length ? '你还没让 AI 做过页面。' : '还没有页面。'}
+              {samples.length ? t('你还没让 AI 做过页面。') : t('还没有页面。')}
               <br />
-              在对话里说一句，AI 会把它做成一个网页放在这里。比如：
+              {t('在对话里说一句，AI 会把它做成一个网页放在这里。比如：')}
             </p>
             <div className="mt-5 flex flex-col items-center gap-2">
               {EXAMPLES.map((e) => (
@@ -64,7 +69,7 @@ export default async function PagesPage() {
                   className="text-sm px-4 py-2 rounded-full border active:opacity-70 hover:border-brand-500 transition"
                   style={{ borderColor: 'var(--border)' }}
                 >
-                  「{e}」
+                  {t('「{text}」', { text: e })}
                 </Link>
               ))}
             </div>
@@ -75,10 +80,10 @@ export default async function PagesPage() {
 
         {samples.length > 0 && (
           <section className="mt-8">
-            <h2 className="font-medium">示例</h2>
+            <h2 className="font-medium">{t('示例')}</h2>
             <p className="muted text-[12px] mt-1 mb-3 leading-relaxed">
-              下面这些都是在对话里说一句话做出来的，点开能直接玩、直接用，详情页上有当初那句话。
-              照着说、或者让 AI 在它基础上改都行。用不着的可以删掉。
+              {t('下面这些都是在对话里说一句话做出来的，点开能直接玩、直接用，详情页上有当初那句话。')}
+              {t('照着说、或者让 AI 在它基础上改都行。用不着的可以删掉。')}
             </p>
             <Grid pages={samples} />
           </section>
@@ -88,7 +93,9 @@ export default async function PagesPage() {
   );
 }
 
-function Grid({ pages }: { pages: Card[] }) {
+async function Grid({ pages }: { pages: Card[] }) {
+  const t = await getT();
+  const locale = await getLocale();
   return (
     <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
       {pages.map((p) => (
@@ -109,14 +116,18 @@ function Grid({ pages }: { pages: Card[] }) {
                     : 'bg-brand-500/10 text-brand-600 dark:text-brand-300'
               }`}
             >
-              {p.sample ? `示例 · ${p.sample}` : (PAGE_KINDS[p.kind as PageKind] ?? p.kind)}
+              {p.sample
+                ? t('示例 · {category}', { category: t(p.sample) })
+                : PAGE_KINDS[p.kind as PageKind]
+                  ? t(PAGE_KINDS[p.kind as PageKind])
+                  : p.kind}
             </span>
           </div>
           {p.summary && <p className="muted text-sm mt-1.5 leading-relaxed line-clamp-2">{p.summary}</p>}
           {!p.sample && (
             <p className="muted text-[11px] mt-3">
-              {formatTime(p.updatedAt)} 更新
-              {p._count.versions > 0 && ` · 改过 ${p._count.versions} 次`}
+              {t('{time} 更新', { time: formatTime(p.updatedAt, locale) })}
+              {p._count.versions > 0 && ` · ${t('改过 {n} 次', { n: p._count.versions })}`}
             </p>
           )}
         </Link>

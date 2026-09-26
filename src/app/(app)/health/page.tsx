@@ -3,6 +3,7 @@ import PageHeader from '@/components/PageHeader';
 import Notes from '@/components/Notes';
 import Link from 'next/link';
 import { catRank, STATUS_STYLE } from './shared';
+import { getT } from '@/lib/i18n/server';
 
 export const dynamic = 'force-dynamic';
 
@@ -25,6 +26,7 @@ export default async function HealthPage({
   searchParams: Promise<{ m?: string }>;
 }) {
   const { m } = await searchParams;
+  const t = await getT();
 
   const members = await db.member.findMany({
     orderBy: { sort: 'asc' },
@@ -46,11 +48,11 @@ export default async function HealthPage({
   return (
     <>
       <PageHeader
-        title="健康"
+        title={t('健康')}
         subtitle={
           current
-            ? `${current.name} · ${reports.length} 份报告`
-            : `${members.length} 位家人 · ${reports.length} 份报告`
+            ? t('{name} · {n} 份报告', { name: current.name, n: reports.length })
+            : t('{m} 位家人 · {n} 份报告', { m: members.length, n: reports.length })
         }
       />
 
@@ -61,7 +63,7 @@ export default async function HealthPage({
             className={`shrink-0 text-xs px-3 py-1.5 rounded-full border ${!m ? 'bg-brand-500 text-white border-brand-500' : 'muted'}`}
             style={!m ? undefined : { borderColor: 'var(--border)' }}
           >
-            全部
+            {t('全部')}
           </Link>
           {members.map((p) => (
             <Link
@@ -83,9 +85,9 @@ export default async function HealthPage({
               <h2 className="font-medium">{current.name}</h2>
               <span className="muted text-[11px]">
                 {current.relation}
-                {age(current.birthDate) != null && ` · ${age(current.birthDate)} 岁`}
-                {current.gender && ` · ${current.gender === 'male' ? '男' : '女'}`}
-                {current.bloodType && ` · ${current.bloodType} 型`}
+                {age(current.birthDate) != null && ` · ${t('{n} 岁', { n: age(current.birthDate)! })}`}
+                {current.gender && ` · ${current.gender === 'male' ? t('男') : t('女')}`}
+                {current.bloodType && ` · ${t('{type} 型', { type: current.bloodType })}`}
               </span>
             </div>
             {current.chronicDiseases && (
@@ -102,7 +104,7 @@ export default async function HealthPage({
             )}
             {current.allergies && (
               <p className="text-sm mt-2">
-                <span className="muted">过敏：</span>
+                <span className="muted">{t('过敏：')}</span>
                 {current.allergies}
               </p>
             )}
@@ -114,9 +116,9 @@ export default async function HealthPage({
       <div className="px-4 pb-4 space-y-2">
         {reports.length === 0 && (
           <p className="muted text-sm text-center py-20 leading-relaxed">
-            {members.length === 0 ? '还没有家庭成员。' : '还没有体检报告。'}
+            {members.length === 0 ? t('还没有家庭成员。') : t('还没有体检报告。')}
             <br />
-            把报告发给管家，他读完会整理进来。
+            {t('把报告发给管家，他读完会整理进来。')}
           </p>
         )}
 
@@ -145,7 +147,7 @@ export default async function HealthPage({
                       : 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-200'
                   }`}
                 >
-                  {bad.length ? `${bad.length} 项异常` : '全部正常'}
+                  {bad.length ? t('{n} 项异常', { n: bad.length }) : t('全部正常')}
                 </span>
               </div>
 
@@ -159,7 +161,7 @@ export default async function HealthPage({
                       <div key={x.id} className={`flex items-start gap-2.5 text-sm ${newCat && i > 0 ? 'pt-2' : ''}`}>
                         <dt className="shrink-0 w-28 text-[13px] leading-5 muted">
                           {newCat && (
-                            <span className="block text-[10px] opacity-70 leading-4">{x.category}</span>
+                            <span className="block text-[10px] opacity-70 leading-4">{t(x.category)}</span>
                           )}
                           {x.name}
                         </dt>
@@ -168,9 +170,9 @@ export default async function HealthPage({
                             {x.value}
                             {x.unit && <span className="muted font-normal ml-0.5">{x.unit}</span>}
                           </span>
-                          <span className={`text-[11px] px-1.5 py-0.5 rounded ${st.cls}`}>{st.label}</span>
+                          <span className={`text-[11px] px-1.5 py-0.5 rounded ${st.cls}`}>{t(st.label)}</span>
                           {x.referenceRange && (
-                            <span className="muted text-[11px]">参考 {x.referenceRange}</span>
+                            <span className="muted text-[11px]">{t('参考 {range}', { range: x.referenceRange })}</span>
                           )}
                           {x.note && <span className="muted text-[11px] w-full">{x.note}</span>}
                         </dd>
@@ -188,8 +190,8 @@ export default async function HealthPage({
                   className="mt-2.5 flex items-center gap-1 text-[11px] active:opacity-60"
                   style={{ color: 'var(--color-brand-500)' }}
                 >
-                  看全部 {r.metrics.length} 项
-                  {bad.length > 0 && `（其余 ${r.metrics.length - bad.length} 项正常）`}
+                  {t('看全部 {n} 项', { n: r.metrics.length })}
+                  {bad.length > 0 && t('（其余 {n} 项正常）', { n: r.metrics.length - bad.length })}
                   <svg viewBox="0 0 24 24" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <path d="m9 18 6-6-6-6" />
                   </svg>
@@ -203,7 +205,7 @@ export default async function HealthPage({
               {r.notes && (
                 <details className="mt-3 rounded-xl px-3 py-2" style={{ background: 'var(--bg)' }}>
                   <summary className="muted text-[11px] cursor-pointer select-none list-none">
-                    归档说明 · 原件里哪些内容没录进来 ▾
+                    {t('归档说明 · 原件里哪些内容没录进来')} ▾
                   </summary>
                   <div className="text-[13px]">
                     <Notes>{r.notes}</Notes>

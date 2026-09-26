@@ -4,7 +4,8 @@ import MessageBody from '@/components/MessageBody';
 import ImageGallery from '@/components/ImageGallery';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { CATEGORY_ORDER, catRank, STATUS_STYLE } from '../shared';
+import { catRank, STATUS_STYLE } from '../shared';
+import { getT } from '@/lib/i18n/server';
 
 export const dynamic = 'force-dynamic';
 
@@ -28,6 +29,7 @@ export default async function ReportPage({
   const { id } = await params;
   const { only } = await searchParams;
   const onlyBad = only === 'bad';
+  const t = await getT();
 
   const r = await db.healthReport.findUnique({
     where: { id },
@@ -75,14 +77,14 @@ export default async function ReportPage({
             className={`text-xs px-3 py-1.5 rounded-full border ${!onlyBad ? 'bg-brand-500 text-white border-brand-500' : 'muted'}`}
             style={!onlyBad ? undefined : { borderColor: 'var(--border)' }}
           >
-            全部 {r.metrics.length}
+            {t('全部')} {r.metrics.length}
           </Link>
           <Link
             href={`/health/${r.id}?only=bad`}
             className={`text-xs px-3 py-1.5 rounded-full border ${onlyBad ? 'bg-brand-500 text-white border-brand-500' : 'muted'}`}
             style={onlyBad ? undefined : { borderColor: 'var(--border)' }}
           >
-            只看异常 {badCount}
+            {t('只看异常')} {badCount}
           </Link>
         </div>
 
@@ -94,7 +96,7 @@ export default async function ReportPage({
 
         {groups.map(({ cat, items }) => (
           <div key={cat} className="surface border rounded-2xl p-4" style={{ borderColor: 'var(--border)' }}>
-            <h2 className="text-[13px] font-medium mb-2.5">{cat}</h2>
+            <h2 className="text-[13px] font-medium mb-2.5">{t(cat)}</h2>
             <dl className="space-y-1.5">
               {items.map((x) => {
                 const st = x.status === 'normal' ? null : (STATUS_STYLE[x.status] ?? STATUS_STYLE.abnormal);
@@ -106,9 +108,9 @@ export default async function ReportPage({
                         {x.value}
                         {x.unit && <span className="muted font-normal ml-0.5">{x.unit}</span>}
                       </span>
-                      {st && <span className={`text-[11px] px-1.5 py-0.5 rounded ${st.cls}`}>{st.label}</span>}
+                      {st && <span className={`text-[11px] px-1.5 py-0.5 rounded ${st.cls}`}>{t(st.label)}</span>}
                       {x.referenceRange && (
-                        <span className="muted text-[11px]">参考 {x.referenceRange}</span>
+                        <span className="muted text-[11px]">{t('参考 {range}', { range: x.referenceRange })}</span>
                       )}
                       {x.note && <span className="muted text-[11px] w-full">{x.note}</span>}
                     </dd>
@@ -121,7 +123,7 @@ export default async function ReportPage({
 
         {shots.length > 0 && (
           <div className="surface border rounded-2xl p-4" style={{ borderColor: 'var(--border)' }}>
-            <h2 className="text-[13px] font-medium mb-2.5">原件</h2>
+            <h2 className="text-[13px] font-medium mb-2.5">{t('原件')}</h2>
             <ImageGallery shots={shots.map((a) => ({ id: a.id, label: a.note || a.filename }))} />
           </div>
         )}
@@ -144,7 +146,7 @@ export default async function ReportPage({
         {r.notes && (
           <details className="surface border rounded-2xl px-4 py-3" style={{ borderColor: 'var(--border)' }}>
             <summary className="muted text-[11px] cursor-pointer select-none list-none">
-              归档说明 · 原件里哪些内容没录进来 ▾
+              {t('归档说明 · 原件里哪些内容没录进来')} ▾
             </summary>
             <div className="text-[13px]">
               <MessageBody>{r.notes}</MessageBody>

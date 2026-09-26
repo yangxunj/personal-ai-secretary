@@ -24,6 +24,8 @@ const http = require('node:http');
 const { spawn } = require('node:child_process');
 const QRCode = require('qrcode');
 const { LanGateway } = require('./lan');
+const i18n = require('./i18n');
+const { tr } = i18n;
 
 // runtime/ 而不是 app/：electron-builder 会把根目录下的 app/ 当成应用根目录
 const APP_DIR = path.join(__dirname, 'runtime');
@@ -117,7 +119,7 @@ function ensureData() {
   // 装到别人电脑上没有 prisma CLI 可用，所以表结构是预先建好的。
   if (!fs.existsSync(p.db)) {
     const template = path.join(RES_DIR, 'template.db');
-    if (!fs.existsSync(template)) throw new Error('缺少模板数据库，安装包不完整');
+    if (!fs.existsSync(template)) throw new Error(tr('missingTemplate'));
     fs.copyFileSync(template, p.db);
   }
   return p;
@@ -204,7 +206,7 @@ async function startServer() {
   serverProc.stderr.on('data', (d) => process.stderr.write(`[next] ${d}`));
   serverProc.on('exit', (code) => {
     if (code !== 0 && !app.isQuitting) {
-      dialog.showErrorBox('后台服务退出了', `退出码 ${code}。重启一下试试。`);
+      dialog.showErrorBox(tr('serverExited'), tr('serverExitedDetail', { code }));
     }
   });
 
@@ -224,7 +226,7 @@ function waitReady(url, timeoutMs = 60000) {
         resolve();
       });
       req.on('error', () => {
-        if (Date.now() - started > timeoutMs) reject(new Error('后台服务启动超时'));
+        if (Date.now() - started > timeoutMs) reject(new Error(tr('serverTimeout')));
         else setTimeout(tick, 300);
       });
       req.setTimeout(2000, () => req.destroy());
@@ -245,7 +247,7 @@ function createWindow(url) {
     height: 820,
     minWidth: 380,
     minHeight: 560,
-    title: '家庭管家',
+    title: tr('appName'),
     backgroundColor: '#ffffff',
     // ⚠ 别设 autoHideMenuBar —— 隐藏之后要按 Alt 才冒出来，等于没有。
     // 第一版设了 true，结果使用者根本找不到「在哪儿填 API Key」：
@@ -259,6 +261,12 @@ function createWindow(url) {
     },
   });
   win.loadURL(url);
+
+  // 设置页里切了语言 → 菜单跟着换。切语言那个 server action 会 redirect，
+  // 走的是客户端路由（did-navigate-in-page），整页跳转是 did-navigate，两个都听。
+  win.webContents.on('did-navigate', syncLocale);
+  win.webContents.on('did-navigate-in-page', syncLocale);
+  syncLocale();
 
   // 页面里的外链（比如以后的帮助文档）走系统浏览器，别在应用窗口里开
   win.webContents.setWindowOpenHandler(({ url: target }) => {
@@ -302,7 +310,7 @@ function openLanWindow() {
     width: 640,
     height: 720,
     minWidth: 520,
-    title: '用手机访问',
+    title: tr('lanTitle'),
     parent: win ?? undefined,
     autoHideMenuBar: true,
     webPreferences: {
@@ -316,61 +324,81 @@ function openLanWindow() {
   lanWin.on('closed', () => (lanWin = null));
 }
 
+/**
+ * 问 Next 当前界面语言（设置页存在库里，主进程读不到库），变了就重建菜单。
+ * 带上系统语言当 Accept-Language —— 没设过的时候 Next 按它猜，两边猜的一致。
+ */
+function syncLocale() {
+  if (!baseUrl) return;
+  const req = http.get(
+    baseUrl + '/api/locale',
+    { headers: { 'accept-language': app.getLocale() } },
+    (res) => {
+      let body = '';
+      res.on('data', (d) => (body += d));
+      res.on('end', () => {
+        try {
+          if (i18n.setLocale(JSON.parse(body).locale)) {
+            buildMenu();
+            lanWin?.setTitle(tr('lanTitle'));
+            lanWin?.webContents.send('lan:changed');
+          }
+        } catch {}
+      });
+    }
+  );
+  req.on('error', () => {});
+}
+
 function buildMenu() {
   Menu.setApplicationMenu(
     Menu.buildFromTemplate([
       {
-        label: '设置',
+        label: tr('menuSettings'),
         submenu: [
           {
             // 独立一个顶级菜单，不塞进「文件」里。这是使用者最可能来找的东西
             // （「我的 API Key 填哪儿」），埋一层就等于没有。
-            label: 'AI 模型 / API Key…',
+            label: tr('menuAiKey'),
             click: () => win?.loadURL(baseUrl + '/settings'),
           },
           {
-            label: '用手机访问…',
+            label: tr('menuLan'),
             click: () => openLanWindow(),
           },
           {
-            label: '打开数据文件夹',
+            label: tr('menuDataFolder'),
             // 让用户随时能看见「我的数据就在这儿」—— 这比任何说明都有说服力
             click: () => shell.openPath(dataPaths().root),
           },
         ],
       },
       {
-        label: '文件',
-        submenu: [{ role: 'quit', label: '退出' }],
+        label: tr('menuFile'),
+        submenu: [{ role: 'quit', label: tr('quit') }],
       },
       {
-        label: '视图',
+        label: tr('menuView'),
         submenu: [
-          { role: 'reload', label: '重新加载' },
-          { role: 'zoomIn', label: '放大' },
-          { role: 'zoomOut', label: '缩小' },
-          { role: 'resetZoom', label: '恢复默认大小' },
+          { role: 'reload', label: tr('reload') },
+          { role: 'zoomIn', label: tr('zoomIn') },
+          { role: 'zoomOut', label: tr('zoomOut') },
+          { role: 'resetZoom', label: tr('resetZoom') },
           { type: 'separator' },
-          { role: 'toggleDevTools', label: '开发者工具' },
+          { role: 'toggleDevTools', label: tr('devTools') },
         ],
       },
       {
-        label: '帮助',
+        label: tr('menuHelp'),
         submenu: [
           {
-            label: '关于',
+            label: tr('about'),
             click: () =>
               dialog.showMessageBox({
                 type: 'info',
-                title: '关于家庭管家',
-                message: `家庭管家 ${app.getVersion()}`,
-                detail:
-                  '你的数据全部保存在这台电脑上：\n' +
-                  dataPaths().root +
-                  '\n\n没有任何数据上传到开发者的服务器。\n\n' +
-                  '唯一的例外：跟 AI 对话时，你发的内容会传给模型服务商' +
-                  '（阿里云百炼）——AI 要读到账单才能帮你录入。' +
-                  '不想让 AI 看的东西就别发给它。',
+                title: tr('aboutTitle'),
+                message: `${tr('appName')} ${app.getVersion()}`,
+                detail: tr('aboutDetail', { dir: dataPaths().root }),
               }),
           },
         ],
@@ -392,6 +420,8 @@ if (!app.requestSingleInstanceLock()) {
   });
 
   app.whenReady().then(async () => {
+    // 服务还没起来，先按系统语言猜；页面加载后 syncLocale 会以设置页为准
+    i18n.setLocale(i18n.fromSystem(app.getLocale()));
     buildMenu();
     try {
       const url = await startServer();
@@ -400,7 +430,7 @@ if (!app.requestSingleInstanceLock()) {
       // 只给开发时用：自动化测试没法点原生菜单
       if (!app.isPackaged && process.env.HS_OPEN_LAN) openLanWindow();
     } catch (e) {
-      dialog.showErrorBox('启动失败', String(e?.message ?? e));
+      dialog.showErrorBox(tr('startFailed'), String(e?.message ?? e));
       app.quit();
     }
   });

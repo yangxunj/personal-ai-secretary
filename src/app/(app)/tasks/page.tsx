@@ -1,6 +1,7 @@
 import TaskDetail from './TaskDetail';
 import TaskList, { firstVisibleTaskId } from './TaskList';
 import TwoPane from './TwoPane';
+import { getT } from '@/lib/i18n/server';
 
 export const dynamic = 'force-dynamic';
 
@@ -21,6 +22,7 @@ export default async function TasksPage({
   searchParams: Promise<{ c?: string; s?: string; o?: string }>;
 }) {
   const { c, s, o } = await searchParams;
+  const t = await getT();
   const first = await firstVisibleTaskId({ c, s, o });
 
   // 详情页「返回」要回到这一屏的筛选，跟卡片链接上的 from 一个意思
@@ -39,7 +41,7 @@ export default async function TasksPage({
           <TaskDetail id={first} backTo={here} markRead={false} />
         ) : (
           <div className="h-dvh flex items-center justify-center">
-            <p className="muted text-sm">这一栏筛下来没有任务</p>
+            <p className="muted text-sm">{t('这一栏筛下来没有任务')}</p>
           </div>
         )
       }

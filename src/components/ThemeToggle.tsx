@@ -1,10 +1,10 @@
 'use client';
 import { useEffect, useState } from 'react';
+import { useT } from '@/lib/i18n/client';
 
 type Pref = 'system' | 'light' | 'dark';
 
 const NEXT: Record<Pref, Pref> = { system: 'light', light: 'dark', dark: 'system' };
-const LABEL: Record<Pref, string> = { system: '跟随系统', light: '浅色', dark: '深色' };
 
 /** 把偏好落到 <html data-theme> 上，并同步浏览器地址栏的颜色。 */
 function apply(pref: Pref) {
@@ -31,6 +31,8 @@ function apply(pref: Pref) {
 export default function ThemeToggle({ withLabel = false }: { withLabel?: boolean } = {}) {
   const [pref, setPref] = useState<Pref>('system');
   const [ready, setReady] = useState(false);
+  const t = useT();
+  const LABEL: Record<Pref, string> = { system: t('跟随系统'), light: t('浅色'), dark: t('深色') };
 
   useEffect(() => {
     let saved: Pref = 'system';
@@ -89,11 +91,11 @@ export default function ThemeToggle({ withLabel = false }: { withLabel?: boolean
     return (
       <button
         onClick={cycle}
-        aria-label={`主题：${LABEL[pref]}，点击切换`}
+        aria-label={t('主题：{mode}，点击切换', { mode: LABEL[pref] })}
         className="w-full flex items-center gap-3 rounded-xl px-3 py-2.5 text-[14px] muted hover:bg-brand-500/5 transition"
       >
         {icon}
-        <span className="font-medium">主题</span>
+        <span className="font-medium">{t('主题')}</span>
         <span className="ml-auto text-[12px] opacity-80">{ready ? LABEL[pref] : LABEL.system}</span>
       </button>
     );
@@ -102,8 +104,8 @@ export default function ThemeToggle({ withLabel = false }: { withLabel?: boolean
   return (
     <button
       onClick={cycle}
-      aria-label={`主题：${LABEL[pref]}，点击切换`}
-      title={`主题：${LABEL[pref]}`}
+      aria-label={t('主题：{mode}，点击切换', { mode: LABEL[pref] })}
+      title={t('主题：{mode}', { mode: LABEL[pref] })}
       // 服务端渲染不知道用户选了什么，先按「跟随系统」画；ready 之后才可能换图标。
       // 不这样会 hydration 不匹配。
       className="p-2 rounded-lg active:opacity-60 transition muted"

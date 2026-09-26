@@ -5,6 +5,7 @@ import { revalidatePath } from 'next/cache';
 import { removeStored, type StoredFile } from '@/lib/ingest';
 import { buildDataTools } from '@/lib/data-tools';
 import { buildPageTools } from '@/lib/page-tools';
+import { makeT, type T } from '@/lib/i18n/core';
 
 /**
  * 网页里那个 AI 能调用的全部动作。
@@ -49,9 +50,15 @@ export type ToolContext = {
   incoming: StoredFile[];
   /** 这一轮在哪个对话里。留档、做页面都要记下来，才找得回「当初是怎么说的」 */
   conversationId: string;
+  /**
+   * 界面语言的 t()。工具说明、返回给模型的话都是中文，不用它；只有**会原样显示在
+   * 界面上**的几句才过它 —— 目前是 importBill 的余额勾稽 warnings（对话里的工具
+   * 卡片把 warnings 直接铺出来，账单页也显示）。
+   */
+  t?: T;
 };
 
-export function buildAgentTools({ incoming, conversationId }: ToolContext) {
+export function buildAgentTools({ incoming, conversationId, t = makeT(null) }: ToolContext) {
   return {
     // ---------- 任务 ----------
 
@@ -318,13 +325,21 @@ export function buildAgentTools({ incoming, conversationId }: ToolContext) {
           const diff = p.closingTotalCents - expected;
           if (diff !== 0) {
             warnings.push(
-              `余额对不上：期初 ${yuan(p.openingTotalCents)} + 进账 ${yuan(sum('credit'))}` +
-                ` − 出账 ${yuan(sum('debit'))} = ${yuan(expected)}，但账单写的期末是` +
-                ` ${yuan(p.closingTotalCents)}，差 ${yuan(diff)}。多半是有笔交易读漏了或金额读错了`
+              t(
+                '余额对不上：期初 {opening} + 进账 {credit} − 出账 {debit} = {expected}，但账单写的期末是 {closing}，差 {diff}。多半是有笔交易读漏了或金额读错了',
+                {
+                  opening: yuan(p.openingTotalCents),
+                  credit: yuan(sum('credit')),
+                  debit: yuan(sum('debit')),
+                  expected: yuan(expected),
+                  closing: yuan(p.closingTotalCents),
+                  diff: yuan(diff),
+                },
+              ),
             );
           }
         } else {
-          warnings.push('账单没给期初/期末余额，这次没做余额勾稽 —— 金额对不对没法自动验');
+          warnings.push(t('账单没给期初/期末余额，这次没做余额勾稽 —— 金额对不对没法自动验'));
         }
 
         const meta = {

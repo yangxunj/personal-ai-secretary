@@ -1,6 +1,7 @@
 'use client';
 import { useState } from 'react';
 import { copyText } from '@/lib/clipboard';
+import { useT } from '@/lib/i18n/client';
 
 /** 网址去掉协议头和末尾斜杠，手机上短一些 */
 function prettyUrl(url: string) {
@@ -12,6 +13,7 @@ type Feedback = 'idle' | 'copied' | 'failed';
 export default function SecretValue({ value, masked }: { value: string; masked: boolean }) {
   const [shown, setShown] = useState(!masked);
   const [feedback, setFeedback] = useState<Feedback>('idle');
+  const t = useT();
   const isUrl = /^https?:\/\//.test(value);
 
   async function handleCopy() {
@@ -74,7 +76,7 @@ export default function SecretValue({ value, masked }: { value: string; masked: 
           color: feedback === 'failed' ? '#ef4444' : 'var(--muted)',
         }}
       >
-        {feedback === 'copied' ? '已复制' : feedback === 'failed' ? '请长按选取' : '复制'}
+        {feedback === 'copied' ? t('已复制') : feedback === 'failed' ? t('请长按选取') : t('复制')}
       </button>
     </span>
   );

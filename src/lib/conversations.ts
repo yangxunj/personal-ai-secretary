@@ -2,6 +2,8 @@ import { generateText } from 'ai';
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible';
 import { db } from '@/lib/db';
 import { getAiConfig } from '@/lib/ai-config';
+import { getLocale, getT } from '@/lib/i18n/server';
+import { cleanTitle, titleInput, titlePrompt } from '@/lib/system-prompt';
 
 /**
  * 多个对话：列表、改名、删除、自动起标题。
@@ -29,6 +31,7 @@ function clip(s: string, n = TITLE_MAX) {
 }
 
 export async function listConversations(): Promise<ConversationItem[]> {
+  const t = await getT();
   const rows = await db.conversation.findMany({
     orderBy: { updatedAt: 'desc' },
     take: 300,
@@ -44,7 +47,7 @@ export async function listConversations(): Promise<ConversationItem[]> {
     .filter((r) => r.title || r.messages.length)
     .map((r) => ({
       id: r.id,
-      title: r.title ?? clip(r.messages[0]?.content ?? '新对话'),
+      title: r.title ?? clip(r.messages[0]?.content ?? t('新对话')),
       provisional: !r.title,
       updatedAt: r.updatedAt.toISOString(),
     }));
@@ -89,26 +92,25 @@ export async function autoTitle(id: string, user: string, reply: string): Promis
 
   let title = '';
   const cfg = await getAiConfig();
+  // 标题跟着界面语言走：英文界面的列表里全是中文标题就没法认了
+  const locale = await getLocale();
+  const t = await getT();
   if (cfg.apiKey && cfg.baseUrl && cfg.model) {
     try {
       const provider = createOpenAICompatible({ name: 'ai', baseURL: cfg.baseUrl, apiKey: cfg.apiKey });
       const { text } = await generateText({
         model: provider.chatModel(cfg.model),
-        system:
-          '给一段对话起个标题，用来在对话列表里认出它。' +
-          '中文，4 到 12 个字，说清是哪件事（比如「车险续保比价」「妈妈体检报告」）。' +
-          '只输出标题本身，不要引号、不要句号、不要解释。',
-        prompt: `用户：${user.slice(0, 1500)}\n\n助手：${reply.slice(0, 1500)}`,
+        system: titlePrompt(locale),
+        prompt: titleInput(locale, user, reply),
         // 推理模型要先想一会儿，给小了正文是空的
         maxOutputTokens: 1024,
       });
-      title = text.split('\n').map((l) => l.trim()).find(Boolean) ?? '';
-      title = title.replace(/^(标题[:：]\s*)/, '').replace(/^["'「『《]+|["'」』》。.！!]+$/g, '').trim();
+      title = cleanTitle(text);
     } catch (e) {
-      console.error('[chat] 起标题失败，用第一句话代替', e);
+      console.error('[chat] auto-title failed, falling back to the first message', e);
     }
   }
-  if (!title) title = clip(user) || '新对话';
+  if (!title) title = clip(user) || t('新对话');
   title = clip(title, 30);
 
   // 用户在这期间手动改了名的话，别覆盖

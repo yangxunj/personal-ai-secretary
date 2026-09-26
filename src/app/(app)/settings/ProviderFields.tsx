@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { PROVIDERS, modelSeesImages, providerOf, type ProviderId } from '@/lib/ai-providers';
+import { useT } from '@/lib/i18n/client';
 
 const INPUT =
   'mt-1 w-full rounded-xl border px-3.5 py-2.5 text-[15px] bg-transparent outline-none focus:border-brand-500 transition';
@@ -28,6 +29,7 @@ export default function ProviderFields({
   /** 当前 key 从哪来的那句说明；没存过 key 时为 null */
   keySource: string | null;
 }) {
+  const t = useT();
   const saved = providerOf(baseUrl);
   const [pid, setPid] = useState<ProviderId>(saved);
   const [url, setUrl] = useState(baseUrl);
@@ -55,9 +57,9 @@ export default function ProviderFields({
   return (
     <>
       <div>
-        <span className="muted text-[12px]">服务商</span>
-        <div className="mt-1 flex flex-wrap gap-2" role="radiogroup" aria-label="服务商">
-          {[...PROVIDERS.map((p) => ({ id: p.id as ProviderId, label: p.label })), { id: 'custom' as ProviderId, label: '其他（自己填地址）' }].map(
+        <span className="muted text-[12px]">{t('服务商')}</span>
+        <div className="mt-1 flex flex-wrap gap-2" role="radiogroup" aria-label={t('服务商')}>
+          {[...PROVIDERS.map((p) => ({ id: p.id as ProviderId, label: t(p.label) })), { id: 'custom' as ProviderId, label: t('其他（自己填地址）') }].map(
             (o) => {
               const on = pid === o.id;
               return (
@@ -81,8 +83,8 @@ export default function ProviderFields({
         {preset && (
           <p className="muted text-[11px] leading-relaxed mt-1.5">
             {preset.search
-              ? '对话时会按需联网搜索（天气、新闻、价格这类），回答里附来源。'
-              : '这家不能联网搜索，只凭模型自己知道的回答。'}
+              ? t('对话时会按需联网搜索（天气、新闻、价格这类），回答里附来源。')
+              : t('这家不能联网搜索，只凭模型自己知道的回答。')}
           </p>
         )}
       </div>
@@ -96,37 +98,36 @@ export default function ProviderFields({
           required={switched}
           // 显示打码后的值当占位符：留空提交就是「不改」。
           // 不这么做的话，使用者只想换个模型名，一提交就把 key 清了。
-          placeholder={switched ? `填 ${preset?.label ?? '这家服务商'} 的 key` : keyPlaceholder}
+          placeholder={switched ? t('填 {name} 的 key', { name: preset ? t(preset.label) : t('这家服务商') }) : keyPlaceholder}
           className={INPUT}
           style={{ borderColor: 'var(--border)' }}
         />
         <span className="muted text-[11px] leading-relaxed block mt-1">
           {switched
-            ? `换了服务商，原来那个 key 在这家用不了，要填新的。${preset ? preset.keyHint + '。' : ''}`
-            : (keySource ?? preset?.keyHint ?? '服务商给的密钥，形如 sk-xxxxxxxx')}
+            ? t('换了服务商，原来那个 key 在这家用不了，要填新的。') + (preset ? ' ' + t(preset.keyHint) + t('。') : '')
+            : (keySource ?? (preset ? t(preset.keyHint) : t('服务商给的密钥，形如 sk-xxxxxxxx')))}
         </span>
       </label>
 
       <label className="block">
-        <span className="muted text-[12px]">模型名</span>
+        <span className="muted text-[12px]">{t('模型名')}</span>
         <input
           type="text"
           name="model"
           value={mdl}
           onChange={(e) => setMdl(e.target.value)}
-          placeholder={preset?.model ?? '服务商文档里的模型 ID'}
+          placeholder={preset?.model ?? t('服务商文档里的模型 ID')}
           className={INPUT}
           style={{ borderColor: 'var(--border)' }}
         />
         {pid === 'deepseek' && (
           <span className="muted text-[11px] leading-relaxed block mt-1">
-            deepseek-flash 快、便宜、能看图；deepseek-v4-pro 更强，但看不了图。
+            {t('deepseek-flash 快、便宜、能看图；deepseek-v4-pro 更强，但看不了图。')}
           </span>
         )}
         {!modelSeesImages({ baseUrl: url, model: mdl }) && (
           <span className="text-[11px] leading-relaxed block mt-1 text-amber-600 dark:text-amber-400">
-            这个模型看不了图片：发照片给它会照常存档，但它读不出内容 ——
-            体检报告、账单截图这类要靠看图录入的，换成 deepseek-flash。
+            {t('这个模型看不了图片：发照片给它会照常存档，但它读不出内容 —— 体检报告、账单截图这类要靠看图录入的，换成 deepseek-flash。')}
           </span>
         )}
       </label>
@@ -134,7 +135,7 @@ export default function ProviderFields({
       {/* 预设的地址折起来（一般不用动）；自定义时直接摊开，那是必填的 */}
       <details open={pid === 'custom'}>
         <summary className="muted text-[12px] cursor-pointer select-none">
-          接口地址{pid === 'custom' ? '' : '（选了服务商就不用动）'}
+          {pid === 'custom' ? t('接口地址') : t('接口地址（选了服务商就不用动）')}
         </summary>
         <input
           type="text"
@@ -151,7 +152,7 @@ export default function ProviderFields({
           style={{ borderColor: 'var(--border)' }}
         />
         <span className="muted text-[11px] leading-relaxed block mt-1">
-          任何 OpenAI 兼容的接口都行。
+          {t('任何 OpenAI 兼容的接口都行。')}
         </span>
       </details>
     </>

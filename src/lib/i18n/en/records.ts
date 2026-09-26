@@ -1,5 +1,264 @@
 import type { Dict } from '../core';
 
-/** 中文原文 → 英文。key 必须跟 t('…') 里的字符串一字不差 */
+/**
+ * 中文原文 → 英文。key 必须跟 t('…') 里的字符串一字不差。
+ * 财务、健康、保险、设置、登录。
+ */
 export const records: Dict = {
+  // ---------- 通用碎片 ----------
+  '。': '.',
+  全部: 'All',
+  原件: 'Original',
+  男: 'Male',
+  女: 'Female',
+
+  // ---------- 财务 ----------
+  '{n} 个月': '{n} {n|month|months}',
+  '还没有账单。': 'No statements yet.',
+  '把银行月结单 PDF 发给我，我解析后收进来。': "Send me a bank statement PDF and I'll read it and file it here.",
+  '{n} 笔待确认': '{n} to confirm',
+  真实支出: 'Real spending',
+  '真实支出（不含待确认）': 'Real spending (excl. unconfirmed)',
+  '{n} 笔 · 期末余额 {balance}': '{n} {n|transaction|transactions} · closing balance {balance}',
+  '另有 {n} 笔待确认（支出 {out}、收入 {in}）未计入上面的支出':
+    'Plus {n} unconfirmed ({out} out, {in} in), not counted in the spending above',
+  '另有 {n} 笔待确认（支出 {out}）未计入上面的支出': 'Plus {n} unconfirmed ({out} out), not counted in the spending above',
+  查看原始月结单: 'View original statement',
+  '「真实支出」已剔除本人账户之间的调拨和月初月末结余行 —— 自己把钱从一个户口搬到另一个，不该算进花掉的钱。':
+    '"Real spending" leaves out transfers between your own accounts and the opening/closing balance lines — moving your money from one account to another isn\'t money spent.',
+  返回财务列表: 'Back to finance',
+  '上月 {amount}': 'Last month {amount}',
+  外部收入: 'External income',
+  资产净变化: 'Net change in assets',
+  期末余额: 'Closing balance',
+  '另有本人账户调拨：转入 {in}、转出 {out}': 'Transfers between your own accounts: {in} in, {out} out',
+  '（净 {net}）': ' (net {net})',
+  '。这部分不算支出也不算收入 —— 是自己在不同户口之间搬钱。':
+    ". These count as neither spending nor income — it's just your money moving between accounts.",
+  钱花在哪: 'Where the money went',
+  '待确认 {n} 笔': '{n} to confirm',
+  '原文里没有对手方信息，我不猜。告诉我是什么，我补进规则，以后自动归类。':
+    "The statement doesn't say who these were with, and I won't guess. Tell me what they are and I'll categorize them.",
+  '大额往来（≥ {amount}）': 'Large transactions (≥ {amount})',
+  '全部明细（{n} 笔）': 'All transactions ({n})',
+  原始月结单: 'Original statement',
+  银行发出的原件: 'Original issued by the bank',
+  '分类是按生活口径归的，不是银行官方分类 —— 归错了跟我说一声，我改。':
+    "Categories reflect everyday life, not the bank's official ones — if one's wrong, tell me and I'll fix it.",
+  '本月提醒：{note}。': 'Note for this month: {note}.',
+  // 交易分类（lib/finance.ts CATEGORY_LABELS）
+  固定成本: 'Fixed costs',
+  日常生活: 'Daily life',
+  '工具 / 订阅': 'Tools / subscriptions',
+  大额采购: 'Big purchases',
+  本人账户调拨: 'Own-account transfers',
+  资金往来: 'Pass-through',
+  工资: 'Salary',
+  其他收入: 'Other income',
+  待确认: 'Unconfirmed',
+  余额项: 'Balance lines',
+
+  // ---------- 健康 ----------
+  '{name} · {n} 份报告': '{name} · {n} {n|report|reports}',
+  '{m} 位家人 · {n} 份报告': '{m} family {m|member|members} · {n} {n|report|reports}',
+  '{n} 岁': '{n} yrs',
+  '{type} 型': 'type {type}',
+  '过敏：': 'Allergies: ',
+  '还没有家庭成员。': 'No family members yet.',
+  '还没有体检报告。': 'No checkup reports yet.',
+  '把报告发给管家，他读完会整理进来。': "Send a report in chat and I'll read it and file it here.",
+  '{n} 项异常': '{n} abnormal',
+  全部正常: 'All normal',
+  '参考 {range}': 'ref {range}',
+  '看全部 {n} 项': 'See all {n} {n|item|items}',
+  '（其余 {n} 项正常）': ' ({n} others normal)',
+  '归档说明 · 原件里哪些内容没录进来': "Filing notes · what wasn't entered from the original",
+  只看异常: 'Abnormal only',
+  // 指标状态（health/shared.ts STATUS_STYLE）
+  偏高: 'High',
+  偏低: 'Low',
+  异常: 'Abnormal',
+  // 指标分类（health/shared.ts CATEGORY_ORDER）；「其他」在 common
+  肾功能: 'Kidney function',
+  肝功能: 'Liver function',
+  血糖: 'Blood sugar',
+  血脂: 'Blood lipids',
+  血常规: 'Complete blood count',
+  尿常规: 'Urinalysis',
+  维生素: 'Vitamins',
+  骨密度: 'Bone density',
+  甲状腺: 'Thyroid',
+  肿瘤标志物: 'Tumor markers',
+  一般检查: 'General exam',
+  影像: 'Imaging',
+
+  // ---------- 保险 ----------
+  医疗: 'Medical',
+  重疾: 'Critical illness',
+  寿险: 'Life',
+  防癌: 'Cancer',
+  // 只有中文界面会走「万」（见 insurance/page.tsx 的 wan）；这条只是让对账脚本认得
+  '{n} 万': '{n} × 10,000',
+  '{n} 份保单 · {p} 个人 · 年缴 {total}': '{n} {n|policy|policies} · {p} {p|person|people} · {total}/yr',
+  年缴合计: 'Total per year',
+  '境内 {n} 份': 'Domestic · {n}',
+  '境外 {n} 份': 'Overseas · {n}',
+  '外币按粗略汇率折算，只用来排序和汇总，对账以原币为准。标了':
+    'Foreign currencies are converted at rough rates, for sorting and totals only — reconcile in the original currency. Items marked ',
+  账外: 'off-ledger',
+  '的那几笔不经导入的银行账单 —— 财务页的「真实支出」看不到它们。':
+    ' aren\'t paid through any imported bank statement, so "Real spending" on the Finance page doesn\'t see them.',
+  接下来要交的: 'Coming up',
+  已缴: 'Paid',
+  就是今天: 'Today',
+  '已过 {n} 天': '{n} {n|day|days} overdue',
+  '{n} 天后': 'in {n} {n|day|days}',
+  '⚠ 缴费日已过，先确认扣款成功了没有': '⚠ Due date has passed — check that the payment went through',
+  '{date} 已缴': 'Paid {date}',
+  '保证续保 —— 但保费还是要按时到账': 'Guaranteed renewal — but the premium still has to arrive on time',
+  '⚠ 不保证续保，到期前必须主动去重新投保': '⚠ Renewal not guaranteed — you must reapply before it expires',
+  断了就买不回来的日子: "Dates you can't miss — a lapse can't be bought back",
+  '还有 {n} 个月': '{n} {n|month|months} left',
+  '不保证续保的 {n} 份 —— 每年都得自己去办': '{n} without guaranteed renewal — you have to renew these yourself every year',
+  '这几份到期不会自动延续：保险期间届满要重新申请、经保险人同意才成立新合同。':
+    "These don't roll over on their own: when the term ends you reapply, and a new contract exists only if the insurer accepts.",
+  '它们能一直保着，靠的是「对保障期间连续的保单，按照':
+    'They stay insurable only because "policies with continuous coverage are underwritten on the health declaration made ',
+  首年投保时: 'in the first year',
+  '的健康告知核保」—— 断一次，这个保护就没了。': '" — one lapse and that protection is gone.',
+  '{date} 到期': 'due {date}',
+  '首次投保 {date}': 'first issued {date}',
+  每个人保了什么: "What each person's covered for",
+  '{amount} / 年': '{amount} / yr',
+  '保额 {amount}': 'sum insured {amount}',
+  '保证续保至 {date}': 'renewal guaranteed until {date}',
+  保证续保: 'renewal guaranteed',
+  '⚠ 不保证续保': '⚠ renewal not guaranteed',
+  条款细节与原件: 'Policy terms and originals',
+  '条款解读、告知瑕疵、保障缺口的分析': 'Analysis of terms, disclosure issues and coverage gaps',
+  '「全家保险」专题': 'the "Family insurance" topic',
+  '这一页只列事实。为什么某条红线危险、某份保单哪里有敞口，都写在专题的呈现页里。':
+    "This page lists facts only. Why a deadline matters or where a policy leaves you exposed is written up in the topic's page.",
+
+  // ---------- 设置 ----------
+  'AI 模型': 'AI model',
+  '对话功能用的模型。填自己的 API Key，': 'The model used for chat. Enter your own API key — ',
+  '保存后立刻生效，不用重启': 'it takes effect as soon as you save, no restart needed',
+  还没填: 'Not set',
+  '当前用的是你自己填的 key。留空不改。': "You're using your own key. Leave blank to keep it.",
+  '当前用的是软件自带的 key。填上你自己的就会换掉。': "You're using the key that came with the app. Enter your own to replace it.",
+  保存并测试: 'Save and test',
+  只测试当前配置: 'Test current settings',
+  恢复默认: 'Reset to default',
+  '你发给 AI 的内容会传给这个服务商 —— AI 要读到账单才能帮你录入。不想让它看的东西就别发给它。':
+    "What you send to the AI goes to this provider — it has to read a bill to enter it for you. If you don't want it to see something, don't send it.",
+  家里的人: 'Household members',
+  '任务能派给谁、留言以谁的名义。用逗号或顿号隔开，第一个是你自己。AI 建任务时也会按这份名单填负责人。':
+    'Who tasks can be assigned to and who notes are written as. Separate names with commas; the first one is you. The AI uses this list when it assigns tasks too.',
+  '例如：我，老婆，妈妈': 'e.g. Me, Anna, Mom',
+  '改名或删掉一个人，已经派给他的任务不会跟着变，还挂在原来的名字下。':
+    "Renaming or removing someone doesn't change tasks already assigned to them — those stay under the old name.",
+  用手机访问: 'Phone access',
+  '同一个 WiFi 下的手机也能用。在电脑上点窗口顶部菜单': 'Phones on the same Wi-Fi can use it too. On the computer, open the menu ',
+  '「设置 → 用手机访问…」': 'Settings → Phone access…',
+  '，打开开关，用手机扫二维码。只有扫过码的手机进得来。':
+    ', turn it on and scan the QR code with your phone. Only phones that have scanned a code can get in.',
+  改登录密码: 'Change password',
+  '改完之后，其他设备上已经登录的会全部被踢下线，需要用新密码重新登录。':
+    'After the change, every other device that is signed in gets signed out and has to sign in again with the new password.',
+  '密码已改好，下次登录用新的。': 'Password changed. Use the new one next time you sign in.',
+  当前密码: 'Current password',
+  新密码: 'New password',
+  '至少 {n} 位': 'at least {n} characters',
+  再输一次新密码: 'Confirm new password',
+  确认修改: 'Change password',
+  '忘了密码进不来的话，只能让搭这套系统的人在服务器上重置 —— 密码存的是不可逆的哈希，谁也算不回来。':
+    "If you forget the password, whoever set up this server has to reset it there — it's stored as a one-way hash that no one can reverse.",
+  退出登录: 'Sign out',
+  '只退出这台设备，数据不受影响。': 'Signs out this device only. Your data is untouched.',
+  退出: 'Sign out',
+  '这是本机版，没有登录：在这台电脑上直接用，手机要先扫码配对。数据都在这台电脑上，菜单「设置 → 打开数据文件夹」能看到。':
+    'This is the desktop version, with no sign-in: use it directly on this computer; phones pair by scanning a QR code first. All data stays on this computer — menu Settings → Open data folder shows it.',
+  // ProviderFields
+  服务商: 'Provider',
+  '其他（自己填地址）': 'Other (enter URL)',
+  '对话时会按需联网搜索（天气、新闻、价格这类），回答里附来源。':
+    'Searches the web when needed during chat (weather, news, prices and so on) and cites sources.',
+  '这家不能联网搜索，只凭模型自己知道的回答。': "This provider can't search the web; answers come from what the model already knows.",
+  '填 {name} 的 key': 'Enter your {name} key',
+  这家服务商: 'this provider',
+  '换了服务商，原来那个 key 在这家用不了，要填新的。': "You switched providers — the old key won't work here, so enter a new one.",
+  '服务商给的密钥，形如 sk-xxxxxxxx': 'The key from your provider, like sk-xxxxxxxx',
+  模型名: 'Model',
+  '服务商文档里的模型 ID': "Model ID from the provider's docs",
+  'deepseek-flash 快、便宜、能看图；deepseek-v4-pro 更强，但看不了图。':
+    "deepseek-flash is fast, cheap and can read images; deepseek-v4-pro is stronger but can't read images.",
+  '这个模型看不了图片：发照片给它会照常存档，但它读不出内容 —— 体检报告、账单截图这类要靠看图录入的，换成 deepseek-flash。':
+    "This model can't read images: photos you send are still saved, but it can't see what's in them. For checkup reports and bill screenshots, switch to deepseek-flash.",
+  接口地址: 'API URL',
+  '接口地址（选了服务商就不用动）': 'API URL (no need to change it once a provider is picked)',
+  '任何 OpenAI 兼容的接口都行。': 'Any OpenAI-compatible endpoint works.',
+  // lib/ai-providers.ts
+  阿里云百炼: 'Alibaba Cloud Bailian',
+  'DeepSeek 官方': 'DeepSeek',
+  '在阿里云百炼控制台申请，形如 sk-xxxxxxxx': 'Create one in the Alibaba Cloud Bailian console; looks like sk-xxxxxxxx',
+  '在 platform.deepseek.com 的「API keys」里创建，形如 sk-xxxxxxxx':
+    'Create one under "API keys" at platform.deepseek.com; looks like sk-xxxxxxxx',
+  // settings/actions.ts、lib/ai-config.ts、lib/auth.ts 的提示
+  两次输入的新密码不一样: "The two new passwords don't match",
+  '错太多次了，{n} 秒后再试': 'Too many attempts. Try again in {n} seconds.',
+  '已保存，但试了一下不通：': "Saved, but the test didn't go through: ",
+  '已保存并测试通过，现在就能用了': 'Saved and tested — ready to use.',
+  '通了，当前用的是 {model}': 'Working. Currently using {model}.',
+  已恢复成默认配置: 'Reset to the default settings.',
+  '接口地址要以 http:// 或 https:// 开头': 'The API URL must start with http:// or https://',
+  'API Key 看起来不完整': 'That API key looks incomplete',
+  没有要改的内容: 'Nothing to change',
+  '还没填 API Key': 'No API key yet',
+  还没填接口地址: 'No API URL yet',
+  还没填模型名: 'No model name yet',
+  'API Key 被拒绝（{status}）。': 'API key rejected ({status}). ',
+  '接口地址或模型名不对（404）。': 'Wrong API URL or model name (404). ',
+  '服务商返回 {status}。': 'The provider returned {status}. ',
+  '接口通了，但返回的格式看不懂 —— 确认这是 OpenAI 兼容接口':
+    "Connected, but the response format isn't recognized — make sure it's an OpenAI-compatible endpoint",
+  '30 秒没响应，检查网络或者接口地址': 'No response in 30 seconds — check your network or the API URL',
+  '连不上：{msg}': "Can't connect: {msg}",
+  当前密码不对: 'The current password is wrong',
+  '新密码至少 {n} 位': 'The new password needs at least {n} characters',
+  新密码跟当前密码一样: 'The new password is the same as the current one',
+
+  // ---------- 登录 ----------
+  测试: 'Test',
+  '测试环境，数据开发者可见': 'Test environment — the developer can see the data',
+  私人生活秘书: 'Your personal life secretary',
+  访问密码: 'Password',
+  请输入密码: 'Enter password',
+  '失败次数过多，已暂时锁定，请在 {n} 分钟后再试。': 'Too many failed attempts. Locked for now — try again in {n} {n|minute|minutes}.',
+  '密码不正确，请重试。': 'Wrong password. Please try again.',
+  进入: 'Sign in',
+  '本站为个人私有平台，包含隐私资料': 'A private personal site containing private information',
+  请勿在公共设备上保持登录: "Don't stay signed in on a shared device",
+  // 交易的小分类是 AI 记账时自由填的文字，不是固定枚举。这里只收常见的几个，
+  // 让中文时期记的账在英文界面下也读得懂；英文界面下 AI 本来就会写英文分类。
+  住房: 'Housing',
+  房贷: 'Mortgage',
+  物业: 'Property fees',
+  水电: 'Utilities',
+  通讯: 'Phone & internet',
+  日用: 'Household',
+  餐饮: 'Dining',
+  交通: 'Transport',
+  服饰: 'Clothing',
+  购物: 'Shopping',
+  娱乐: 'Entertainment',
+  数码: 'Electronics',
+  旅行: 'Trips',
+  宠物: 'Pets',
+  人情: 'Gifts',
+  // 体检报告里 AI 录入时常用的简称（不在 CATEGORY_ORDER 里，但真实数据里常见）
+  肾功: 'Kidney function',
+  肝功: 'Liver function',
+  体格: 'Physical exam',
+  血压: 'Blood pressure',
 };

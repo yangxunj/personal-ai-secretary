@@ -2,6 +2,7 @@ import { scryptSync, timingSafeEqual, randomBytes, createHmac } from 'node:crypt
 import { cookies } from 'next/headers';
 import { db } from '@/lib/db';
 import { SESSION_COOKIE } from '@/lib/instance';
+import { getT } from '@/lib/i18n/server';
 
 // 名字随实例变（生产 / 测试各一个），原因见 instance.ts。
 // 继续从这儿再导出一次：原来 SESSION_COOKIE 就定义在这个文件里，
@@ -17,7 +18,7 @@ export const MIN_PASSWORD_LENGTH = 8;
 
 function secret() {
   const s = process.env.SESSION_SECRET;
-  if (!s) throw new Error('缺少 SESSION_SECRET 环境变量');
+  if (!s) throw new Error('SESSION_SECRET is not set');
   return s;
 }
 
@@ -82,11 +83,12 @@ export type ChangeResult = { ok: true } | { ok: false; error: string };
 
 /** 改密码：验旧的 → 写新的 → 版本号 +1（旧 session 随即失效） */
 export async function changePassword(oldPw: string, newPw: string): Promise<ChangeResult> {
-  if (!(await verifyPassword(oldPw))) return { ok: false, error: '当前密码不对' };
+  const t = await getT();
+  if (!(await verifyPassword(oldPw))) return { ok: false, error: t('当前密码不对') };
   if (newPw.length < MIN_PASSWORD_LENGTH) {
-    return { ok: false, error: `新密码至少 ${MIN_PASSWORD_LENGTH} 位` };
+    return { ok: false, error: t('新密码至少 {n} 位', { n: MIN_PASSWORD_LENGTH }) };
   }
-  if (newPw === oldPw) return { ok: false, error: '新密码跟当前密码一样' };
+  if (newPw === oldPw) return { ok: false, error: t('新密码跟当前密码一样') };
 
   const next = hashPassword(newPw);
   const version = String((await currentPwVersion()) + 1);

@@ -3,6 +3,7 @@ import PageHeader from '@/components/PageHeader';
 import { humanSize } from '@/lib/format';
 import { formatTime } from '@/lib/format';
 import Link from 'next/link';
+import { getLocale, getT } from '@/lib/i18n/server';
 
 export const dynamic = 'force-dynamic';
 
@@ -12,6 +13,8 @@ export default async function FilesPage({
   searchParams: Promise<{ c?: string }>;
 }) {
   const { c } = await searchParams;
+  const t = await getT();
+  const locale = await getLocale();
 
   const files = await db.attachment.findMany({
     where: c ? { category: c } : {},
@@ -29,7 +32,7 @@ export default async function FilesPage({
 
   return (
     <>
-      <PageHeader title="文件" subtitle={`${files.length} 个文件 · ${humanSize(totalSize)}`} />
+      <PageHeader title={t('文件')} subtitle={t('{n} 个文件 · {size}', { n: files.length, size: humanSize(totalSize) })} />
 
       <div className="px-4 py-3">
         <div className="flex gap-1.5 overflow-x-auto pb-1 -mx-4 px-4">
@@ -38,7 +41,7 @@ export default async function FilesPage({
             className={`shrink-0 text-xs px-3 py-1.5 rounded-full border ${!c ? 'bg-brand-500 text-white border-brand-500' : 'muted'}`}
             style={!c ? undefined : { borderColor: 'var(--border)' }}
           >
-            全部
+            {t('全部')}
           </Link>
           {cats.filter((g) => g.category).map((g) => (
             <Link
@@ -47,7 +50,7 @@ export default async function FilesPage({
               className={`shrink-0 text-xs px-3 py-1.5 rounded-full border ${c === g.category ? 'bg-brand-500 text-white border-brand-500' : 'muted'}`}
               style={c === g.category ? undefined : { borderColor: 'var(--border)' }}
             >
-              {g.category} {g._count}
+              {t(g.category!)} {g._count}
             </Link>
           ))}
         </div>
@@ -56,9 +59,9 @@ export default async function FilesPage({
       <div className="px-4 pb-4 space-y-2">
         {files.length === 0 && (
           <p className="muted text-sm text-center py-20 leading-relaxed">
-            还没有文件。
+            {t('还没有文件。')}
             <br />
-            在「沟通」里点回形针，就能把账单、报告发过来。
+            {t('在「沟通」里点回形针，就能把账单、报告发过来。')}
           </p>
         )}
 
@@ -89,18 +92,22 @@ export default async function FilesPage({
             <div className="min-w-0 flex-1">
               <p className="text-sm font-medium break-all">{f.filename}</p>
               <p className="muted text-[11px] mt-0.5">
-                {humanSize(f.size)} · {formatTime(f.createdAt)}
-                {f.uploadedBy === 'secretary' && ' · 管家生成'}
+                {humanSize(f.size)} · {formatTime(f.createdAt, locale)}
+                {f.uploadedBy === 'secretary' && ` · ${t('管家生成')}`}
               </p>
               {(f.task || f.vaultItem || f.note) && (
                 <p className="muted text-[11px] break-all mt-0.5">
-                  {f.task ? `任务：${f.task.title}` : f.vaultItem ? `资料：${f.vaultItem.title}` : f.note}
+                  {f.task
+                    ? t('任务：{title}', { title: f.task.title })
+                    : f.vaultItem
+                      ? t('资料：{title}', { title: f.vaultItem.title })
+                      : f.note}
                 </p>
               )}
             </div>
             {f.category && (
               <span className="shrink-0 muted text-[11px] px-2 py-0.5 rounded-md" style={{ background: 'var(--bg)' }}>
-                {f.category}
+                {t(f.category)}
               </span>
             )}
           </a>

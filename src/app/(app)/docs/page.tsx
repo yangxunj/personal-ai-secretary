@@ -2,6 +2,8 @@ import { db } from '@/lib/db';
 import PageHeader from '@/components/PageHeader';
 import { formatDate } from '@/lib/format';
 import Link from 'next/link';
+import { getLocale, getT } from '@/lib/i18n/server';
+import { intlTag } from '@/lib/i18n/core';
 
 export const dynamic = 'force-dynamic';
 
@@ -11,6 +13,8 @@ export default async function DocsPage({
   searchParams: Promise<{ c?: string }>;
 }) {
   const { c } = await searchParams;
+  const t = await getT();
+  const locale = await getLocale();
 
   const docs = await db.document.findMany({
     where: c ? { category: c } : {},
@@ -24,8 +28,12 @@ export default async function DocsPage({
   return (
     <>
       <PageHeader
-        title="文稿"
-        subtitle={docs.length > 0 ? `${docs.length} 篇 · 共 ${totalChars.toLocaleString('zh-CN')} 字` : undefined}
+        title={t('文稿')}
+        subtitle={
+          docs.length > 0
+            ? t('{n} 篇 · 共 {chars} 字', { n: docs.length, chars: totalChars.toLocaleString(intlTag(locale)) })
+            : undefined
+        }
       />
 
       {cats.length > 1 && (
@@ -36,7 +44,7 @@ export default async function DocsPage({
               className={`shrink-0 text-xs px-3 py-1.5 rounded-full border ${!c ? 'bg-brand-500 text-white border-brand-500' : 'muted'}`}
               style={!c ? undefined : { borderColor: 'var(--border)' }}
             >
-              全部
+              {t('全部')}
             </Link>
             {cats.filter((g) => g.category).map((g) => (
               <Link
@@ -45,7 +53,7 @@ export default async function DocsPage({
                 className={`shrink-0 text-xs px-3 py-1.5 rounded-full border ${c === g.category ? 'bg-brand-500 text-white border-brand-500' : 'muted'}`}
                 style={c === g.category ? undefined : { borderColor: 'var(--border)' }}
               >
-                {g.category} {g._count}
+                {t(g.category!)} {g._count}
               </Link>
             ))}
           </div>
@@ -55,9 +63,9 @@ export default async function DocsPage({
       <div className="px-4 pt-3 pb-4 space-y-2.5">
         {docs.length === 0 && (
           <p className="muted text-sm text-center py-20 leading-relaxed">
-            还没有文稿。
+            {t('还没有文稿。')}
             <br />
-            发言稿、文章、信件这类成篇的文字会收在这里。
+            {t('发言稿、文章、信件这类成篇的文字会收在这里。')}
           </p>
         )}
 
@@ -75,7 +83,7 @@ export default async function DocsPage({
                   className="shrink-0 muted text-[11px] px-2 py-0.5 rounded-md"
                   style={{ background: 'var(--bg)' }}
                 >
-                  {d.category}
+                  {t(d.category)}
                 </span>
               )}
             </div>
@@ -90,9 +98,9 @@ export default async function DocsPage({
             )}
 
             <p className="muted text-[11px] mt-2.5">
-              {d.date && `${formatDate(d.date)} · `}
-              {d.body.length.toLocaleString('zh-CN')} 字
-              {d.attachments.length > 0 && ` · ${d.attachments.length} 个附件`}
+              {d.date && `${formatDate(d.date, locale)} · `}
+              {t('{chars} 字', { chars: d.body.length.toLocaleString(intlTag(locale)) })}
+              {d.attachments.length > 0 && ` · ${t('{n} 个附件', { n: d.attachments.length })}`}
             </p>
           </Link>
         ))}

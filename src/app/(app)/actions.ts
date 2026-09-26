@@ -4,6 +4,9 @@ import { revalidatePath } from 'next/cache';
 import { db } from '@/lib/db';
 import { destroySession } from '@/lib/auth';
 import { redirect } from 'next/navigation';
+import { getT } from '@/lib/i18n/server';
+import { translate } from '@/lib/i18n/core';
+import { EN } from '@/lib/i18n/en';
 import { mkdir, writeFile, unlink } from 'node:fs/promises';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
@@ -32,7 +35,7 @@ export async function createTask(formData: FormData) {
     data: {
       title,
       detail: String(formData.get('detail') ?? '').trim() || null,
-      category: String(formData.get('category') ?? '其他'),
+      category: String(formData.get('category') ?? '其他'), // i18n-ignore：存库的分类值
       priority: Number(formData.get('priority') ?? 2),
       owner: String(formData.get('owner') ?? '').trim() || null,
       dueDate: formData.get('dueDate') ? new Date(String(formData.get('dueDate'))) : null,
@@ -69,7 +72,7 @@ export async function createVaultItem(formData: FormData) {
   await db.vaultItem.create({
     data: {
       title,
-      category: String(formData.get('category') ?? '其他'),
+      category: String(formData.get('category') ?? '其他'), // i18n-ignore：存库的分类值
       fields: JSON.stringify(fields),
       notes: String(formData.get('notes') ?? '').trim() || null,
       tags: String(formData.get('tags') ?? '').trim(),
@@ -104,6 +107,12 @@ export async function logout() {
  * sender：平台不做登录，没有「谁在问」这个概念，只能发的时候自己选，
  * 默认取任务负责人。答案会因为问的人是谁而不同，所以这个值有用。
  */
+/**
+ * 只传了附件、没写字时存进库的那句话。按当时的界面语言存；
+ * deleteAttachment 靠它认出「空的回传消息」，所以中英两个版本都要认。
+ */
+const NO_TEXT = '（没写说明，见附件）'; // i18n-ignore：老数据的暗号，删附件时要认
+
 export async function postTaskMessage(formData: FormData) {
   // taskId 走隐藏字段而不是 bind：这样整个调用就是一个普通的 FormData，
   // 可以直接用 curl 打一次验证（React 给「函数参数里塞 FormData」用的是
@@ -119,7 +128,7 @@ export async function postTaskMessage(formData: FormData) {
     data: {
       role: 'user',
       sender,
-      content: content || '（没写说明，见附件）',
+      content: content || (await getT())(NO_TEXT),
       status: 'pending',
       taskId,
     },
@@ -145,7 +154,7 @@ export async function postTaskMessage(formData: FormData) {
           storedPath: stored.replace(/\\/g, '/'),
           mimeType: file.type || 'application/octet-stream',
           size: file.size,
-          category: '任务回传',
+          category: '任务回传', // i18n-ignore：存库的附件分类
           note: content || null,
           uploadedBy: 'user',
           messageId: msg.id,
@@ -201,7 +210,7 @@ export async function deleteAttachment(id: string) {
       where: { id: f.messageId },
       include: { attachments: { select: { id: true } } },
     });
-    if (m && m.attachments.length === 0 && m.content.includes('（没写说明，见附件）')) {
+    if (m && m.attachments.length === 0 && [NO_TEXT, translate(EN, NO_TEXT)].some((x) => m.content.includes(x))) {
       await db.message.delete({ where: { id: m.id } });
     }
   }

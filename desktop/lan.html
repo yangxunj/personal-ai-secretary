@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="zh-CN">
+<html lang="zh-CN" id="root">
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:">
@@ -49,10 +49,10 @@
   <section>
     <div class="row">
       <div>
-        <h1>用手机访问</h1>
-        <p class="muted" id="status">读取中…</p>
+        <h1 data-i="title">用手机访问</h1>
+        <p class="muted" id="status" data-i="loading">读取中…</p>
       </div>
-      <label class="switch" title="允许同一个 WiFi 下配对过的手机访问">
+      <label class="switch" id="switch" title="允许同一个 WiFi 下配对过的手机访问">
         <input type="checkbox" id="toggle">
         <span></span>
       </label>
@@ -60,19 +60,19 @@
   </section>
 
   <section id="pairBox" hidden>
-    <h2>配对一台手机</h2>
+    <h2 data-i="pairHeading">配对一台手机</h2>
     <div class="pair">
       <div class="qr" id="qr"></div>
       <div>
         <ol>
-          <li>手机连上<b>跟这台电脑同一个 WiFi</b></li>
-          <li>用手机相机或微信扫左边的二维码</li>
-          <li>打开后点浏览器的「添加到主屏幕」，以后就像 App 一样点开</li>
+          <li data-h="step1">手机连上<b>跟这台电脑同一个 WiFi</b></li>
+          <li data-h="step2">用手机相机或微信扫左边的二维码</li>
+          <li data-h="step3">打开后点浏览器的「添加到主屏幕」，以后就像 App 一样点开</li>
         </ol>
-        <p class="muted" style="margin-top:10px">二维码只能用一次，扫完自动换新的，可以接着配下一台。<span id="expires"></span></p>
+        <p class="muted" style="margin-top:10px"><span data-i="oneUse">二维码只能用一次，扫完自动换新的，可以接着配下一台。</span><span id="expires"></span></p>
         <p class="url" id="url" style="margin-top:8px"></p>
         <div id="addrRow" style="margin-top:8px" hidden>
-          <span class="muted">扫了打不开？换个地址试试：</span>
+          <span class="muted" data-i="tryOther">扫了打不开？换个地址试试：</span>
           <select id="addr"></select>
         </div>
       </div>
@@ -80,14 +80,14 @@
   </section>
 
   <section id="devBox" hidden>
-    <h2>已配对的设备</h2>
+    <h2 data-i="devicesHeading">已配对的设备</h2>
     <div id="devices"></div>
-    <p class="muted" style="margin-top:6px">手机丢了或者换了，在这里移除，它就再也打不开了。</p>
+    <p class="muted" style="margin-top:6px" data-i="devicesHint">手机丢了或者换了，在这里移除，它就再也打不开了。</p>
   </section>
 
   <section>
-    <h2>打不开？</h2>
-    <ul class="muted" style="margin:0;padding-left:1.2em">
+    <h2 data-i="helpHeading">打不开？</h2>
+    <ul class="muted" id="help" style="margin:0;padding-left:1.2em">
       <li>第一次打开开关时 Windows 会问要不要允许联网 —— 选<b>允许</b>，<b>「专用网络」和「公用网络」都勾上</b>。Windows 11 常把家里的 WiFi 也标成「公用网络」，只勾专用的话手机照样连不上。</li>
       <li>当时点了「取消」、或者只勾了一个：到 Windows 安全中心 → 防火墙和网络保护 → 允许应用通过防火墙 → 更改设置，找到「家庭管家」，两个框都勾上。</li>
       <li>电脑睡眠或者关掉了这个软件，手机就连不上。</li>
@@ -99,25 +99,48 @@
 
 <script>
   const $ = (id) => document.getElementById(id);
+  let ui = null; // 当前语言的文字，主进程随状态一起给（desktop/i18n.js 的 LAN_UI）
+  const fill = (s, vars) => s.replace(/\{(\w+)\}/g, (m, k) => (k in vars ? String(vars[k]) : m));
   const fmt = (iso) => {
     const d = new Date(iso);
     const p = (n) => String(n).padStart(2, '0');
-    return `${d.getMonth() + 1}月${d.getDate()}日 ${p(d.getHours())}:${p(d.getMinutes())}`;
+    return fill(ui.dateFmt, {
+      m: d.getMonth() + 1,
+      mon: d.toLocaleString('en-US', { month: 'short' }),
+      d: d.getDate(),
+      hh: p(d.getHours()),
+      mm: p(d.getMinutes()),
+    });
   };
   let busy = false;
+  let appliedUi = null;
+
+  // 静态文字：只在语言变了的时候重填（设置页里切了语言，主进程会发 lan:changed）
+  function applyUi() {
+    if (appliedUi === ui.lang) return;
+    appliedUi = ui.lang;
+    document.title = ui.title;
+    $('root').lang = ui.lang;
+    document.querySelectorAll('[data-i]').forEach((el) => (el.textContent = ui[el.dataset.i]));
+    document.querySelectorAll('[data-h]').forEach((el) => (el.innerHTML = ui[el.dataset.h]));
+    $('switch').title = ui.toggleHint;
+    $('help').innerHTML = ui.help.map((h) => `<li>${h}</li>`).join('');
+  }
 
   async function render() {
     const s = await window.lan.state();
+    ui = s.ui;
+    applyUi();
     $('toggle').checked = s.enabled;
 
     if (!s.enabled) {
-      $('status').textContent = '关着。同一个 WiFi 下谁都连不进来。';
+      $('status').textContent = ui.off;
       $('status').className = 'muted';
     } else if (s.error) {
       $('status').textContent = s.error;
       $('status').className = 'muted err';
     } else if (s.running) {
-      $('status').textContent = `开着，端口 ${s.port}。只有配对过的设备能打开。`;
+      $('status').textContent = fill(ui.on, { port: s.port });
       $('status').className = 'muted on';
     }
 
@@ -126,7 +149,7 @@
       $('qr').innerHTML = s.qr;
       $('url').textContent = s.url.replace(/\/__pair\/.*/, '');
       const left = Math.max(0, Math.round((s.codeExpires - Date.now()) / 60000));
-      $('expires').textContent = ` 这一张 ${left} 分钟后失效。`;
+      $('expires').textContent = fill(ui.expiresIn, { n: left });
       const addrs = s.addresses;
       $('addrRow').hidden = addrs.length < 2;
       const cur = s.url.match(/^http:\/\/([^:]+)/)[1];
@@ -139,8 +162,8 @@
     $('devices').innerHTML = s.devices
       .map(
         (d) => `<div class="dev"><div><div>${d.name.replace(/[<>&]/g, '')}</div>
-        <div class="muted">配对于 ${fmt(d.createdAt)} · 最近用过 ${fmt(d.lastSeen)}</div></div>
-        <button data-id="${d.id}">移除</button></div>`
+        <div class="muted">${fill(ui.pairedAt, { a: fmt(d.createdAt), b: fmt(d.lastSeen) })}</div></div>
+        <button data-id="${d.id}">${ui.remove}</button></div>`
       )
       .join('');
   }
@@ -148,7 +171,7 @@
   $('toggle').addEventListener('change', async (e) => {
     if (busy) return;
     busy = true;
-    $('status').textContent = e.target.checked ? '正在打开…' : '正在关闭…';
+    $('status').textContent = e.target.checked ? ui.opening : ui.closing;
     try { await window.lan.setEnabled(e.target.checked); } finally { busy = false; render(); }
   });
   $('addr').addEventListener('change', (e) => window.lan.setAddress(e.target.value));

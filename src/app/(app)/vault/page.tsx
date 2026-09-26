@@ -7,6 +7,7 @@ import SecretValue from '@/components/SecretValue';
 import ImageGallery from '@/components/ImageGallery';
 import Notes from '@/components/Notes';
 import Link from 'next/link';
+import { getT } from '@/lib/i18n/server';
 
 export const dynamic = 'force-dynamic';
 
@@ -19,14 +20,15 @@ export default async function VaultPage({
 }: {
   searchParams: Promise<{ c?: string; q?: string; t?: string }>;
 }) {
-  const { c, q, t } = await searchParams;
+  const { c, q, t: tag } = await searchParams;
+  const t = await getT();
 
   const items = await db.vaultItem.findMany({
     where: {
       ...(c ? { category: c } : {}),
       // 标签筛选。tags 是逗号分隔的字符串，contains 会命中「主人」也命中「主人」，
       // 对「按人看证件」这个用法来说宽一点反而好用，不做精确匹配。
-      ...(t ? { tags: { contains: t } } : {}),
+      ...(tag ? { tags: { contains: tag } } : {}),
       ...(q
         ? { OR: [{ title: { contains: q } }, { notes: { contains: q } }, { tags: { contains: q } }, { fields: { contains: q } }] }
         : {}),
@@ -40,10 +42,10 @@ export default async function VaultPage({
   return (
     <>
       <PageHeader
-        title="资料库"
-        subtitle={t ? `标签「${t}」· ${items.length} 条` : `${items.length} 条记录`}
+        title={t('资料库')}
+        subtitle={tag ? t('标签「{tag}」· {n} 条', { tag, n: items.length }) : t('{n} 条记录', { n: items.length })}
         action={
-          <FormDialog label="+ 新建" title="新建资料">
+          <FormDialog label={t('+ 新建')} title={t('新建资料')}>
             <VaultForm action={createVaultItem} />
           </FormDialog>
         }
@@ -54,40 +56,40 @@ export default async function VaultPage({
           <input
             name="q"
             defaultValue={q ?? ''}
-            placeholder="搜索账号、地址、号码…"
+            placeholder={t('搜索账号、地址、号码…')}
             className="flex-1 rounded-xl border px-4 py-2.5 bg-transparent outline-none focus:border-brand-500"
             style={{ borderColor: 'var(--border)' }}
           />
           {c && <input type="hidden" name="c" value={c} />}
-          {t && <input type="hidden" name="t" value={t} />}
+          {tag && <input type="hidden" name="t" value={tag} />}
         </form>
 
-        {t && (
+        {tag && (
           <Link
             href={c ? `/vault?c=${encodeURIComponent(c)}` : '/vault'}
             className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full bg-brand-500 text-white"
           >
-            标签：{t}
+            {t('标签：')}{tag}
             <span className="opacity-70">×</span>
           </Link>
         )}
 
         <div className="flex gap-1.5 overflow-x-auto pb-1 -mx-4 px-4">
           <Link
-            href={t ? `/vault?t=${encodeURIComponent(t)}` : '/vault'}
+            href={tag ? `/vault?t=${encodeURIComponent(tag)}` : '/vault'}
             className={`shrink-0 text-xs px-3 py-1.5 rounded-full border ${!c ? 'bg-brand-500 text-white border-brand-500' : 'muted'}`}
             style={!c ? undefined : { borderColor: 'var(--border)' }}
           >
-            全部
+            {t('全部')}
           </Link>
           {all.map((g) => (
             <Link
               key={g.category}
-              href={`/vault?c=${encodeURIComponent(g.category)}${t ? `&t=${encodeURIComponent(t)}` : ''}`}
+              href={`/vault?c=${encodeURIComponent(g.category)}${tag ? `&t=${encodeURIComponent(tag)}` : ''}`}
               className={`shrink-0 text-xs px-3 py-1.5 rounded-full border ${c === g.category ? 'bg-brand-500 text-white border-brand-500' : 'muted'}`}
               style={c === g.category ? undefined : { borderColor: 'var(--border)' }}
             >
-              {g.category} {g._count}
+              {t(g.category)} {g._count}
             </Link>
           ))}
         </div>
@@ -96,9 +98,9 @@ export default async function VaultPage({
       <div className="px-4 pb-4 space-y-2">
         {items.length === 0 && (
           <p className="muted text-sm text-center py-20 leading-relaxed">
-            资料库还是空的。
+            {t('资料库还是空的。')}
             <br />
-            银行账号、学校账号、住址、证件号都可以存在这里。
+            {t('银行账号、学校账号、住址、证件号都可以存在这里。')}
           </p>
         )}
 
@@ -119,7 +121,7 @@ export default async function VaultPage({
                 <div className="min-w-0">
                   <h3 className="font-medium leading-snug">{item.title}</h3>
                   <span className="muted text-[11px] flex items-center gap-1">
-                    {item.category}
+                    {t(item.category)}
                     {item.sensitive && (
                       <svg viewBox="0 0 24 24" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="2">
                         <rect x="5" y="11" width="14" height="10" rx="2" />
@@ -130,7 +132,7 @@ export default async function VaultPage({
                 </div>
                 <form action={deleteVaultItem.bind(null, item.id)} className="shrink-0">
                   <button className="muted text-[11px] px-2 py-1 rounded-lg border whitespace-nowrap" style={{ borderColor: 'var(--border)' }}>
-                    删除
+                    {t('删除')}
                   </button>
                 </form>
               </div>
@@ -176,14 +178,14 @@ export default async function VaultPage({
 
               {item.tags && (
                 <div className="flex flex-wrap gap-1.5 mt-3">
-                  {splitTags(item.tags).map((tag) => (
+                  {splitTags(item.tags).map((x) => (
                     <Link
-                      key={tag}
-                      href={`/vault?t=${encodeURIComponent(tag)}`}
+                      key={x}
+                      href={`/vault?t=${encodeURIComponent(x)}`}
                       className="muted text-[11px] px-2 py-0.5 rounded-md active:opacity-60"
                       style={{ background: 'var(--bg)' }}
                     >
-                      {tag}
+                      {x}
                     </Link>
                   ))}
                 </div>

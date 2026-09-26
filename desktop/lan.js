@@ -19,6 +19,7 @@ const http = require('node:http');
 const os = require('node:os');
 const fs = require('node:fs');
 const crypto = require('node:crypto');
+const { tr, getLocale, lanUi } = require('./i18n');
 
 const COOKIE = 'hs_device';
 const PAIR_PREFIX = '/__pair/';
@@ -38,14 +39,14 @@ function deviceName(ua = '') {
     : /iPad/.test(ua)
       ? 'iPad'
       : /Android/.test(ua)
-        ? (ua.match(/Android[^;]*;\s*([^;)]+?)(?:\s+Build|\))/)?.[1] ?? 'Android 手机')
+        ? (ua.match(/Android[^;]*;\s*([^;)]+?)(?:\s+Build|\))/)?.[1] ?? tr('androidPhone'))
         : /Macintosh/.test(ua)
           ? 'Mac'
           : /Windows/.test(ua)
-            ? 'Windows 电脑'
-            : '未知设备';
+            ? tr('windowsPc')
+            : tr('unknownDevice');
   const br = /MicroMessenger/.test(ua)
-    ? '微信'
+    ? tr('wechat')
     : /EdgA?\//.test(ua)
       ? 'Edge'
       : /CriOS|Chrome\//.test(ua)
@@ -86,7 +87,7 @@ function lanAddresses() {
 }
 
 function page(title, body) {
-  return `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8">
+  return `<!doctype html><html lang="${getLocale() === 'en' ? 'en' : 'zh-CN'}"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>${title}</title>
 <style>
@@ -170,12 +171,12 @@ class LanGateway {
         return;
       } catch (e) {
         if (e.code !== 'EADDRINUSE') {
-          this.error = `打不开端口 ${p}：${e.message}`;
+          this.error = tr('portFailed', { port: p, msg: e.message });
           return;
         }
       }
     }
-    this.error = `端口 ${this.state.port}~${this.state.port + 9} 都被占了`;
+    this.error = tr('portsBusy', { from: this.state.port, to: this.state.port + 9 });
   }
 
   async stop() {
@@ -229,6 +230,7 @@ class LanGateway {
       codeExpires: this.code?.expires ?? null,
       address: this.state.address,
       addresses: lanAddresses(),
+      ui: lanUi(),
       devices: this.state.devices.map(({ id, name, createdAt, lastSeen }) => ({ id, name, createdAt, lastSeen })),
     };
   }
@@ -251,11 +253,7 @@ class LanGateway {
     if (!dev) {
       res.writeHead(403, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' });
       return res.end(
-        page(
-          '这台设备还没配对',
-          '<p>为了不让同一个 WiFi 下的其他人看到你的资料，手机要先跟电脑配对一次。</p>' +
-            '<p>在电脑上打开家庭管家，点菜单 <b>设置 → 用手机访问</b>，用手机扫那个二维码。</p>'
-        )
+        page(tr('notPairedTitle'), tr('notPairedBody'))
       );
     }
 
@@ -269,11 +267,7 @@ class LanGateway {
     if (!ok) {
       res.writeHead(410, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' });
       return res.end(
-        page(
-          '二维码已经失效',
-          '<p>每个二维码只能用一次，10 分钟不用也会作废。</p>' +
-            '<p>在电脑上的「用手机访问」窗口里会自动换一个新的，再扫一次就行。</p>'
-        )
+        page(tr('codeExpiredTitle'), tr('codeExpiredBody'))
       );
     }
     const t = token(32);
@@ -320,7 +314,7 @@ class LanGateway {
     );
     up.on('error', () => {
       if (!res.headersSent) res.writeHead(502, { 'content-type': 'text/plain; charset=utf-8' });
-      res.end('电脑上的家庭管家没响应，稍后再试');
+      res.end(tr('upstreamDown'));
     });
     // 手机中途关了页面，别让后面那条请求一直挂着
     res.on('close', () => up.destroy());

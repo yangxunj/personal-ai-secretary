@@ -1,6 +1,7 @@
 import { db } from './db';
 import { money, CATEGORY_LABELS } from './finance';
 import { formatDate, TASK_STATUS } from './format';
+import { getLocale, getT } from './i18n/server';
 
 export type Hit = {
   id: string;
@@ -11,7 +12,9 @@ export type Hit = {
 };
 
 export type Group = {
-  kind: string;
+  kind: 'vault' | 'tasks' | 'docs' | 'transactions' | 'files' | 'messages';
+  /** 显示用，已按界面语言翻好 */
+  label: string;
   href: string;
   hits: Hit[];
 };
@@ -61,6 +64,8 @@ function vaultSnippet(fieldsJson: string, notes: string | null, q: string): stri
 
 export async function search(q: string): Promise<Group[]> {
   const like = { contains: q };
+  const t = await getT();
+  const locale = await getLocale();
 
   const [vaults, tasks, docs, txs, files, messages] = await Promise.all([
     db.vaultItem.findMany({
@@ -99,68 +104,74 @@ export async function search(q: string): Promise<Group[]> {
 
   const groups: Group[] = [
     {
-      kind: '资料',
+      kind: 'vault',
+      label: t('资料'),
       href: `/vault?q=${encodeURIComponent(q)}`,
       hits: vaults.map((v) => ({
         id: v.id,
         title: v.title,
         snippet: vaultSnippet(v.fields, v.notes, q),
-        meta: v.category,
+        meta: t(v.category),
         href: `/vault?q=${encodeURIComponent(q)}`,
       })),
     },
     {
-      kind: '任务',
+      kind: 'tasks',
+      label: t('任务'),
       href: '/tasks',
-      hits: tasks.map((t) => ({
-        id: t.id,
-        title: t.title,
-        snippet: makeSnippet(t.result || t.detail, q),
-        meta: `${TASK_STATUS[t.status]?.label ?? t.status} · ${t.category}${t.dueDate ? ` · ${formatDate(t.dueDate)}` : ''}`,
+      hits: tasks.map((x) => ({
+        id: x.id,
+        title: x.title,
+        snippet: makeSnippet(x.result || x.detail, q),
+        meta: `${TASK_STATUS[x.status] ? t(TASK_STATUS[x.status].label) : x.status} · ${t(x.category)}${x.dueDate ? ` · ${formatDate(x.dueDate, locale)}` : ''}`,
         href: '/tasks',
       })),
     },
     {
-      kind: '文稿',
+      kind: 'docs',
+      label: t('文稿'),
       href: '/docs',
       hits: docs.map((d) => ({
         id: d.id,
         title: d.title,
         snippet: makeSnippet(d.body, q),
-        meta: [d.category, d.occasion, formatDate(d.date)].filter(Boolean).join(' · '),
+        meta: [d.category && t(d.category), d.occasion, formatDate(d.date, locale)].filter(Boolean).join(' · '),
         href: `/docs/${d.id}`,
       })),
     },
     {
-      kind: '交易',
+      kind: 'transactions',
+      label: t('交易'),
       href: '/finance',
-      hits: txs.map((t) => ({
-        id: t.id,
-        title: t.counterparty || t.label || t.kind || '交易',
-        snippet: makeSnippet(t.rawText, q),
-        meta: `${formatDate(t.date)} · ${t.direction === 'debit' ? '支出' : '收入'} ${money(t.amountCents)} · ${CATEGORY_LABELS[t.category] ?? t.category}`,
-        href: `/finance/${t.statement.period}`,
+      hits: txs.map((x) => ({
+        id: x.id,
+        title: x.counterparty || x.label || x.kind || t('交易'),
+        snippet: makeSnippet(x.rawText, q),
+        meta: `${formatDate(x.date, locale)} · ${x.direction === 'debit' ? t('支出') : t('收入')} ${money(x.amountCents)} · ${t(CATEGORY_LABELS[x.category] ?? x.category)}`,
+        href: `/finance/${x.statement.period}`,
       })),
     },
     {
-      kind: '文件',
+      kind: 'files',
+      label: t('文件'),
       href: '/files',
       hits: files.map((f) => ({
         id: f.id,
         title: f.filename,
         snippet: f.note ?? '',
-        meta: [f.category, formatDate(f.createdAt)].filter(Boolean).join(' · '),
+        meta: [f.category && t(f.category), formatDate(f.createdAt, locale)].filter(Boolean).join(' · '),
         href: `/api/files/${f.id}`,
       })),
     },
     {
-      kind: '记录',
+      kind: 'messages',
+      label: t('记录'),
       href: '/chat',
       hits: messages.map((m) => ({
         id: m.id,
-        title: m.role === 'user' ? '主人' : '管家',
+        title: m.role === 'user' ? t('主人') : t('管家'),
         snippet: makeSnippet(m.content, q, 60),
-        meta: [formatDate(m.createdAt), m.conversation?.title].filter(Boolean).join(' · '),
+        meta: [formatDate(m.createdAt, locale), m.conversation?.title].filter(Boolean).join(' · '),
         // 对话里说的 → 定位到那个对话的那一条；任务页的留言不属于任何对话 → 去任务页
         href: m.conversationId
           ? `/chat/${m.conversationId}?m=${m.id}`

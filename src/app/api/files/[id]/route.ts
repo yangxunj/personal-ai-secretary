@@ -7,6 +7,7 @@ import { absolutePath, THUMB_DIR } from '@/lib/storage';
 import { verifySessionValue } from '@/lib/session-edge';
 import { sessionIsCurrent, SESSION_COOKIE } from '@/lib/auth';
 import { cookies } from 'next/headers';
+import { getT } from '@/lib/i18n/server';
 
 /**
  * 附件下载 / 显示。
@@ -42,6 +43,7 @@ async function thumbnail(storedPath: string, id: string, width: number) {
 }
 
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const t = await getT();
   // 与 middleware 一致：启用鉴权时，文件接口也要单独校验一次
   // （否则知道 id 就能绕过页面直接取走账单）
   if (process.env.AUTH_ENABLED === 'true') {
@@ -50,15 +52,15 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
       jar.get(SESSION_COOKIE)?.value,
       process.env.SESSION_SECRET ?? ''
     );
-    if (!ok) return new NextResponse('未授权', { status: 401 });
+    if (!ok) return new NextResponse(t('未授权'), { status: 401 });
     // 签名对不代表还算数 —— 密码改过之后旧 cookie 要当场作废。
     // 页面那边在 layout 里验，这儿是 API，不走 layout，必须自己再验一次。
-    if (!(await sessionIsCurrent())) return new NextResponse('未授权', { status: 401 });
+    if (!(await sessionIsCurrent())) return new NextResponse(t('未授权'), { status: 401 });
   }
 
   const { id } = await params;
   const file = await db.attachment.findUnique({ where: { id } });
-  if (!file) return new NextResponse('文件不存在', { status: 404 });
+  if (!file) return new NextResponse(t('文件不存在'), { status: 404 });
 
   const asked = Number(new URL(req.url).searchParams.get('w'));
   const width = ALLOWED_WIDTHS.includes(asked) ? asked : null;
@@ -85,6 +87,6 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
       },
     });
   } catch {
-    return new NextResponse('文件已丢失', { status: 410 });
+    return new NextResponse(t('文件已丢失'), { status: 410 });
   }
 }

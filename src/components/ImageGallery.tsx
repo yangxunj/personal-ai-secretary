@@ -1,5 +1,6 @@
 'use client';
 import { useEffect, useState } from 'react';
+import { useT } from '@/lib/i18n/client';
 
 export type Shot = { id: string; label: string };
 
@@ -18,6 +19,7 @@ export type Shot = { id: string; label: string };
  */
 export default function ImageGallery({ shots }: { shots: Shot[] }) {
   const [open, setOpen] = useState<number | null>(null);
+  const t = useT();
 
   // 大图开着的时候锁住背景滚动，否则手指在图上拖会带着整页跑
   useEffect(() => {
@@ -82,7 +84,7 @@ export default function ImageGallery({ shots }: { shots: Shot[] }) {
               onClick={() => setOpen(null)}
               className="shrink-0 text-sm px-3 py-1.5 rounded-lg border border-white/25"
             >
-              关闭
+              {t('关闭')}
             </button>
           </div>
 
@@ -98,13 +100,13 @@ export default function ImageGallery({ shots }: { shots: Shot[] }) {
                 onClick={() => setOpen((i) => (i === null ? null : (i - 1 + shots.length) % shots.length))}
                 className="text-white/90 text-sm px-5 py-2 rounded-lg border border-white/25"
               >
-                上一张
+                {t('上一张')}
               </button>
               <button
                 onClick={() => setOpen((i) => (i === null ? null : (i + 1) % shots.length))}
                 className="text-white/90 text-sm px-5 py-2 rounded-lg border border-white/25"
               >
-                下一张
+                {t('下一张')}
               </button>
             </div>
           )}

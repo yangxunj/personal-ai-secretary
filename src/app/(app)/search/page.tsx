@@ -1,6 +1,7 @@
 import { search } from '@/lib/search';
 import PageHeader from '@/components/PageHeader';
 import Link from 'next/link';
+import { getT } from '@/lib/i18n/server';
 
 export const dynamic = 'force-dynamic';
 
@@ -27,14 +28,15 @@ export default async function SearchPage({
 }) {
   const { q } = await searchParams;
   const keyword = (q ?? '').trim();
+  const t = await getT();
   const groups = keyword ? await search(keyword) : [];
   const total = groups.reduce((sum, g) => sum + g.hits.length, 0);
 
   return (
     <>
       <PageHeader
-        title="搜索"
-        subtitle={keyword ? `“${keyword}” 找到 ${total} 条` : '记录 · 任务 · 资料 · 财务 · 文稿 · 文件'}
+        title={t('搜索')}
+        subtitle={keyword ? t('“{q}” 找到 {n} 条', { q: keyword, n: total }) : t('记录 · 任务 · 资料 · 财务 · 文稿 · 文件')}
         search={false}
       />
 
@@ -44,7 +46,7 @@ export default async function SearchPage({
             name="q"
             defaultValue={keyword}
             autoFocus
-            placeholder="搜点什么，比如 门锁、图书馆、Claude…"
+            placeholder={t('搜点什么，比如 门锁、图书馆、Claude…')}
             className="flex-1 rounded-xl border px-4 py-2.5 bg-transparent outline-none focus:border-brand-500"
             style={{ borderColor: 'var(--border)' }}
           />
@@ -52,17 +54,17 @@ export default async function SearchPage({
 
         {!keyword && (
           <p className="muted text-sm leading-relaxed pt-8 text-center">
-            一次搜遍全部六个板块。
+            {t('一次搜遍全部六个板块。')}
             <br />
-            账号、号码、商户名、文件名都能搜。
+            {t('账号、号码、商户名、文件名都能搜。')}
           </p>
         )}
 
         {keyword && total === 0 && (
           <p className="muted text-sm leading-relaxed pt-8 text-center">
-            没找到「{keyword}」。
+            {t('没找到「{q}」。', { q: keyword })}
             <br />
-            换个说法试试，或者直接问管家。
+            {t('换个说法试试，或者直接问管家。')}
           </p>
         )}
 
@@ -70,11 +72,11 @@ export default async function SearchPage({
           <section key={g.kind} className="space-y-2">
             <div className="flex items-baseline justify-between">
               <h2 className="text-sm font-semibold">
-                {g.kind}
+                {g.label}
                 <span className="muted font-normal ml-1.5 text-xs">{g.hits.length}</span>
               </h2>
               <Link href={g.href} className="muted text-xs">
-                去{g.kind}页 →
+                {t('去{kind}页 →', { kind: g.label })}
               </Link>
             </div>
 

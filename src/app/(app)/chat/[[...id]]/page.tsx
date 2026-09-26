@@ -6,6 +6,7 @@ import ConversationList from '@/components/chat/ConversationList';
 import { listConversations, newConversationId } from '@/lib/conversations';
 import { formatTime } from '@/lib/format';
 import { markRead } from '../../actions';
+import { getLocale, getT } from '@/lib/i18n/server';
 
 export const dynamic = 'force-dynamic';
 
@@ -48,6 +49,8 @@ export default async function ChatPage({
   searchParams: Promise<{ take?: string; m?: string; draft?: string }>;
 }) {
   const [{ id: segs }, { take, m, draft }] = await Promise.all([params, searchParams]);
+  const t = await getT();
+  const locale = await getLocale();
 
   const unread = await db.message.count({ where: { role: 'secretary', status: 'unread' } });
   if (unread > 0) await markRead();
@@ -152,10 +155,10 @@ export default async function ChatPage({
           list={list}
           subtitle={
             focusId
-              ? `定位到这一条 · 这个对话共 ${total} 条`
+              ? t('定位到这一条 · 这个对话共 {n} 条', { n: total })
               : latest
-                ? `最近更新 ${formatTime(latest.createdAt)}`
-                : '想到什么说什么'
+                ? t('最近更新 {time}', { time: formatTime(latest.createdAt, locale) })
+                : t('想到什么说什么')
           }
         />
 
@@ -163,13 +166,13 @@ export default async function ChatPage({
           {history.length === 0 && (
             <div className="surface border rounded-2xl p-4 mb-4" style={{ borderColor: 'var(--border)' }}>
               <p className="text-[14px] leading-relaxed">
-                跟我说话就行 —— 要记的事、要存的号码、要查的东西。
+                {t('跟我说话就行 —— 要记的事、要存的号码、要查的东西。')}
               </p>
               <p className="muted text-[12px] mt-2 leading-relaxed">
-                比如「下周三前把车险续了」「记住我的招行卡号是 6225…」「还有什么没办」。
+                {t('比如「下周三前把车险续了」「记住我的招行卡号是 6225…」「还有什么没办」。')}
               </p>
               <p className="muted text-[12px] mt-2 leading-relaxed">
-                一件事一个对话，聊得清楚些；存下的资料、任务、页面在哪个对话里都查得到。
+                {t('一件事一个对话，聊得清楚些；存下的资料、任务、页面在哪个对话里都查得到。')}
               </p>
             </div>
           )}

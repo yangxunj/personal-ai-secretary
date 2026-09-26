@@ -28,7 +28,12 @@ const AI_FACING = [
   'src/lib/data-tools.ts',
   'src/lib/page-tools.ts',
   'src/lib/chat-context.ts',
+  'src/lib/chat-intake.ts',
+  'src/lib/system-prompt.ts',
   'src/lib/sample-pages.data.ts',
+  // 这两个里有给模型看的警告/附注；pages.ts 的 PAGE_KINDS 译文在 content.ts
+  'src/lib/pages.ts',
+  'src/lib/doc-extract.ts',
   'src/lib/schema-upgrade.ts',
   'src/lib/env-guard.ts',
   'src/instrumentation.ts',
@@ -38,9 +43,14 @@ const AI_FACING = [
  * 这些文件里放的是「中文原文当 key」的常量表（状态名、分类、导航标签），
  * 显示时由别处过 t()。这里的中文字符串不算漏翻，但**必须在英文词典里有**。
  */
-const KEY_FILES = ['src/lib/format.ts', 'src/components/nav-tabs.tsx'];
+const KEY_FILES = ['src/lib/format.ts', 'src/components/nav-tabs.tsx',
+  'src/lib/finance.ts', 'src/lib/ai-providers.ts', 'src/app/(app)/health/shared.ts',
+  'src/lib/topic.ts', 'src/lib/sample-pages.ts'];
 
-/** 故意不翻的原文片段（比如设置页那个双语标题） */
+/**
+ * 故意不翻的原文片段（比如设置页那个双语标题）。
+ * 单独一行要放过（存进库的中文值、暗号），在那行末尾写注释 `// i18n-ignore：为什么`。
+ */
 const ALLOW = ['界面语言 · Language'];
 
 const HAN = /[一-鿿]/;
@@ -112,7 +122,9 @@ const leftovers = []; // { file, line, text }
 
 for (const file of walk(SRC)) {
   const rel = path.relative(ROOT, file).replaceAll('\\', '/');
-  const code = stripComments(readFileSync(file, 'utf8'));
+  const raw = readFileSync(file, 'utf8');
+  const ignored = new Set(raw.split(/\r?\n/).flatMap((l, i) => (l.includes('i18n-ignore') ? [i + 1] : [])));
+  const code = stripComments(raw);
   const lineOf = (idx) => code.slice(0, idx).split('\n').length;
 
   for (const m of code.matchAll(T_CALL)) {
@@ -144,7 +156,7 @@ for (const file of walk(SRC)) {
   let rest = code.replace(T_CALL, (m) => m.replace(/[^\n]/g, ' '));
   for (const a of ALLOW) rest = rest.replaceAll(a, ' '.repeat(a.length));
   rest.split('\n').forEach((l, i) => {
-    if (HAN.test(l)) leftovers.push({ file: rel, line: i + 1, text: l.trim().slice(0, 100) });
+    if (HAN.test(l) && !ignored.has(i + 1)) leftovers.push({ file: rel, line: i + 1, text: l.trim().slice(0, 100) });
   });
 }
 

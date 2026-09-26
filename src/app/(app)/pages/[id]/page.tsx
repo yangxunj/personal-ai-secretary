@@ -5,6 +5,7 @@ import PageHeader from '@/components/PageHeader';
 import { formatTime } from '@/lib/format';
 import { PAGE_KINDS, type PageKind } from '@/lib/pages';
 import PageManage from './PageManage';
+import { getLocale, getT } from '@/lib/i18n/server';
 
 export const dynamic = 'force-dynamic';
 
@@ -15,6 +16,8 @@ export default async function PageDetail({ params }: { params: Promise<{ id: str
     include: { versions: { orderBy: { createdAt: 'desc' }, select: { id: true, title: true, createdAt: true } } },
   });
   if (!page) notFound();
+  const t = await getT();
+  const locale = await getLocale();
 
   // 在哪个对话里做的（Page.conversationId 没挂外键：对话删了页面照样留着）
   const from = page.conversationId
@@ -26,13 +29,17 @@ export default async function PageDetail({ params }: { params: Promise<{ id: str
   const regenerate =
     page.kind === 'snapshot' && page.request
       ? `/chat?draft=${encodeURIComponent(
-          `按最新数据重新生成页面「${page.title}」（id: ${page.id}），原来的要求是：${page.request}`,
+          t('按最新数据重新生成页面「{title}」（id: {id}），原来的要求是：{request}', {
+            title: page.title,
+            id: page.id,
+            request: page.request,
+          }),
         )}`
       : null;
 
   // 在它基础上改：详情页上最该有的下一步。示例页尤其 —— 看完「原来能做这个」，
   // 下一个念头就是「给我家也改一个」
-  const tweak = `/chat?draft=${encodeURIComponent(`把页面「${page.title}」（id: ${page.id}）改一下：`)}`;
+  const tweak = `/chat?draft=${encodeURIComponent(t('把页面「{title}」（id: {id}）改一下：', { title: page.title, id: page.id }))}`;
 
   const btn = 'text-xs px-2.5 py-1.5 rounded-lg border whitespace-nowrap active:opacity-60 hover:border-brand-500 transition';
 
@@ -43,21 +50,21 @@ export default async function PageDetail({ params }: { params: Promise<{ id: str
         title={page.title}
         subtitle={
           page.sample
-            ? `示例 · ${page.sample}`
-            : `${PAGE_KINDS[page.kind as PageKind] ?? page.kind} · ${formatTime(page.updatedAt)} 更新`
+            ? t('示例 · {category}', { category: t(page.sample) })
+            : `${PAGE_KINDS[page.kind as PageKind] ? t(PAGE_KINDS[page.kind as PageKind]) : page.kind} · ${t('{time} 更新', { time: formatTime(page.updatedAt, locale) })}`
         }
         action={
           <div className="flex items-center gap-1.5">
             {regenerate && (
               <Link href={regenerate} className={`${btn} hidden sm:inline-block`} style={{ borderColor: 'var(--border)' }}>
-                用最新数据重做
+                {t('用最新数据重做')}
               </Link>
             )}
             <a href={raw} target="_blank" rel="noopener" className={btn} style={{ borderColor: 'var(--border)' }}>
-              全屏
+              {t('全屏')}
             </a>
             <a href={`${raw}?download=1`} className={btn} style={{ borderColor: 'var(--border)' }}>
-              下载
+              {t('下载')}
             </a>
           </div>
         }
@@ -77,32 +84,32 @@ export default async function PageDetail({ params }: { params: Promise<{ id: str
         {page.summary && <p className="muted text-sm leading-relaxed">{page.summary}</p>}
         {page.request && (
           <p className="text-[12px] leading-relaxed muted">
-            <span className="font-medium">{page.sample ? '在对话里这样说就能做出来：' : '当初的要求：'}</span>
-            {page.sample ? `「${page.request}」` : page.request}
+            <span className="font-medium">{page.sample ? t('在对话里这样说就能做出来：') : t('当初的要求：')}</span>
+            {page.sample ? t('「{text}」', { text: page.request }) : page.request}
           </p>
         )}
         <Link
           href={tweak}
           className="inline-block text-[13px] px-3.5 py-2 rounded-xl bg-brand-500 text-white active:opacity-80"
         >
-          {page.sample ? '照这个改一个自己的' : '在对话里改它'}
+          {page.sample ? t('照这个改一个自己的') : t('在对话里改它')}
         </Link>
         {regenerate && (
           <Link href={regenerate} className={`${btn} inline-block sm:hidden`} style={{ borderColor: 'var(--border)' }}>
-            用最新数据重做
+            {t('用最新数据重做')}
           </Link>
         )}
         {from && (
           <p className="muted text-[12px] leading-relaxed">
-            做它的那个对话：
+            {t('做它的那个对话：')}
             <Link href={`/chat/${from.id}`} className="text-brand-600 dark:text-brand-300 underline underline-offset-2">
-              {from.title ?? '没起标题的对话'}
+              {from.title ?? t('没起标题的对话')}
             </Link>
           </p>
         )}
         <PageManage
           id={page.id}
-          versions={page.versions.map((v) => ({ id: v.id, title: v.title, at: formatTime(v.createdAt) }))}
+          versions={page.versions.map((v) => ({ id: v.id, title: v.title, at: formatTime(v.createdAt, locale) }))}
         />
       </div>
     </div>

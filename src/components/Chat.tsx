@@ -10,30 +10,32 @@ import { isModelImage, unreadableReason } from '@/lib/file-support';
 import { formatTime, dayLabel, sameDay, humanSize } from '@/lib/format';
 import { titleConversation } from '@/app/(app)/chat/actions';
 import { emitConversations } from '@/components/chat/events';
+import { useLocale, useT } from '@/lib/i18n/client';
+import type { T } from '@/lib/i18n/core';
 
 /** 工具名 → 人话。工具卡片上显示它，用户不该看见 createTask 这种字眼 */
-const TOOL_LABELS: Record<string, string> = {
-  createTask: '记下待办',
-  listTasks: '翻了翻待办',
-  updateTask: '更新待办',
-  addVaultItem: '存进资料库',
-  searchVault: '查资料库',
-  saveNote: '留了个档',
-  saveFile: '归档文件',
-  importBill: '读账单入库',
-  importHealthReport: '读体检报告入库',
-  queryFinance: '查账',
-  queryHealth: '查体检记录',
-  queryPolicies: '查保单',
-  listPages: '翻了翻页面',
-  getPage: '取回页面',
-  savePage: '做页面',
-  restorePageVersion: '退回上一版',
-};
+const toolLabels = (t: T): Record<string, string> => ({
+  createTask: t('记下待办'),
+  listTasks: t('翻了翻待办'),
+  updateTask: t('更新待办'),
+  addVaultItem: t('存进资料库'),
+  searchVault: t('查资料库'),
+  saveNote: t('留了个档'),
+  saveFile: t('归档文件'),
+  importBill: t('读账单入库'),
+  importHealthReport: t('读体检报告入库'),
+  queryFinance: t('查账'),
+  queryHealth: t('查体检记录'),
+  queryPolicies: t('查保单'),
+  listPages: t('翻了翻页面'),
+  getPage: t('取回页面'),
+  savePage: t('做页面'),
+  restorePageVersion: t('退回上一版'),
+});
 
-function toolLabel(type: string) {
+function toolLabel(type: string, t: T) {
   const name = type.replace(/^tool-/, '');
-  return TOOL_LABELS[name] ?? name;
+  return toolLabels(t)[name] ?? name;
 }
 
 /** 单张图最大 10MB。手机原图动辄 5-8MB，再大就该先压一压 */
@@ -58,6 +60,7 @@ function readAsDataUrl(file: File) {
  * **不能让「没验」和「验过了」在页面上看起来一样。**
  */
 function ToolCard({ label, state, output }: { label: string; state: string; output?: unknown }) {
+  const t = useT();
   const done = state === 'output-available';
   const failed = state === 'output-error';
   const warnings =
@@ -83,7 +86,7 @@ function ToolCard({ label, state, output }: { label: string; state: string; outp
       </div>
       {pageUrl && (
         <Link href={pageUrl} className="ml-1.5 text-[11px] text-brand-600 dark:text-brand-300 hover:underline">
-          打开页面 →
+          {t('打开页面 →')}
         </Link>
       )}
       {warnings.length > 0 && (
@@ -102,11 +105,12 @@ function ToolCard({ label, state, output }: { label: string; state: string; outp
 /** 思考过程：默认折起来。想看的人点开，不想看的人不受打扰 */
 function Reasoning({ text }: { text: string }) {
   const [open, setOpen] = useState(false);
+  const t = useT();
   if (!text.trim()) return null;
   return (
     <div className="text-[11px]">
       <button onClick={() => setOpen((v) => !v)} className="muted hover:underline">
-        {open ? '收起思考过程' : `思考过程（${text.length} 字）`}
+        {open ? t('收起思考过程') : t('思考过程（{n} 字）', { n: text.length })}
       </button>
       {open && (
         <pre
@@ -178,6 +182,8 @@ export function Chat({
   });
   const router = useRouter();
   const pathname = usePathname();
+  const t = useT();
+  const locale = useLocale();
   // 浏览器「后退」回到一个新开过的对话时，地址栏是 /chat/<那个 id>（当初
   // replaceState 换的），可 Next 按路由结构恢复页面，拿的是 /chat 这个路由
   // **最近一次**的渲染 —— 也就是后来又点的那个空白新对话。于是地址写着 A，
@@ -228,7 +234,7 @@ export function Chat({
     const incoming = Array.from(list);
     const tooBig = incoming.filter((f) => f.size > MAX_BYTES);
     if (tooBig.length) {
-      setNote(`${tooBig.map((f) => f.name).join('、')} 超过 10MB，先压一下再传`);
+      setNote(t('{names} 超过 10MB，先压一下再传', { names: tooBig.map((f) => f.name).join(t('、')) }));
     } else {
       setNote('');
     }
@@ -252,7 +258,7 @@ export function Chat({
       : undefined;
 
     // 只传了图没配话时给一句默认的：模型收到一条空消息不知道该干嘛
-    const said = text || (attached ? '看看这个' : '');
+    const said = text || (attached ? t('看看这个') : '');
     sendMessage({ text: said, files: attached });
 
     // 新对话的第一句：地址换成 /chat/<id>（不重新加载，这一轮不能断），
@@ -289,7 +295,7 @@ export function Chat({
               className="muted text-xs px-4 py-2 rounded-full border inline-block"
               style={{ borderColor: 'var(--border)' }}
             >
-              还有 {olderCount} 条更早的 · 查看更早
+              {t('还有 {n} 条更早的 · 查看更早', { n: olderCount })}
             </Link>
           </div>
         )}
@@ -300,7 +306,7 @@ export function Chat({
           const newDay = !prev || !sameDay(prev.createdAt, m.createdAt);
           return (
             <div key={m.id}>
-              {newDay && <DayDivider label={dayLabel(m.createdAt)} />}
+              {newDay && <DayDivider label={dayLabel(m.createdAt, locale)} />}
               {compaction?.firstKeptId === m.id && <CompactionDivider c={compaction} />}
               <HistoryItem msg={m} focused={m.id === focusId} />
             </div>
@@ -310,7 +316,7 @@ export function Chat({
         {history.length > 0 && messages.length > 0 && (
           <div className="flex items-center gap-2 py-1">
             <div className="h-px flex-1" style={{ background: 'var(--border)' }} />
-            <span className="muted text-[10px]">以下是本次对话</span>
+            <span className="muted text-[10px]">{t('以下是本次对话')}</span>
             <div className="h-px flex-1" style={{ background: 'var(--border)' }} />
           </div>
         )}
@@ -327,19 +333,19 @@ export function Chat({
                     <img
                       key={i}
                       src={p.url}
-                      alt={p.filename ?? '图片'}
+                      alt={p.filename ?? t('图片')}
                       className="rounded-lg max-h-56 w-auto"
                     />
                   ) : (
                     <div key={i} className="text-[12px] opacity-80">
-                      📎 {p.filename ?? '文件'}
+                      📎 {p.filename ?? t('文件')}
                     </div>
                   );
                 }
                 if (p.type.startsWith('tool-') || p.type === 'dynamic-tool') {
                   const state = 'state' in p ? String(p.state) : '';
                   const output = 'output' in p ? p.output : undefined;
-                  return <ToolCard key={i} label={toolLabel(p.type)} state={state} output={output} />;
+                  return <ToolCard key={i} label={toolLabel(p.type, t)} state={state} output={output} />;
                 }
                 return null;
               })}
@@ -355,9 +361,9 @@ export function Chat({
 
         {error && (
           <div className="text-[12px] text-red-500 px-1">
-            出错了：{error.message}
+            {t('出错了：')}{error.message}
             <button onClick={() => location.reload()} className="ml-2 underline">
-              刷新重试
+              {t('刷新重试')}
             </button>
           </div>
         )}
@@ -377,7 +383,7 @@ export function Chat({
         {files.length > 0 && (
           <div className="flex flex-wrap gap-2 mb-2">
             {files.map((f, i) => {
-              const bad = unreadableReason(f.type, f.name);
+              const bad = unreadableReason(f.type, f.name, t);
               return (
               <div
                 key={i}
@@ -397,14 +403,14 @@ export function Chat({
                 <button
                   onClick={() => setFiles((prev) => prev.filter((_, j) => j !== i))}
                   className="absolute top-0 right-0 bg-black/55 text-white w-5 h-5 text-[11px] leading-5 text-center"
-                  aria-label="移除"
+                  aria-label={t('移除')}
                 >
                   ×
                 </button>
                 {/* 选的时候就说清楚，别等 AI 回一句「读不了」才知道 —— 那一轮白花钱 */}
                 {bad && (
                   <div className="absolute bottom-0 inset-x-0 bg-amber-500 text-white text-[10px] leading-4 text-center">
-                    AI 读不了
+                    {t('AI 读不了')}
                   </div>
                 )}
               </div>
@@ -412,9 +418,9 @@ export function Chat({
             })}
           </div>
         )}
-        {files.some((f) => unreadableReason(f.type, f.name)) && (
+        {files.some((f) => unreadableReason(f.type, f.name, t)) && (
           <div className="text-[11px] text-amber-600 dark:text-amber-400 mb-1.5 leading-relaxed">
-            {[...new Set(files.map((f) => unreadableReason(f.type, f.name)).filter(Boolean))].map((r) => (
+            {[...new Set(files.map((f) => unreadableReason(f.type, f.name, t)).filter(Boolean))].map((r) => (
               <p key={r}>{r}</p>
             ))}
           </div>
@@ -437,7 +443,7 @@ export function Chat({
             onClick={() => picker.current?.click()}
             className="shrink-0 rounded-full w-10 h-10 border text-lg muted"
             style={{ borderColor: 'var(--border)' }}
-            aria-label="添加文件"
+            aria-label={t('添加文件')}
           >
             +
           </button>
@@ -460,7 +466,7 @@ export function Chat({
               }
             }}
             rows={1}
-            placeholder={files.length ? '说说这是什么（可留空）…' : '跟我说点什么，也可以传张图…'}
+            placeholder={files.length ? t('说说这是什么（可留空）…') : t('跟我说点什么，也可以传张图…')}
             className="flex-1 resize-none rounded-2xl border px-3.5 py-2.5 text-[15px] bg-transparent outline-none focus:border-brand-500 transition max-h-32"
             style={{ borderColor: 'var(--border)' }}
           />
@@ -469,7 +475,7 @@ export function Chat({
               onClick={stop}
               className="shrink-0 rounded-full w-10 h-10 border text-sm"
               style={{ borderColor: 'var(--border)' }}
-              aria-label="停止"
+              aria-label={t('停止')}
             >
               ■
             </button>
@@ -478,7 +484,7 @@ export function Chat({
               onClick={send}
               disabled={!input.trim() && !files.length}
               className="shrink-0 rounded-full w-10 h-10 bg-brand-500 text-white disabled:opacity-30 transition"
-              aria-label="发送"
+              aria-label={t('发送')}
             >
               ↑
             </button>
@@ -507,6 +513,8 @@ function DayDivider({ label }: { label: string }) {
  */
 function HistoryItem({ msg, focused }: { msg: SeedMessage; focused: boolean }) {
   const mine = msg.role === 'user';
+  const t = useT();
+  const locale = useLocale();
   return (
     <div id={`m-${msg.id}`} className={`scroll-mt-20 flex flex-col ${mine ? 'items-end' : 'items-start'}`}>
       <div
@@ -543,11 +551,11 @@ function HistoryItem({ msg, focused }: { msg: SeedMessage; focused: boolean }) {
           href={`/tasks/${msg.task.id}`}
           className="mt-1.5 text-xs px-2.5 py-1 rounded-lg bg-brand-50 text-brand-700 dark:bg-brand-500/15 dark:text-brand-100"
         >
-          关联任务：{msg.task.title}
+          {t('关联任务：')}{msg.task.title}
         </Link>
       )}
 
-      <span className="muted text-[11px] mt-1 px-1">{formatTime(msg.createdAt)}</span>
+      <span className="muted text-[11px] mt-1 px-1">{formatTime(msg.createdAt, locale)}</span>
     </div>
   );
 }
@@ -576,12 +584,14 @@ function Bubble({ role, children }: { role: 'user' | 'assistant'; children: Reac
  * 摘要默认收起：它是给 AI 看的，平时不用管，想知道「它到底记得什么」时再点开。
  */
 function CompactionDivider({ c }: { c: Compaction }) {
+  const t = useT();
+  const locale = useLocale();
   return (
     <details className="my-3 group">
       <summary className="list-none cursor-pointer select-none flex items-center gap-2 py-1">
         <div className="h-px flex-1" style={{ background: 'var(--border)' }} />
         <span className="muted text-[11px] whitespace-nowrap">
-          ↑ 以上的对话 AI 只记得摘要 · <span className="underline underline-offset-2">看摘要</span>
+          {t('↑ 以上的对话 AI 只记得摘要')} · <span className="underline underline-offset-2">{t('看摘要')}</span>
         </span>
         <div className="h-px flex-1" style={{ background: 'var(--border)' }} />
       </summary>
@@ -590,8 +600,8 @@ function CompactionDivider({ c }: { c: Compaction }) {
         style={{ borderColor: 'var(--border)' }}
       >
         <p className="muted text-[11px] mb-2">
-          {formatTime(c.createdAt)} 整理 · 对话太长时，早期内容会自动整理成这份摘要，
-          之后 AI 记得的是「摘要 + 这条线以下的原文」
+          {t('{time} 整理', { time: formatTime(c.createdAt, locale) })} ·{' '}
+          {t('对话太长时，早期内容会自动整理成这份摘要，之后 AI 记得的是「摘要 + 这条线以下的原文」')}
         </p>
         <MessageBody>{c.summary}</MessageBody>
       </div>

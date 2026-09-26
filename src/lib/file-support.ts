@@ -8,6 +8,8 @@
 /** 模型直接收的图片格式。DeepSeek 官方文档列的就这四种；iPhone 的 HEIC 不在里面 */
 export const MODEL_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
 
+import { makeT, type T } from './i18n/core';
+
 const DOC_EXT = ['pdf', 'docx', 'xlsx'];
 const TEXT_EXT = ['txt', 'csv', 'json', 'md'];
 
@@ -28,19 +30,22 @@ export function isModelImage(mimeType: string) {
   return MODEL_IMAGE_TYPES.includes(mimeType.toLowerCase());
 }
 
-/** 读不了的话返回一句给人看的原因；读得了返回 null */
-export function unreadableReason(mimeType: string, name: string): string | null {
-  const t = mimeType.toLowerCase();
+/**
+ * 读不了的话返回一句给人看的原因；读得了返回 null。
+ * 页面上显示时传 useT() 的 t 进来；不传就是中文（服务端拼给模型看的那句用这个）。
+ */
+export function unreadableReason(mimeType: string, name: string, t: T = makeT(null)): string | null {
+  const type = mimeType.toLowerCase();
   const e = ext(name);
-  if (isModelImage(t)) return null;
-  if (t === 'image/heic' || t === 'image/heif' || e === 'heic' || e === 'heif') {
-    return 'HEIC 照片 AI 看不了，iPhone 上可以截个图再发，或者设置里把照片格式改成「兼容性最佳」';
+  if (isModelImage(type)) return null;
+  if (type === 'image/heic' || type === 'image/heif' || e === 'heic' || e === 'heif') {
+    return t('HEIC 照片 AI 看不了，iPhone 上可以截个图再发，或者设置里把照片格式改成「兼容性最佳」');
   }
-  if (t.startsWith('image/')) return '这种图片格式 AI 看不了，截个图（PNG/JPG）再发';
-  if (DOC_EXT.includes(e) || t === 'application/pdf') return null;
-  if (isTextFile(t, name)) return null;
+  if (type.startsWith('image/')) return t('这种图片格式 AI 看不了，截个图（PNG/JPG）再发');
+  if (DOC_EXT.includes(e) || type === 'application/pdf') return null;
+  if (isTextFile(type, name)) return null;
   if (e === 'doc' || e === 'xls' || e === 'ppt') {
-    return `旧版 .${e} 读不了，另存成 .${e}x 再发，或者截图`;
+    return t('旧版 .{ext} 读不了，另存成 .{ext}x 再发，或者截图', { ext: e });
   }
-  return '这种格式 AI 读不了，发出去只会存档。能读的：图片、PDF、Word(.docx)、Excel(.xlsx)、txt/csv';
+  return t('这种格式 AI 读不了，发出去只会存档。能读的：图片、PDF、Word(.docx)、Excel(.xlsx)、txt/csv');
 }

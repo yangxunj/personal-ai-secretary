@@ -10,9 +10,13 @@ policies, so they're right there when you need them.
 The one exception: when you chat with the AI, what you send goes to the model
 provider you chose.
 
-> ⚠ **The interface is Chinese-only for now.** The AI replies in whatever language
-> you write in, but menus, pages and labels are in Chinese. The finance module
-> assumes a single base currency (CNY by default).
+The interface comes in **English and Chinese**. It follows your system language on
+first launch; switch any time under **Settings → Language**. In English, the AI
+replies in English and saves what it records in English too.
+
+> Still Chinese-only: the 8 bundled sample pages (games and small tools) and the demo
+> data. The finance module assumes a single base currency (CNY by default). The
+> developer notes and code comments are in Chinese.
 
 ![Chat](docs/images/chat.jpg)
 
@@ -37,6 +41,7 @@ Also:
 - **Topics**: an ongoing matter (renovation, buying a car) with its related tasks and a list of "things we haven't figured out yet".
 - **Phone access**: pair your phone by QR code on the same Wi-Fi and use it in the mobile browser. Add it to your home screen and it feels like an app.
 - **Household members**: tasks can be assigned to different people at home.
+- **English / Chinese interface**: switch under Settings → Language.
 
 <p>
 <img src="docs/images/pages.jpg" width="62%" alt="Pages">
@@ -53,7 +58,7 @@ Grab one from [Releases](../../releases):
 | `personal-ai-secretary-<version>-win.zip` | `data\` inside the unzipped folder | No install. Unzip and run; copy the whole folder to a USB stick to take it with you |
 | `personal-ai-secretary-portable-<version>.exe` | `data\` next to the exe | Single-file, no install. Unpacks itself on every launch, so cold start is slow |
 
-Once installed, the app is called 「家庭管家」 ("Household Steward").
+Once installed, the app is called "Household Steward" (「家庭管家」 in Chinese).
 
 The installers aren't code-signed, so Windows will say "Windows protected your PC".
 Click **More info → Run anyway**. If you'd rather not, build it yourself (see below).
@@ -62,18 +67,18 @@ Windows only for now.
 
 ## First run
 
-1. **Enter an AI model key.** Menu 「设置 → AI 模型 / API Key…」 (Settings → AI model / API key), pick a provider, paste the key, click 「保存并测试」 (Save and test).
+1. **Enter an AI model key.** Menu **Settings → AI model / API key…**, pick a provider, paste the key, click **Save and test**.
    - **Alibaba Cloud Model Studio (Bailian)**: create a key on the "API-KEY" page of the [console](https://bailian.console.aliyun.com/)
    - **DeepSeek**: "API keys" at [platform.deepseek.com](https://platform.deepseek.com/)
    - Any other OpenAI-compatible endpoint works too; fill in the base URL and model name yourself. Reading bills and checkup reports needs a **vision-capable** model.
-2. **Settings → 家里的人 (household members)**: list who's in your household so tasks can be assigned to them.
-3. Go to 「对话」 (Chat) and say something.
+2. **Settings → Household members**: list who's in your household so tasks can be assigned to them.
+3. Go to **Chat** and say something.
 
 It works without a key too: tasks, the vault and so on can all be edited by hand, you just can't chat.
 
 ## Privacy
 
-- The database (SQLite), uploaded originals and backups all live in that `data` folder. Menu 「设置 → 打开数据文件夹」 (Settings → Open data folder) takes you there.
+- The database (SQLite), uploaded originals and backups all live in that `data` folder. Menu **Settings → Open data folder** takes you there.
 - The app itself sends no telemetry. **Text and images you send in a chat go to your chosen model provider**; the AI has to read a bill to enter it for you. If you don't want the AI to see something, don't send it; enter it by hand.
 - Sensitive values are stored **in plain text** in the local database (that's how the AI can look them up). Protection relies on the computer itself: don't hand the `data` folder to anyone.
 - Phone access is off by default. When on, only devices paired by QR code can get in. Pairing codes are single-use and expire after 10 minutes, and devices can be removed at any time.

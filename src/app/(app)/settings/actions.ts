@@ -7,7 +7,7 @@ import { checkThrottle, recordFailure, recordSuccess, sleep, clientKey } from '@
 import { setAiConfig, clearAiConfig, testAiConfig, getAiConfig } from '@/lib/ai-config';
 import { parseOwners, setOwners } from '@/lib/owners';
 import { revalidatePath } from 'next/cache';
-import { setLocale } from '@/lib/i18n/server';
+import { getT, setLocale } from '@/lib/i18n/server';
 import { isLocale } from '@/lib/i18n/core';
 
 /**
@@ -21,13 +21,14 @@ export async function changePasswordAction(formData: FormData) {
   const oldPw = String(formData.get('current') ?? '');
   const newPw = String(formData.get('next') ?? '');
   const confirm = String(formData.get('confirm') ?? '');
+  const t = await getT();
 
-  if (newPw !== confirm) redirect('/settings?e=' + encodeURIComponent('两次输入的新密码不一样'));
+  if (newPw !== confirm) redirect('/settings?e=' + encodeURIComponent(t('两次输入的新密码不一样')));
 
   const key = clientKey(await headers());
   const verdict = checkThrottle(key);
   if (!verdict.allowed) {
-    redirect('/settings?e=' + encodeURIComponent(`错太多次了，${verdict.retryAfterSec} 秒后再试`));
+    redirect('/settings?e=' + encodeURIComponent(t('错太多次了，{n} 秒后再试', { n: verdict.retryAfterSec })));
   }
   await sleep(verdict.delayMs);
 
@@ -67,12 +68,13 @@ export async function saveAiConfigAction(formData: FormData) {
   });
   if (!saved.ok) redirect('/settings?aiE=' + encodeURIComponent(saved.error));
 
+  const t = await getT();
   const tested = await testAiConfig();
   if (!tested.ok) {
     // 注意仍然是保存成功的 —— 别让使用者以为白填了，而是告诉他存下了但不通
-    redirect('/settings?aiE=' + encodeURIComponent('已保存，但试了一下不通：' + tested.error));
+    redirect('/settings?aiE=' + encodeURIComponent(t('已保存，但试了一下不通：') + tested.error));
   }
-  redirect('/settings?aiOk=' + encodeURIComponent('已保存并测试通过，现在就能用了'));
+  redirect('/settings?aiOk=' + encodeURIComponent(t('已保存并测试通过，现在就能用了')));
 }
 
 /** 只测不存 —— 用来确认当前这份配置还好使（比如怀疑余额用完了） */
@@ -80,24 +82,27 @@ export async function testAiConfigAction() {
   const r = await testAiConfig();
   if (!r.ok) redirect('/settings?aiE=' + encodeURIComponent(r.error));
   const cfg = await getAiConfig();
-  redirect('/settings?aiOk=' + encodeURIComponent(`通了，当前用的是 ${cfg.model}`));
+  const t = await getT();
+  redirect('/settings?aiOk=' + encodeURIComponent(t('通了，当前用的是 {model}', { model: cfg.model })));
 }
 
 /** 退回安装包/`.env` 自带的那份配置 */
 export async function resetAiConfigAction() {
   await clearAiConfig();
-  redirect('/settings?aiOk=' + encodeURIComponent('已恢复成默认配置'));
+  const t = await getT();
+  redirect('/settings?aiOk=' + encodeURIComponent(t('已恢复成默认配置')));
 }
 
 // ---------- 家里的人 ----------
 
 /** 任务能派给谁。改名不会连带改已有任务上的名字 —— 那些是历史记录 */
 export async function saveOwnersAction(formData: FormData) {
-  const r = parseOwners(String(formData.get('owners') ?? ''));
+  const t = await getT();
+  const r = parseOwners(String(formData.get('owners') ?? ''), t);
   if (!r.ok) redirect('/settings?mE=' + encodeURIComponent(r.error) + '#members');
   await setOwners(r.owners);
   revalidatePath('/tasks', 'layout');
-  redirect('/settings?mOk=' + encodeURIComponent(`已保存：${r.owners.join('、')}`) + '#members');
+  redirect('/settings?mOk=' + encodeURIComponent(t('已保存：{names}', { names: r.owners.join(t('、')) })) + '#members');
 }
 
 /**
