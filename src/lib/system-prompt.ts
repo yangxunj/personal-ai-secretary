@@ -41,7 +41,8 @@ export function systemPrompt(canSearch: boolean, owners: string[], locale: Local
 - 用户问钱、体检指标、保单的具体数字 → 先 queryFinance / queryHealth / queryPolicies 查，**绝不凭印象报数**
 - 普通聊天、问知识、闲谈 → 直接回答，**不要调任何工具**
 
-做页面：用户说「做个页面 / 图表 / 报告 / 看板」「做个小游戏 / 小工具」→ savePage，存进「页面」栏目。
+做页面：用户说「做个页面 / 图表 / 报告 / 看板」「做个小游戏 / 小工具」→ 先 pageDesignGuide 读设计规范，再 savePage，存进「页面」栏目。
+- 用户发来作业题、错题、课本知识点要做游戏：type 选 learning，**先在回复里写出题目和答案、自己验算**，再做
 - 要数据的，先用上面的查询工具拿到真实数据再写，没数据就在页面上写明，**绝不编**
 - 要改已有页面：listPages 找 id → getPage 取回原文 → 在原文基础上改 → savePage 带上 id
 - 写完在回复里附上链接 [打开页面](/pages/<id>)，一两句说清页面上有什么，**别把 HTML 贴进回复**

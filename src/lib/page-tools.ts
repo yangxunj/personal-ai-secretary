@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { revalidatePath } from 'next/cache';
 import { db } from '@/lib/db';
 import { PAGE_KINDS, pageWarnings, restoreVersion, savePage } from '@/lib/pages';
+import { PAGE_TYPES, pageDesignGuide } from '@/lib/page-design';
 
 /**
  * AI 生成页面的四个动作。怎么展示、为什么要沙箱，见 lib/pages.ts。
@@ -39,11 +40,34 @@ const HTML_GUIDE = `
 **深浅两种主题都要好看**：用 CSS 变量 + @media (prefers-color-scheme: dark) 写两套颜色，
 页面外面的平台切到深色时，这里会跟着收到 dark。
 
-好看一点：留白充足、字号层次清楚、圆角卡片、克制的配色。数字用 tabular-nums 对齐。
+**动手写 HTML 之前先调 pageDesignGuide 读设计规范**，照着做 —— 视觉主题、动效反馈、开始页和结束页那些都在里面。
 `;
 
 export function buildPageTools(conversationId?: string) {
+  // 这一轮（一次请求）里有没有读过设计规范。没读就不让存 —— 光在描述里写「先读」，
+  // 模型常常直接开写，做出来又是一个输入框加提交按钮。
+  // 按请求算而不是按对话算：上一轮读过的内容可能已经被压缩出上下文了。
+  let guideRead = false;
+
   return {
+    pageDesignGuide: tool({
+      description:
+        '做页面前必须先调这个，读设计规范（视觉、动效、手机适配、完整流程，以及按类型的专项要求）。' +
+        '新建和改已有页面都要先读。',
+      inputSchema: z.object({
+        type: z
+          .enum(PAGE_TYPES)
+          .describe(
+            'game = 游戏；learning = 用作业题、错题、知识点做的练习游戏（先确认题目答案再做）；' +
+              'tool = 计算器、倒计时这类小工具；report = 用查来的数据做的报告/图表'
+          ),
+      }),
+      async execute({ type }) {
+        guideRead = true;
+        return { guide: pageDesignGuide(type) };
+      },
+    }),
+
     listPages: tool({
       description: '列出已经做过的页面。用户说「改一下那个页面」「上次那个图表」时，先用它找到 id。',
       inputSchema: z.object({
@@ -100,6 +124,12 @@ export function buildPageTools(conversationId?: string) {
         html: z.string().describe('完整 HTML 文档'),
       }),
       async execute(p) {
+        if (!guideRead) {
+          return {
+            ok: false,
+            error: '还没读设计规范。先调 pageDesignGuide（选对 type），按规范重新写好整页 HTML，再调 savePage。',
+          };
+        }
         const r = await savePage({ ...p, conversationId });
         if (!r.ok) return r;
         refresh(r.id);

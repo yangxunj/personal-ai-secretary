@@ -47,6 +47,7 @@ export const chat: Dict = {
   翻了翻页面: 'Browsed pages',
   取回页面: 'Opened a page',
   做页面: 'Made a page',
+  读设计规范: 'Read the design guide',
   退回上一版: 'Restored previous version',
   '打开页面 →': 'Open page →',
   收起思考过程: 'Hide reasoning',

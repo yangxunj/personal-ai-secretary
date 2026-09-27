@@ -28,6 +28,7 @@ const toolLabels = (t: T): Record<string, string> => ({
   queryHealth: t('查体检记录'),
   queryPolicies: t('查保单'),
   listPages: t('翻了翻页面'),
+  pageDesignGuide: t('读设计规范'),
   getPage: t('取回页面'),
   savePage: t('做页面'),
   restorePageVersion: t('退回上一版'),
