@@ -185,8 +185,8 @@ export function toStoredModelJson(messages: ModelMessage[]): string | null {
 const MAX_STORED_RESULT_CHARS = 6000;
 
 /**
- * 做一个页面，savePage 的参数就是一整页 HTML（二三十 KB）；改页面前 getPage
- * 又取回一整页。原样存进历史的话，此后**每一轮**都要把这几页重新喂给模型 ——
+ * 以前做一个页面，savePage 的参数就是一整页 HTML（二三十 KB）；现在页面另起调用写
+ * （lib/page-builder.ts），但 buildPage 的 data 和 getPage 取回的整页照样大。原样存进历史的话，此后**每一轮**都要把这几页重新喂给模型 ——
  * 做三个页面，随便聊一句也是几万 token。
  *
  * 所以存的时候换成一句占位：模型知道「这里做过一个页面、id 是什么」就够了，
@@ -200,7 +200,15 @@ function shrinkToolParts(messages: ModelMessage[]): ModelMessage[] {
       return {
         ...m,
         content: m.content.map((p) => {
-          if (p.type !== 'tool-call' || p.toolName !== 'savePage') return p;
+          if (p.type !== 'tool-call') return p;
+          // buildPage 的 data 是查好交给写页面模型的原始数据，可能很长；页面做完它就没用了
+          if (p.toolName === 'buildPage') {
+            const input = p.input as { data?: string } | undefined;
+            if (!input?.data || input.data.length <= MAX_STORED_RESULT_CHARS) return p;
+            return { ...p, input: { ...input, data: `［${input.data.length} 字的数据，已写进页面］` } };
+          }
+          // savePage 是以前对话模型自己写整页 HTML 的工具，老对话的历史里还有
+          if (p.toolName !== 'savePage') return p;
           const input = p.input as { html?: string } | undefined;
           if (!input?.html) return p;
           return { ...p, input: { ...input, html: `［整页 HTML ${input.html.length} 字，已存进页面，要改先 getPage 取原文］` } };

@@ -28,9 +28,10 @@ const toolLabels = (t: T): Record<string, string> => ({
   queryHealth: t('查体检记录'),
   queryPolicies: t('查保单'),
   listPages: t('翻了翻页面'),
-  pageDesignGuide: t('读设计规范'),
   getPage: t('取回页面'),
-  savePage: t('做页面'),
+  buildPage: t('做页面'),
+  getPageData: t('读页面里的数据'),
+  setPageData: t('往页面里写数据'),
   restorePageVersion: t('退回上一版'),
 });
 
@@ -62,12 +63,14 @@ function readAsDataUrl(file: File) {
  */
 function ToolCard({ label, state, output }: { label: string; state: string; output?: unknown }) {
   const t = useT();
-  const done = state === 'output-available';
-  const failed = state === 'output-error';
-  const warnings =
-    output && typeof output === 'object' && Array.isArray((output as { warnings?: unknown }).warnings)
-      ? ((output as { warnings: unknown[] }).warnings as string[])
-      : [];
+  const o = output && typeof output === 'object' ? (output as Record<string, unknown>) : null;
+  // 写页面要一两分钟，工具一路吐进度（lib/page-builder.ts），不显示的话看着像卡死了
+  const progress = o?.progress as { phase: string; thinking: number; written: number; seconds: number } | undefined;
+  // 工具自己说没做成（ok: false）也算失败，不能挂个绿勾。
+  // 原因不在这里显示：工具的报错是写给模型看的中文，模型会在回复里用界面语言讲给用户
+  const failed = state === 'output-error' || (!progress && o?.ok === false);
+  const done = state === 'output-available' && !progress && !failed;
+  const warnings = Array.isArray(o?.warnings) ? (o.warnings as string[]) : [];
   // 做完页面直接给个入口 —— 别让人去回复正文里找那个链接
   const pageUrl =
     done && output && typeof output === 'object' && typeof (output as { url?: unknown }).url === 'string'
@@ -84,6 +87,13 @@ function ToolCard({ label, state, output }: { label: string; state: string; outp
           {failed ? '✕' : done ? '✓' : '⋯'}
         </span>
         <span className="muted">{label}</span>
+        {progress && (
+          <span className="muted tabular-nums">
+            {progress.phase === 'writing'
+              ? t('· 正在写，已写 {n} 字 · {s} 秒', { n: progress.written.toLocaleString(), s: progress.seconds })
+              : t('· 正在构思 · {s} 秒', { s: progress.seconds })}
+          </span>
+        )}
       </div>
       {pageUrl && (
         <Link href={pageUrl} className="ml-1.5 text-[11px] text-brand-600 dark:text-brand-300 hover:underline">

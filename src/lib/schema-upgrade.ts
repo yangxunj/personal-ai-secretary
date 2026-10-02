@@ -152,6 +152,22 @@ const STEPS: Step[] = [
        VALUES ('migrated.conversations', '1', CAST(strftime('%s','now') AS INTEGER) * 1000)`,
     ],
   },
+  {
+    // 2026-10-02 页面自带存储（lib/page-data.ts）
+    name: 'PageData',
+    needed: async () => !(await hasTable('PageData')),
+    sql: [
+      `CREATE TABLE "PageData" (
+    "pageId" TEXT NOT NULL,
+    "key" TEXT NOT NULL,
+    "value" TEXT NOT NULL,
+    "updatedAt" DATETIME NOT NULL,
+
+    PRIMARY KEY ("pageId", "key"),
+    CONSTRAINT "PageData_pageId_fkey" FOREIGN KEY ("pageId") REFERENCES "Page" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+)`,
+    ],
+  },
 ];
 
 export async function upgradeSchema(): Promise<string[]> {

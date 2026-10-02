@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { sessionIsCurrent } from '@/lib/auth';
-import { SANDBOX_CSP, downloadName, withShim } from '@/lib/pages';
+import { SANDBOX_CSP, downloadName, forDownload, withShim } from '@/lib/pages';
+import { dumpForModel } from '@/lib/page-data';
 import { getT } from '@/lib/i18n/server';
 
 /**
@@ -13,6 +14,7 @@ import { getT } from '@/lib/i18n/server';
  *
  * `?download=1` 给原样的 HTML 当附件下载：不注入 SHIM（下载下来是普通网页，
  * 原生 alert、localStorage 都能用），也不带 CSP（离开了平台，就没什么可偷的了）。
+ * 页面用了 pageStore 的，换成 localStorage 版并带上当前数据（见 forDownload）。
  */
 export const dynamic = 'force-dynamic';
 
@@ -28,7 +30,8 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
 
   if (new URL(req.url).searchParams.get('download')) {
     const name = downloadName(page.title);
-    return new NextResponse(page.html, {
+    const { data } = await dumpForModel(id, Infinity);
+    return new NextResponse(forDownload(page.html, data), {
       headers: {
         'Content-Type': 'text/html; charset=utf-8',
         'Content-Disposition': `attachment; filename="page.html"; filename*=UTF-8''${encodeURIComponent(name)}`,

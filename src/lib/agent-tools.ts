@@ -5,6 +5,7 @@ import { revalidatePath } from 'next/cache';
 import { removeStored, type StoredFile } from '@/lib/ingest';
 import { buildDataTools } from '@/lib/data-tools';
 import { buildPageTools } from '@/lib/page-tools';
+import type { PageBuilder } from '@/lib/page-builder';
 import { makeT, type T } from '@/lib/i18n/core';
 
 /**
@@ -56,9 +57,11 @@ export type ToolContext = {
    * 卡片把 warnings 直接铺出来，账单页也显示）。
    */
   t?: T;
+  /** 写页面用的模型和参数（推理拉满）。见 lib/page-builder.ts */
+  pageBuilder?: PageBuilder;
 };
 
-export function buildAgentTools({ incoming, conversationId, t = makeT(null) }: ToolContext) {
+export function buildAgentTools({ incoming, conversationId, t = makeT(null), pageBuilder }: ToolContext) {
   return {
     // ---------- 任务 ----------
 
@@ -534,7 +537,7 @@ export function buildAgentTools({ incoming, conversationId, t = makeT(null) }: T
     ...buildDataTools(),
 
     // ---------- AI 生成的页面：见 page-tools.ts ----------
-    ...buildPageTools(conversationId),
+    ...buildPageTools({ conversationId, builder: pageBuilder }),
   } as const;
 }
 

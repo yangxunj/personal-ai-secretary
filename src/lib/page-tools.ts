@@ -3,14 +3,19 @@ import { z } from 'zod';
 import { revalidatePath } from 'next/cache';
 import { db } from '@/lib/db';
 import { PAGE_KINDS, pageWarnings, restoreVersion, savePage } from '@/lib/pages';
-import { PAGE_TYPES, pageDesignGuide } from '@/lib/page-design';
+import { PAGE_TYPES } from '@/lib/page-design';
+import { buildPageHtml, type BuildProgress, type PageBuilder } from '@/lib/page-builder';
+import { declaredSchema, dumpForModel, setData, shapeSummary } from '@/lib/page-data';
 
 /**
- * AI 生成页面的四个动作。怎么展示、为什么要沙箱，见 lib/pages.ts。
+ * AI 生成页面的几个动作。怎么展示、为什么要沙箱，见 lib/pages.ts。
  *
- * savePage 的描述就是「怎么写一个在这里能跑的页面」的全部规范 —— 模型只看得见
- * 工具描述，写在别处它不知道。里面好几条是 livepage 实测撞出来的（手机没有方向键、
- * alert 被吞、游戏结束不能重来），改的时候别弄丢。
+ * 页面本身不是对话里的模型写的：它调 buildPage 交一份需求，由 lib/page-builder.ts
+ * 另起一次推理拉满的调用来写。所以「怎么写一个在这里能跑的页面」的规范在那边，
+ * 这里只告诉对话模型**需求该怎么交**。
+ *
+ * 页面自带存储（pageStore）的数据，AI 用 getPageData / setPageData 读写 —— 页面里记的读书记录，
+ * 用户在对话里问「今年读了几本」时要答得上来。
  */
 
 function refresh(id?: string) {
@@ -18,56 +23,10 @@ function refresh(id?: string) {
   if (id) revalidatePath(`/pages/${id}`);
 }
 
-const HTML_GUIDE = `
-写一个**完整、独立的单文件 HTML**（<!doctype html> 开头，CSS 和 JS 都内联）。
+const KIND_ENUM = Object.keys(PAGE_KINDS) as [keyof typeof PAGE_KINDS, ...(keyof typeof PAGE_KINDS)[]];
 
-它跑在沙箱里，下面几条是硬限制，不是建议：
-- **不能联网**：CDN 上的图表库、网络字体、外链图片一律加载不出来，fetch 也发不出去。
-  图表用内联 <svg> 或 <canvas> 自己画；字体用 system-ui。
-- **数据直接写进 HTML**。先用 queryFinance / queryHealth / queryPolicies / listTasks
-  查到真实数据，再把数字写进页面。**绝不编数据**；没查到就在页面上写明「暂无数据」。
-  数据快照类页面要在显眼处写「数据截至 YYYY-MM-DD」，日期取查询结果里的 dataAsOf / 最新一条的日期，别自己编。
-- alert() 能用（显示成不阻塞的提示条）；confirm() / prompt() 不行，要确认或输入就自己画按钮和 <input>。
-- localStorage 只在这次打开期间有效，关掉就没了。别承诺「会记住最高分」。
-
-**手机优先** —— 用户很可能在手机上看：
-- 必须有 <meta name="viewport" content="width=device-width, initial-scale=1">
-- 宽度用 max-width:100% / 百分比，别写死几百像素宽
-- 游戏和小工具**必须一根手指就能玩全**：别只绑 keydown（手机没有键盘，更没有方向键），
-  自己画一副方向键或支持滑动（touchstart / touchend），点击目标至少 44px 见方
-- 游戏结束要能「再来一局」，别 alert 一句就停住
-
-**深浅两种主题都要好看**：用 CSS 变量 + @media (prefers-color-scheme: dark) 写两套颜色，
-页面外面的平台切到深色时，这里会跟着收到 dark。
-
-**动手写 HTML 之前先调 pageDesignGuide 读设计规范**，照着做 —— 视觉主题、动效反馈、开始页和结束页那些都在里面。
-`;
-
-export function buildPageTools(conversationId?: string) {
-  // 这一轮（一次请求）里有没有读过设计规范。没读就不让存 —— 光在描述里写「先读」，
-  // 模型常常直接开写，做出来又是一个输入框加提交按钮。
-  // 按请求算而不是按对话算：上一轮读过的内容可能已经被压缩出上下文了。
-  let guideRead = false;
-
+export function buildPageTools({ conversationId, builder }: { conversationId?: string; builder?: PageBuilder }) {
   return {
-    pageDesignGuide: tool({
-      description:
-        '做页面前必须先调这个，读设计规范（视觉、动效、手机适配、完整流程，以及按类型的专项要求）。' +
-        '新建和改已有页面都要先读。',
-      inputSchema: z.object({
-        type: z
-          .enum(PAGE_TYPES)
-          .describe(
-            'game = 游戏；learning = 用作业题、错题、知识点做的练习游戏（先确认题目答案再做）；' +
-              'tool = 计算器、倒计时这类小工具；report = 用查来的数据做的报告/图表'
-          ),
-      }),
-      async execute({ type }) {
-        guideRead = true;
-        return { guide: pageDesignGuide(type) };
-      },
-    }),
-
     listPages: tool({
       description: '列出已经做过的页面。用户说「改一下那个页面」「上次那个图表」时，先用它找到 id。',
       inputSchema: z.object({
@@ -96,7 +55,9 @@ export function buildPageTools(conversationId?: string) {
     }),
 
     getPage: tool({
-      description: '取一个页面现在的完整 HTML。**要改已有页面，先取回来在它的基础上改**，别凭印象从头重写。',
+      description:
+        '取一个页面现在的完整 HTML，看它现在是什么样。**改页面不用先取**：buildPage 带上 id，' +
+        '写页面的模型会自己拿到原来的 HTML 在上面改。',
       inputSchema: z.object({ id: z.string() }),
       async execute({ id }) {
         const p = await db.page.findUnique({ where: { id } });
@@ -105,43 +66,144 @@ export function buildPageTools(conversationId?: string) {
       },
     }),
 
-    savePage: tool({
+    buildPage: tool({
       description:
-        '做一个网页，存进「页面」栏目 —— 用户说「做个页面/图表/报告/看板」「做个小游戏/小工具」时用。' +
-        '不带 id 是新建；带 id 是整页替换（旧的自动存成历史版本，能退回）。\n' +
-        HTML_GUIDE,
+        '做一个网页，存进「页面」栏目 —— 用户说「做个页面/图表/报告/看板」「做个小游戏/小工具」' +
+        '「做个读书记录/打卡表/清单」时用。不带 id 是新建；带 id 是在原页面基础上改（旧的自动存成历史版本，能退回）。\n\n' +
+        '页面由**专门的设计模型**来写（推理拉满，要一两分钟），它看不到这段对话、看不到图片、查不了数据库，' +
+        '只看得到你给的 brief 和 data。所以：\n' +
+        '- brief 写清楚：给谁用、用来干什么、要有哪些内容和功能、想要的风格。用户原话里的要求一条都别丢。' +
+        '改页面时写清「改什么、别动什么」。\n' +
+        '- 要用真实数据的（报告、图表），**先用查询工具查好**，原样放进 data；别让它编。\n' +
+        '- 学习类（作业题、错题、知识点）：**先在回复里写出题目和答案、自己验算**，再把题目原文、正确答案、' +
+        '解题步骤、知识点、年级写进 brief。\n' +
+        '- 要记东西的页面（读书记录、打卡、记账）会用页面自带的存储，不用你管；以后用 getPageData 能读到里面的内容。',
       inputSchema: z.object({
         id: z.string().optional().describe('改已有页面时填它的 id；新建不填'),
-        title: z.string().describe('页面标题，简短，如「2026 年支出分析」「贪吃蛇」'),
+        title: z.string().describe('页面标题，简短，如「2026 年支出分析」「贪吃蛇」「读书记录」'),
         summary: z.string().optional().describe('一句话说明，显示在页面墙卡片上'),
         request: z
           .string()
           .optional()
           .describe('新建时填：用户的原始要求，写完整（含时间范围、要看什么）。以后「按最新数据重新生成」就是把这句话再交给你'),
-        kind: z
-          .enum(Object.keys(PAGE_KINDS) as [keyof typeof PAGE_KINDS, ...(keyof typeof PAGE_KINDS)[]])
-          .describe('snapshot = 用查来的数据做的报告/图表；app = 游戏、计算器这类自带玩法、不依赖数据的'),
-        html: z.string().describe('完整 HTML 文档'),
+        kind: z.enum(KIND_ENUM).describe('snapshot = 用查来的数据做的报告/图表；app = 游戏、工具、记录本这类自带玩法的'),
+        type: z
+          .enum(PAGE_TYPES)
+          .describe(
+            'game = 游戏；learning = 用作业题、错题、知识点做的练习游戏；' +
+              'tool = 计算器、倒计时、读书记录、打卡表这类小工具和记录本；report = 用查来的数据做的报告/图表',
+          ),
+        brief: z.string().describe('给设计模型的完整需求，见上面的说明。宁可写长，别让它猜'),
+        data: z.string().optional().describe('要写进页面的真实数据（JSON 或表格文字）。报告类必填，游戏和工具一般不用'),
       }),
-      async execute(p) {
-        if (!guideRead) {
-          return {
-            ok: false,
-            error: '还没读设计规范。先调 pageDesignGuide（选对 type），按规范重新写好整页 HTML，再调 savePage。',
-          };
+      async *execute(p, { abortSignal }) {
+        if (!builder) {
+          yield { ok: false as const, error: '这次对话没有配置写页面的模型' };
+          return;
         }
-        const r = await savePage({ ...p, conversationId });
-        if (!r.ok) return r;
+        const old = p.id ? await db.page.findUnique({ where: { id: p.id }, select: { html: true } }) : null;
+        if (p.id && !old) {
+          yield { ok: false as const, error: `没有 id 为 ${p.id} 的页面，先用 listPages 查一下` };
+          return;
+        }
+        const stored = p.id ? await shapeSummary(p.id) : [];
+
+        const gen = buildPageHtml(builder, {
+          type: p.type,
+          title: p.title,
+          brief: p.brief,
+          data: p.data,
+          existing: old?.html,
+          stored,
+          abortSignal,
+        });
+        let step = await gen.next();
+        while (!step.done) {
+          yield { progress: step.value satisfies BuildProgress };
+          step = await gen.next();
+        }
+        const built = step.value;
+        if (!built.ok) {
+          yield built;
+          return;
+        }
+
+        const r = await savePage({
+          id: p.id,
+          title: p.title,
+          summary: p.summary,
+          request: p.request,
+          kind: p.kind,
+          html: built.html,
+          conversationId,
+        });
+        if (!r.ok) {
+          yield r;
+          return;
+        }
         refresh(r.id);
-        const warnings = pageWarnings(p.html);
-        return {
-          ok: true,
+        const warnings = pageWarnings(built.html);
+        yield {
+          ok: true as const,
           id: r.id,
           created: r.created,
           url: `/pages/${r.id}`,
           ...(warnings.length ? { warnings } : {}),
-          hint: `回复里附上链接 [打开页面](/pages/${r.id})。有 warnings 就先改好再告诉用户。`,
+          hint:
+            `回复里附上链接 [打开页面](/pages/${r.id})，一两句说清页面上有什么、怎么用。` +
+            (warnings.length ? '有 warnings 的话，再调一次 buildPage（带 id）让它改掉。' : ''),
         };
+      },
+    }),
+
+    getPageData: tool({
+      description:
+        '读一个页面自带存储里的数据（用户在页面里记的东西：读书记录、打卡、清单……）。' +
+        '用户问「我今年读了几本书」「上周打卡了几天」这类问题时，先 listPages 找到页面，再用它读，**别凭印象答**。',
+      inputSchema: z.object({ id: z.string().describe('页面 id') }),
+      async execute({ id }) {
+        const page = await db.page.findUnique({ where: { id }, select: { title: true, html: true } });
+        if (!page) return { ok: false, error: `没有 id 为 ${id} 的页面，先用 listPages 查一下` };
+        const { data, truncated } = await dumpForModel(id);
+        const schema = declaredSchema(page.html);
+        const empty = !Object.keys(data).length && !truncated.length;
+        return {
+          ok: true,
+          title: page.title,
+          // 页面声明的格式：往里写东西时照它的 key 和字段名来
+          ...(schema ? { schema } : {}),
+          data,
+          ...(truncated.length ? { truncated, note: '这几个 key 太大没放进来' } : {}),
+          ...(empty
+            ? {
+                note: schema
+                  ? '这个页面里还没有存任何数据。要写的话照 schema 的 key 和 example 的字段格式写'
+                  : '这个页面里还没有存任何数据，也没声明格式。要写的话先 getPage 看代码里 pageStore 用的 key 和字段名，别猜',
+              }
+            : {}),
+        };
+      },
+    }),
+
+    setPageData: tool({
+      description:
+        '往页面自带存储里写一个 key（整份覆盖）。用户在对话里说「读书记录里加一本《xx》」「把那条打卡删了」时用。\n' +
+        '**先 getPageData 取回原来的值和 schema，在它基础上加/改，再整份写回**，字段名和格式跟 schema、原来的条目保持一致 —— ' +
+        '页面是按那个格式读的，写错了页面上就显示不出来。',
+      inputSchema: z.object({
+        id: z.string().describe('页面 id'),
+        key: z.string().describe('要写的 key，用页面里已有的那个'),
+        valueJson: z.string().describe('新的完整值，JSON 文本'),
+      }),
+      async execute({ id, key, valueJson }) {
+        let value: unknown;
+        try {
+          value = JSON.parse(valueJson);
+        } catch {
+          return { ok: false, error: 'valueJson 不是合法的 JSON' };
+        }
+        const r = await setData(id, key, value);
+        return r.ok ? { ok: true, hint: `页面下次打开时就能看到。链接：/pages/${id}` } : r;
       },
     }),
 

@@ -5,6 +5,7 @@ import PageHeader from '@/components/PageHeader';
 import { formatTime } from '@/lib/format';
 import { PAGE_KINDS, type PageKind } from '@/lib/pages';
 import PageManage from './PageManage';
+import PageFrame from '@/components/PageFrame';
 import { getLocale, getT } from '@/lib/i18n/server';
 
 export const dynamic = 'force-dynamic';
@@ -60,7 +61,7 @@ export default async function PageDetail({ params }: { params: Promise<{ id: str
                 {t('用最新数据重做')}
               </Link>
             )}
-            <a href={raw} target="_blank" rel="noopener" className={btn} style={{ borderColor: 'var(--border)' }}>
+            <a href={`/play/${page.id}`} target="_blank" rel="noopener" className={btn} style={{ borderColor: 'var(--border)' }}>
               {t('全屏')}
             </a>
             <a href={`${raw}?download=1`} className={btn} style={{ borderColor: 'var(--border)' }}>
@@ -72,11 +73,11 @@ export default async function PageDetail({ params }: { params: Promise<{ id: str
 
       {/* sandbox 不带 allow-same-origin：页面里的脚本拿不到平台的任何东西。
           响应头上也有一道同样的 CSP，这里是第二道 —— 见 lib/pages.ts。
-          ?v= 让改版后的页面不吃浏览器缓存 */}
-      <iframe
+          ?v= 让改版后的页面不吃浏览器缓存。PageFrame 顺带替页面转 pageStore 的读写 */}
+      <PageFrame
+        id={page.id}
         src={`${raw}?v=${page.updatedAt.getTime()}`}
         title={page.title}
-        sandbox="allow-scripts allow-downloads"
         className="block w-full border-0 h-[calc(100dvh-3.5rem-4.25rem)] lg:h-[calc(100dvh-3.5rem)]"
       />
 

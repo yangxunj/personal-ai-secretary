@@ -587,6 +587,7 @@ model Page {
   updatedAt DateTime @updatedAt
 
   versions PageVersion[]
+  data     PageData[]
 
   @@index([updatedAt])
 }
@@ -601,4 +602,24 @@ model PageVersion {
   createdAt DateTime @default(now())
 
   @@index([pageId, createdAt])
+}
+
+/// 页面自己的小存储。AI 做的页面跑在沙箱里，没有 origin、localStorage 关掉就没 ——
+/// 「读书记录」「打卡表」这种要记东西的页面只能存这里。
+///
+/// 页面脚本**碰不到接口**：它调 window.pageStore → postMessage 给外面的平台页面 →
+/// 平台页面按自己知道的 pageId 去调 /api/pages/<id>/data。页面只能读写自己这一份，
+/// 改不了 pageId，也看不到平台里的任何别的东西（见 components/PageFrame.tsx）。
+///
+/// 一个 key 一行而不是整页一个 JSON：两处同时改（页面里点了一下、AI 在对话里加了一条）
+/// 不会互相覆盖整份数据。
+model PageData {
+  pageId    String
+  page      Page     @relation(fields: [pageId], references: [id], onDelete: Cascade)
+  key       String
+  /// JSON 文本
+  value     String
+  updatedAt DateTime @updatedAt
+
+  @@id([pageId, key])
 }

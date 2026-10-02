@@ -8,7 +8,7 @@ import { db } from '@/lib/db';
 import { sessionIsCurrent } from '@/lib/auth';
 import { getAiConfig } from '@/lib/ai-config';
 import { getOwners } from '@/lib/owners';
-import { modelSeesImages, searchOptions } from '@/lib/ai-providers';
+import { modelSeesImages, pageBuildOptions, searchOptions } from '@/lib/ai-providers';
 import { estimateMessageTokens, prepareContext, summaryBlock, toStoredModelJson } from '@/lib/chat-context';
 
 export const runtime = 'nodejs';
@@ -109,15 +109,16 @@ export async function POST(req: Request) {
     model: chatModel,
     system: systemPrompt(!!search, await getOwners(), locale) + summaryBlock(ctx.summary),
     messages: modelMessages,
-    tools: buildAgentTools({ incoming, conversationId, t }),
+    // 页面由同一个模型另起一次调用来写，推理拉满（见 lib/page-builder.ts）
+    tools: buildAgentTools({ incoming, conversationId, t, pageBuilder: { model: chatModel, locale, ...pageBuildOptions(cfg) } }),
     // 允许「调工具 → 看结果 → 再调 → 最后作答」。不给它多步，
     // 模型调完一个工具就停住了，用户只看到一个工具卡片没有回复。
     stopWhen: stepCountIs(8),
     // 键名要跟上面 createOpenAICompatible 的 name 一致，SDK 按它把参数并进请求体
     ...(search ? { providerOptions: { ai: search as Record<string, never> } } : {}),
     // 推理模型先想再说：给小了会把 token 全花在思考上，正文是空的。
-    // 做页面时一整页 HTML 是一次工具调用的参数，也算在这里面 —— 原来的 4096
-    // 连一个带图表的页面都写不完，JSON 被截断，工具直接报参数错误。
+    // （以前一整页 HTML 是工具参数、也算在这里面；现在页面另起调用写了，
+    // 但 brief 和 data 有时也不短，留着这个余量。）
     maxOutputTokens: 32768,
 
     async onFinish({ text, responseMessages }) {

@@ -31,6 +31,8 @@ export const PROVIDERS = [
      * 百炼的 Responses API + web_search 工具也能搜，但那要换一套协议，没必要。
      */
     search: { enable_search: true },
+    /** 写页面时的推理强度，见下面 pageBuildOptions */
+    pageReasoning: 'max',
   },
   {
     id: 'deepseek',
@@ -46,6 +48,7 @@ export const PROVIDERS = [
      * 输入 token 全是 62、回答全是「没法联网」—— 参数被静默忽略，不报错。
      */
     search: null,
+    pageReasoning: 'max',
   },
 ] as const;
 
@@ -76,4 +79,25 @@ export function modelSeesImages(cfg: { baseUrl: string; model: string }): boolea
 /** 能不能联网搜索 —— 能的话返回要并进请求体的参数 */
 export function searchOptions(cfg: { baseUrl: string }): Record<string, unknown> | null {
   return PROVIDERS.find((x) => x.id === providerOf(cfg.baseUrl))?.search ?? null;
+}
+
+/**
+ * 写页面那一次单独调用（lib/page-builder.ts）的参数。
+ *
+ * 推理强度：百炼和 DeepSeek 官方都认顶层的 `reasoning_effort`（low / high / max，默认 high）。
+ * 2026-10-02 实测同一道题思考 token：low 21、high 505、max 876。
+ * ⚠ 通过 AI SDK 传要写成 providerOptions.ai.reasoningEffort（驼峰）——
+ * 直接写 reasoning_effort 会被 SDK 用它自己的字段（undefined）覆盖掉，请求里就没了。
+ *
+ * 认不出的服务商不传：别家不一定认这个参数，认错了整个请求报 400。
+ * 输出上限同理：百炼 deepseek-v4 系列 max_tokens 和思考共用 393216 的天花板，
+ * 给 128K 足够一整页加长时间思考；别家按对话那边的 32K 保守给。
+ */
+export function pageBuildOptions(cfg: { baseUrl: string }): {
+  providerOptions?: { ai: { reasoningEffort: string } };
+  maxOutputTokens: number;
+} {
+  const p = PROVIDERS.find((x) => x.id === providerOf(cfg.baseUrl));
+  if (!p?.pageReasoning) return { maxOutputTokens: 32768 };
+  return { providerOptions: { ai: { reasoningEffort: p.pageReasoning } }, maxOutputTokens: 131072 };
 }

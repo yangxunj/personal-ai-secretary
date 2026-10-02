@@ -52,6 +52,10 @@ export const SANDBOX_CSP = [
  * - **localStorage → 内存版**。没有 origin 的文档一碰 localStorage 就抛
  *   SecurityError，游戏里常见的 `localStorage.getItem('best')` 会让整段脚本
  *   在第一行就挂掉。换成内存版：这次打开期间有效，关了就没了。
+ * - **window.pageStore**：真正能长期存东西的地方（lib/page-data.ts）。
+ *   get/set/remove/keys 都返回 Promise，值是任意 JSON。实现是 postMessage 给外层的
+ *   PageFrame，由它调接口；只认 `e.source === window.parent` 的回信。
+ *   没有外层（直接在新标签页开了 raw）时退化成内存版，`persistent` 为 false。
  */
 const SHIM = `<script>(function(){
 function toast(m){try{var d=document.createElement('div');d.textContent=String(m);
@@ -61,16 +65,52 @@ window.alert=toast;
 try{window.localStorage.getItem('x')}catch(e){var s={};var m={getItem:function(k){return k in s?s[k]:null},setItem:function(k,v){s[k]=String(v)},removeItem:function(k){delete s[k]},clear:function(){s={}},key:function(i){return Object.keys(s)[i]||null},get length(){return Object.keys(s).length}};
 try{Object.defineProperty(window,'localStorage',{value:m,configurable:true})}catch(e2){}
 try{Object.defineProperty(window,'sessionStorage',{value:m,configurable:true})}catch(e3){}}
+var P={},n=0,up=window.parent!==window,mem={};
+window.addEventListener('message',function(e){if(e.source!==window.parent)return;var d=e.data;if(!d||d.__pageStoreReply!==1)return;var p=P[d.id];if(!p)return;delete P[d.id];if(d.ok)p[0](d.value===undefined?null:d.value);else p[1](new Error(d.error||'pageStore error'))});
+function call(op,k,v){if(!up){var c=function(x){return x==null?null:JSON.parse(JSON.stringify(x))};
+if(op==='get')return Promise.resolve(k in mem?c(mem[k]):null);if(op==='set'){if(v==null)delete mem[k];else mem[k]=c(v);return Promise.resolve(null)}
+if(op==='remove'){delete mem[k];return Promise.resolve(null)}return Promise.resolve(Object.keys(mem))}
+return new Promise(function(res,rej){var id=++n;P[id]=[res,rej];
+try{window.parent.postMessage({__pageStore:1,id:id,op:op,key:k,value:v},'*')}catch(e){delete P[id];rej(e);return}
+setTimeout(function(){if(P[id]){delete P[id];rej(new Error('pageStore timeout'))}},15000)})}
+window.pageStore={persistent:up,get:function(k){return call('get',k)},set:function(k,v){return call('set',k,v)},remove:function(k){return call('remove',k)},keys:function(){return call('keys')}};
 })();</script>`;
 
-/** 把 SHIM 插到 <head> 开头（没有 head 就插到最前面），保证它比页面自己的脚本先跑 */
-export function withShim(html: string): string {
+/**
+ * 下载下来的页面离开了平台，没有 PageFrame 接 postMessage。
+ * 给它一个用 localStorage 实现的 pageStore（下载下来的页面有正常的 origin，localStorage 能用），
+ * 并把下载那一刻平台里存的数据当初始值带上 —— 不然「读书记录」下载下来是一张空表。
+ * 浏览器里已经有的 key 不覆盖：在离线版里又记过的东西不能被下载时的旧数据冲掉。
+ */
+function downloadShim(seed: Record<string, unknown>) {
+  const json = JSON.stringify(seed).replace(/</g, '\\u003c');
+  return `<script>(function(){if(window.pageStore)return;var L=window.localStorage,p='pageStore:',seed=${json};
+try{for(var k in seed)if(L.getItem(p+k)===null)L.setItem(p+k,JSON.stringify(seed[k]))}catch(e){}
+function g(k){try{var v=L.getItem(p+k);return v===null?null:JSON.parse(v)}catch(e){return null}}
+window.pageStore={persistent:true,get:function(k){return Promise.resolve(g(k))},
+set:function(k,v){try{if(v==null)L.removeItem(p+k);else L.setItem(p+k,JSON.stringify(v));return Promise.resolve(null)}catch(e){return Promise.reject(e)}},
+remove:function(k){try{L.removeItem(p+k)}catch(e){}return Promise.resolve(null)},
+keys:function(){var o=[];try{for(var i=0;i<L.length;i++){var k=L.key(i);if(k&&k.indexOf(p)===0)o.push(k.slice(p.length))}}catch(e){}return Promise.resolve(o)}};
+})();</script>`;
+}
+
+/** 把一段脚本插到 <head> 开头（没有 head 就插到最前面），保证它比页面自己的脚本先跑 */
+function inject(html: string, script: string): string {
   const m = html.match(/<head[^>]*>/i);
   if (m && m.index !== undefined) {
     const at = m.index + m[0].length;
-    return html.slice(0, at) + SHIM + html.slice(at);
+    return html.slice(0, at) + script + html.slice(at);
   }
-  return SHIM + html;
+  return script + html;
+}
+
+export function withShim(html: string): string {
+  return inject(html, SHIM);
+}
+
+/** 下载用：页面没用 pageStore 就原样给，用了才带上离线版和当前数据 */
+export function forDownload(html: string, seed: Record<string, unknown>): string {
+  return /\bpageStore\b/.test(html) ? inject(html, downloadShim(seed)) : html;
 }
 
 /**
