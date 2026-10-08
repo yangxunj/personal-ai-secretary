@@ -61,7 +61,7 @@ Also:
 
 Grab one from [Releases](../../releases):
 
-> As of 2026-10-08, the latest release is still `v0.2.0` from 2026-09-25. The page-building and persistent-storage improvements above are in the current source, but the downloadable packages have not been updated. To try these improvements now, build from source using the instructions below.
+> `v0.3.0` includes the page-building and persistent-storage improvements above. Download the matching version from Releases; existing users can install over the old version to keep their data.
 
 | File | Where your data lives | Best for |
 | --- | --- | --- |
