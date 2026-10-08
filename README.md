@@ -112,6 +112,8 @@ docs/              开发笔记
 
 想改代码先看 [`docs/开发笔记.md`](docs/开发笔记.md) 和 [`desktop/README.md`](desktop/README.md)。
 
+后续计划：[`本机 Codex 接入方案`](docs/Codex接入方案.md)（暂缓开发，先保留现有 API 后端）。
+
 ## 现状
 
 早期版本，作者自己家在用。
