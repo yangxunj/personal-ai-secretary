@@ -33,6 +33,8 @@ Talk to it like you'd text a person:
 | Drop in a checkup report | Records each metric in the health archive, flags abnormal ones, shows trends across checkups |
 | "Make a page showing where the money went these months" | Queries the real data and builds a chart page, saved under "Pages" |
 | "Make a snake game for my kid" | Builds a playable mini game (8 sample pages ship with the app) |
+| "Make a reading log with book titles, authors and ratings" | Builds an editable page; records are saved in the local database and remain available when you reopen it or access it from your paired phone |
+| "How many books have I read this year?" / "Add Dune to my reading log" | Reads the records saved by the page and queries or updates that same data on your request |
 
 Also:
 
@@ -43,6 +45,13 @@ Also:
 - **Household members**: tasks can be assigned to different people at home.
 - **English / Chinese interface**: switch under Settings → Language.
 
+## Recent page-building improvements (current source)
+
+- **A separate model call for each page**: the chat AI prepares the requirements and real data, then a separate call builds the page with design guidance for reports, games and learning activities. The Bailian and official DeepSeek configurations use `max` reasoning effort to give the model more room to think; this parameter is not forced on other custom providers.
+- **Visible progress**: see whether the model is thinking or how much HTML it has written while a complex page is being generated.
+- **Pages that remember**: reading logs, habit trackers, lists and game high scores can use built-in storage backed by your local database. The page and the chat AI read and update the same data, so you can ask about your records without copying them into chat.
+- **Full-screen view and download**: records can still be saved in the full-screen view. Downloading a single HTML file includes the page's existing data. The downloaded file works independently and does not automatically sync changes back to the app.
+
 <p>
 <img src="docs/images/pages.jpg" width="62%" alt="Pages">
 <img src="docs/images/phone.jpg" width="30%" alt="On a phone">
@@ -51,6 +60,8 @@ Also:
 ## Download (Windows)
 
 Grab one from [Releases](../../releases):
+
+> As of 2026-10-08, the latest release is still `v0.2.0` from 2026-09-25. The page-building and persistent-storage improvements above are in the current source, but the downloadable packages have not been updated. To try these improvements now, build from source using the instructions below.
 
 | File | Where your data lives | Best for |
 | --- | --- | --- |
@@ -122,6 +133,8 @@ docs/              Developer notes (Chinese)
 
 Before changing code, read [`docs/开发笔记.md`](docs/开发笔记.md) and
 [`desktop/README.md`](desktop/README.md) (both in Chinese; code comments are in Chinese too).
+
+Planned work: [local Codex integration](docs/Codex接入方案.md) (plan in Chinese; development is deferred, and the existing API backend is retained).
 
 ## Status
 
