@@ -2,6 +2,8 @@ import PageHeader from '@/components/PageHeader';
 import { MIN_PASSWORD_LENGTH } from '@/lib/auth';
 import { getAiConfig, maskKey } from '@/lib/ai-config';
 import ProviderFields from './ProviderFields';
+import LocalCodexSettings from './LocalCodexSettings';
+import { getChatBackend, getCodexConfig, localCodexEnabled } from '@/lib/codex/config';
 import {
   changePasswordAction,
   logoutAction,
@@ -66,11 +68,13 @@ export default async function SettingsPage({
           </form>
         </section>
 
+        <LocalCodexSettings backend={await getChatBackend()} enabled={localCodexEnabled()} config={await getCodexConfig()} />
+
         {/* ---------- 模型 ---------- */}
         <section className="surface border rounded-2xl p-4" style={{ borderColor: 'var(--border)' }}>
-          <h2 className="text-[15px] font-semibold mb-1">{t('AI 模型')}</h2>
+          <h2 className="text-[15px] font-semibold mb-1">{t('API 模型配置')}</h2>
           <p className="muted text-[12px] leading-relaxed mb-3">
-            {t('对话功能用的模型。填自己的 API Key，')}
+            {t('只用于 API 后端。选择本机 Codex 时可以留空。填自己的 API Key，')}
             <strong className="font-semibold">{t('保存后立刻生效，不用重启')}</strong>
             {t('。')}
           </p>

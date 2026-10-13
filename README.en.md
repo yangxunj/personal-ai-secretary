@@ -152,3 +152,7 @@ project: I'll read them, but can't promise a quick reply.
 [AGPL-3.0](LICENSE). Free to use, modify and redistribute. **If you run a modified
 version as a service for others (including as a website), you must publish its
 source code too.**
+
+## Local Codex backend (source only)
+
+The current source supports the Codex login on your own computer as an optional chat backend. It uses the same platform tools and database, keeps persistent independent conversations, and generates HTML through a separate Codex turn without requiring a DeepSeek API key. Select it in Settings and start a new chat; existing chats keep their backend. Local source installations must set `ENABLE_LOCAL_CODEX=true`; desktop builds enable it automatically. Internet and account allowance are required. The published v0.3.0 installers do not contain this change. See [local Codex details](docs/Codex本机对话.md).

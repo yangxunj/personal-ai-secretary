@@ -9,6 +9,10 @@ import { parseOwners, setOwners } from '@/lib/owners';
 import { revalidatePath } from 'next/cache';
 import { getT, setLocale } from '@/lib/i18n/server';
 import { isLocale } from '@/lib/i18n/core';
+import { sessionIsCurrent } from '@/lib/auth';
+import { db } from '@/lib/db';
+import { diagnoseCodex, localCodexEnabled, openCodex } from '@/lib/codex/config';
+import { denyRequest, runTurn } from '@/lib/codex/protocol.mjs';
 
 /**
  * 改密码。
@@ -114,4 +118,47 @@ export async function setLocaleAction(formData: FormData) {
   if (isLocale(v)) await setLocale(v);
   revalidatePath('/', 'layout');
   redirect('/settings');
+}
+
+
+export async function saveChatBackendAction(form:FormData) {
+  if(!(await sessionIsCurrent()))redirect('/login');
+  const t=await getT();
+  const backend=String(form.get('backend') || 'api');
+  if(!['api','codex'].includes(backend))throw new Error('Invalid backend');
+  if(backend==='codex') {
+    if(!localCodexEnabled())throw new Error('Local Codex is disabled');
+    const effort=String(form.get('codexEffort') || 'medium');
+    if(!['low','medium','high','xhigh'].includes(effort))throw new Error('Invalid effort');
+    for(const [key,value] of [['codex.path',String(form.get('codexPath') || '').trim()],['codex.model',String(form.get('codexModel') || '').trim()],['codex.effort',effort]]) {
+      await db.setting.upsert({where:{key},create:{key,value},update:{value}});
+    }
+    let problem='';
+    try {
+      const result=await diagnoseCodex();
+      const model=result.models.find((m:{id:string})=>m.id===result.model);
+      if(!model)throw new Error('Configured model is not in the installed Codex model catalog.');
+      if(!model.efforts.includes(effort))throw new Error('Configured reasoning effort is not supported by this model.');
+    }catch(e){problem=e instanceof Error?e.message:String(e);}
+    if(problem)redirect('/settings?aiE='+encodeURIComponent(t('Codex 配置已保存，连接检查失败：')+problem));
+  }
+  await db.setting.upsert({where:{key:'ai.backend'},create:{key:'ai.backend',value:backend},update:{value:backend}});
+  revalidatePath('/chat','layout');
+  redirect('/settings?aiOk='+encodeURIComponent(t('已保存，新对话使用所选后端。')));
+}
+
+export async function testCodexAction() {
+  if(!(await sessionIsCurrent()))redirect('/login');
+  const t=await getT();let problem='';
+  try {
+    const {client,cfg,cwd,config}=await openCodex();
+    try {
+      client.on('request',msg=>denyRequest(client,msg));
+      const r=await client.request('thread/start',{cwd,config,ephemeral:true,sandbox:'read-only',approvalPolicy:'on-request',...(cfg.model?{model:cfg.model}:{}),baseInstructions:'Reply only OK. Do not use any tools.',dynamicTools:[]});
+      const reply=await runTurn(client,{threadId:r.thread.id,input:[{type:'text',text:'Reply OK'}],effort:cfg.effort,timeoutMs:60000});
+      if(!reply.trim())throw new Error('No reply');
+    } finally {client.close();}
+  }catch(e){problem=e instanceof Error?e.message:String(e);}
+  if(problem)redirect('/settings?aiE='+encodeURIComponent(t('Codex 测试失败：')+problem));
+  redirect('/settings?aiOk='+encodeURIComponent(t('Codex 已完成真实回复，登录和模型调用可用。')));
 }

@@ -7,6 +7,8 @@ import { getLocale, getT } from '@/lib/i18n/server';
 import { db } from '@/lib/db';
 import { sessionIsCurrent } from '@/lib/auth';
 import { getAiConfig } from '@/lib/ai-config';
+import { getChatBackend, localCodexEnabled } from '@/lib/codex/config';
+import { codexChatResponse } from '@/lib/codex/chat';
 import { getOwners } from '@/lib/owners';
 import { modelSeesImages, pageBuildOptions, searchOptions } from '@/lib/ai-providers';
 import { estimateMessageTokens, prepareContext, summaryBlock, toStoredModelJson } from '@/lib/chat-context';
@@ -37,10 +39,10 @@ async function resolveConversation(id: string | undefined): Promise<string | nul
   if (id === undefined) {
     const latest = await db.conversation.findFirst({ orderBy: { updatedAt: 'desc' }, select: { id: true } });
     if (latest) return latest.id;
-    return (await db.conversation.create({ data: {} })).id;
+    return (await db.conversation.create({ data: { backend: await getChatBackend() } })).id;
   }
   if (!CONVERSATION_ID.test(id)) return null;
-  await db.conversation.upsert({ where: { id }, create: { id }, update: {} });
+  await db.conversation.upsert({ where: { id }, create: { id, backend: await getChatBackend() }, update: {} });
   return id;
 }
 
@@ -54,6 +56,21 @@ export async function POST(req: Request) {
   // 不补这一句，改完密码以后旧 cookie 页面进不去、直接打这个接口却还能跟 AI 对话。
   if (!(await sessionIsCurrent())) {
     return new Response(t('未授权'), { status: 401 });
+  }
+
+  if (Number(req.headers.get('content-length') || 0) > 85*1024*1024) return new Response('Request too large',{status:413});
+  const origin = req.headers.get('origin');
+  const expectedHost = req.headers.get('x-forwarded-host') || req.headers.get('host') || new URL(req.url).host;
+  if (origin && new URL(origin).host !== expectedHost) return new Response('Invalid origin', {status:403});
+  const body = (await req.json()) as { message?: UIMessage; messages?: UIMessage[]; conversationId?: string };
+  const newest = body.message ?? body.messages?.at(-1);
+  if (!newest || newest.role !== 'user' || !Array.isArray(newest.parts)) return new Response(t('没有消息'), {status:400});
+  const conversationId = await resolveConversation(body.conversationId);
+  if (!conversationId) return new Response(t('对话 id 不对'), {status:400});
+  const conv = await db.conversation.findUniqueOrThrow({where:{id:conversationId}});
+  if(conv.backend === 'codex') {
+    if(!localCodexEnabled()) return new Response('Local Codex is disabled on this deployment.', {status:503});
+    return codexChatResponse({conversationId,newest,instructions:systemPrompt(false,await getOwners(),locale),locale});
   }
 
   const cfg = await getAiConfig();
@@ -73,16 +90,7 @@ export async function POST(req: Request) {
   // 前端只发这一轮的新消息（见 Chat.tsx 的 prepareSendMessagesRequest）。
   // 历史从数据库拼 —— 以前用的是前端内存里的，刷新一下模型就什么都不记得了。
   // 旧版前端（桌面端没更新时）还会发整串 messages，取最后一条就行。
-  const body = (await req.json()) as { message?: UIMessage; messages?: UIMessage[]; conversationId?: string };
-  const newest = body.message ?? body.messages?.at(-1);
-  if (!newest) return new Response(t('没有消息'), { status: 400 });
   const messages = [newest];
-
-  // 哪个对话。新对话的 id 是页面上先生成好的（见 chat/[[...id]]/page.tsx），
-  // 第一句话发过来时才真正建出来 —— 点了「新对话」又没说话，不留一个空壳在列表里。
-  // 旧版前端（没更新的桌面端）不传，就接着用最近的那个对话。
-  const conversationId = await resolveConversation(body.conversationId);
-  if (!conversationId) return new Response(t('对话 id 不对'), { status: 400 });
 
   const { incoming, clean } = await intake(messages, modelSeesImages(cfg));
 

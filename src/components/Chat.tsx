@@ -149,6 +149,9 @@ export type Compaction = { firstKeptId: string; summary: string; createdAt: stri
 
 export function Chat({
   conversationId,
+  backend = 'api',
+  pending = false,
+  lastError = '',
   isNew = false,
   history,
   focusId,
@@ -159,6 +162,9 @@ export function Chat({
 }: {
   /** 这是哪个对话。新对话的 id 是页面上先生成的，第一句话发出去时服务端才建 */
   conversationId: string;
+  backend?: string;
+  pending?: boolean;
+  lastError?: string;
   /** 库里还没有这个对话（地址还是 /chat） */
   isNew?: boolean;
   /** 输入框预填的一句话（页面墙上的示例、「用最新数据重做」带过来的） */
@@ -213,7 +219,43 @@ export function Chat({
   const picker = useRef<HTMLInputElement>(null);
   const bottom = useRef<HTMLDivElement>(null);
   const landed = useRef(false);
-  const busy = status === 'submitted' || status === 'streaming';
+  const [background, setBackground] = useState(pending);
+  const [backgroundError, setBackgroundError] = useState(lastError);
+  const busy = background || status === 'submitted' || status === 'streaming';
+  useEffect(() => {
+    if (backend !== 'codex' || !background) return;
+    let disposed = false;
+    const poll = async () => {
+      try {
+        const res = await fetch('/api/codex/state?conversationId=' + encodeURIComponent(conversationId));
+        if (!res.ok || disposed) return;
+        const data = await res.json();
+        if (!disposed && !['queued','running'].includes(data.status)) {
+          setBackground(false);
+          setBackgroundError(data.error || '');
+          router.refresh();
+        }
+      } catch { /* retry when the browser resumes */ }
+    };
+    const visible = () => { if (document.visibilityState === 'visible') void poll(); };
+    const timer = setInterval(poll, 2000);
+    document.addEventListener('visibilitychange', visible);
+    window.addEventListener('focus', poll);
+    void poll();
+    return () => {
+      disposed = true;
+      clearInterval(timer);
+      document.removeEventListener('visibilitychange', visible);
+      window.removeEventListener('focus', poll);
+    };
+  }, [background, backend, conversationId, router]);
+  async function stopReply() {
+    if (backend === 'codex') {
+      await fetch('/api/codex/state', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({conversationId})});
+      setBackground(true);
+    }
+    stop();
+  }
 
   // 首屏落点：定位模式滚到那一条并居中；「查看更早」带着 #m-xxx 回来时
   // 让浏览器停在原来那条上；其余情况直接到最新。
@@ -270,6 +312,7 @@ export function Chat({
 
     // 只传了图没配话时给一句默认的：模型收到一条空消息不知道该干嘛
     const said = text || (attached ? t('看看这个') : '');
+    setBackgroundError('');
     sendMessage({ text: said, files: attached });
 
     // 新对话的第一句：地址换成 /chat/<id>（不重新加载，这一轮不能断），
@@ -288,6 +331,7 @@ export function Chat({
     <div
       className="flex flex-col min-h-[calc(100dvh-8.5rem)] lg:min-h-[calc(100dvh-5.5rem)]"
       onDragOver={(e) => {
+
         e.preventDefault();
         setDragging(true);
       }}
@@ -298,6 +342,9 @@ export function Chat({
         addFiles(e.dataTransfer.files);
       }}
     >
+      <p className="muted text-[11px] mb-2">{backend === 'codex' ? t('本机 Codex · 使用当前电脑的登录') : t('API 模型')}</p>
+      {background && <p className="muted text-[12px] py-2">{t('后台正在处理，完成后会自动更新。')}</p>}
+      {backgroundError && <p className="text-red-500 text-[12px] py-2">{backgroundError}</p>}
       <div className="flex-1 space-y-4 pb-4">
         {olderCount > 0 && olderHref && (
           <div className="text-center">
@@ -483,7 +530,7 @@ export function Chat({
           />
           {busy ? (
             <button
-              onClick={stop}
+              onClick={stopReply}
               className="shrink-0 rounded-full w-10 h-10 border text-sm"
               style={{ borderColor: 'var(--border)' }}
               aria-label={t('停止')}

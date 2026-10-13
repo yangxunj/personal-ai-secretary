@@ -31,6 +31,21 @@ async function hasTable(table: string) {
 }
 
 const STEPS: Step[] = [
+  { name:'Conversation.backend', needed:async()=>!(await hasColumn('Conversation','backend')), sql:[
+    'ALTER TABLE "Conversation" ADD COLUMN "backend" TEXT NOT NULL DEFAULT \'api\'',
+  ]},
+  { name:'Conversation.codexThreadId', needed:async()=>!(await hasColumn('Conversation','codexThreadId')), sql:[
+    'ALTER TABLE "Conversation" ADD COLUMN "codexThreadId" TEXT',
+  ]},
+  { name:'CodexTurn', needed:async()=>!(await hasTable('CodexTurn')), sql:[
+    'CREATE TABLE "CodexTurn" ("id" TEXT PRIMARY KEY NOT NULL,"requestKey" TEXT NOT NULL,"inputHash" TEXT NOT NULL,"conversationId" TEXT NOT NULL,"userMessageId" TEXT,"codexTurnId" TEXT,"status" TEXT NOT NULL DEFAULT \'queued\',"processKey" TEXT NOT NULL,"error" TEXT,"chunksJson" TEXT,"createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,"updatedAt" DATETIME NOT NULL,FOREIGN KEY ("conversationId") REFERENCES "Conversation"("id") ON DELETE CASCADE ON UPDATE CASCADE)',
+    'CREATE UNIQUE INDEX "CodexTurn_requestKey_key" ON "CodexTurn"("requestKey")',
+    'CREATE INDEX "CodexTurn_conversationId_createdAt_idx" ON "CodexTurn"("conversationId","createdAt")',
+  ]},
+  { name:'CodexToolRun', needed:async()=>!(await hasTable('CodexToolRun')), sql:[
+    'CREATE TABLE "CodexToolRun" ("id" TEXT PRIMARY KEY NOT NULL,"turnId" TEXT NOT NULL,"callId" TEXT NOT NULL,"name" TEXT NOT NULL,"inputJson" TEXT NOT NULL,"status" TEXT NOT NULL DEFAULT \'running\',"resultJson" TEXT,"createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,FOREIGN KEY ("turnId") REFERENCES "CodexTurn"("id") ON DELETE CASCADE ON UPDATE CASCADE)',
+    'CREATE UNIQUE INDEX "CodexToolRun_turnId_callId_key" ON "CodexToolRun"("turnId","callId")',
+  ]},
   {
     // 2026-09-23 对话上下文管理（lib/chat-context.ts）
     name: 'Message.modelJson',
@@ -172,7 +187,8 @@ const STEPS: Step[] = [
 
 export async function upgradeSchema(): Promise<string[]> {
   const done: string[] = [];
-  for (const s of STEPS) {
+  const codex = STEPS.filter(s => ['Conversation.backend','Conversation.codexThreadId','CodexTurn','CodexToolRun'].includes(s.name));
+  for (const s of [...STEPS.filter(s => !codex.includes(s)), ...codex]) {
     if (!(await s.needed())) continue;
     for (const q of s.sql) await db.$executeRawUnsafe(q);
     done.push(s.name);

@@ -32,6 +32,7 @@ const AI_FACING = [
   'src/lib/system-prompt.ts',
   'src/lib/page-design.ts',
   'src/lib/page-builder.ts',
+  'src/lib/codex/',
   'src/lib/page-data.ts',
   'src/lib/sample-pages.data.ts',
   // 这两个里有给模型看的警告/附注；pages.ts 的 PAGE_KINDS 译文在 content.ts

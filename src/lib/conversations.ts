@@ -70,6 +70,7 @@ export async function renameConversation(id: string, title: string) {
  * 附件跟着外键 SetNull 留在文件页；对话里建的任务、存的资料本来就在各自的表里，不受影响。
  */
 export async function deleteConversation(id: string) {
+  if (await db.codexTurn.findFirst({where:{conversationId:id,status:{in:['queued','running']}}})) throw new Error('Wait for this conversation to finish before deleting it.');
   await db.$transaction([
     db.message.updateMany({ where: { conversationId: id, taskId: { not: null } }, data: { conversationId: null } }),
     db.message.deleteMany({ where: { conversationId: id } }),
@@ -86,7 +87,7 @@ export async function deleteConversation(id: string) {
  * 已经有标题的（用户改过名、或者已经起过）不动。模型调不通就退回第一句话。
  */
 export async function autoTitle(id: string, user: string, reply: string): Promise<string | null> {
-  const conv = await db.conversation.findUnique({ where: { id }, select: { title: true } });
+  const conv = await db.conversation.findUnique({ where: { id }, select: { title: true, backend: true } });
   if (!conv) return null;
   if (conv.title) return conv.title;
 
@@ -95,7 +96,7 @@ export async function autoTitle(id: string, user: string, reply: string): Promis
   // 标题跟着界面语言走：英文界面的列表里全是中文标题就没法认了
   const locale = await getLocale();
   const t = await getT();
-  if (cfg.apiKey && cfg.baseUrl && cfg.model) {
+  if (conv.backend !== 'codex' && cfg.apiKey && cfg.baseUrl && cfg.model) {
     try {
       const provider = createOpenAICompatible({ name: 'ai', baseURL: cfg.baseUrl, apiKey: cfg.apiKey });
       const { text } = await generateText({

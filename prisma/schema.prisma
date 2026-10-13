@@ -65,6 +65,9 @@ model Conversation {
   updatedAt DateTime @updatedAt
 
   messages Message[]
+  backend String @default("api")
+  codexThreadId String?
+  codexTurns CodexTurn[]
 
   @@index([updatedAt])
 }
@@ -622,4 +625,37 @@ model PageData {
   updatedAt DateTime @updatedAt
 
   @@id([pageId, key])
+}
+
+
+/// Durable request and tool audit for local Codex. Interrupted writes are never replayed.
+model CodexTurn {
+  id String @id @default(cuid())
+  requestKey String @unique
+  inputHash String
+  conversationId String
+  conversation Conversation @relation(fields:[conversationId],references:[id],onDelete:Cascade)
+  userMessageId String?
+  codexTurnId String?
+  status String @default("queued")
+  processKey String
+  error String?
+  chunksJson String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  tools CodexToolRun[]
+  @@index([conversationId,createdAt])
+}
+
+model CodexToolRun {
+  id String @id @default(cuid())
+  turnId String
+  turn CodexTurn @relation(fields:[turnId],references:[id],onDelete:Cascade)
+  callId String
+  name String
+  inputJson String
+  status String @default("running")
+  resultJson String?
+  createdAt DateTime @default(now())
+  @@unique([turnId,callId])
 }

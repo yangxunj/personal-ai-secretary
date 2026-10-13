@@ -1,0 +1,38 @@
+import { mkdir } from 'node:fs/promises';
+import path from 'node:path';
+import { db } from '@/lib/db';
+import { UPLOAD_DIR } from '@/lib/storage';
+import { CodexConnection } from './protocol.mjs';
+
+export const localCodexEnabled = () => process.env.DESKTOP_APP === '1' || process.env.ENABLE_LOCAL_CODEX === 'true';
+export async function getChatBackend() {
+  return (await db.setting.findUnique({where:{key:'ai.backend'}}))?.value === 'codex' && localCodexEnabled() ? 'codex' : 'api';
+}
+export async function getCodexConfig() {
+  const rows=await db.setting.findMany({where:{key:{in:['codex.path','codex.model','codex.effort']}}});
+  const m=new Map(rows.map(r=>[r.key,r.value]));
+  return {executable:m.get('codex.path') || process.env.SECRETARY_CODEX_PATH || '',model:m.get('codex.model') || '',effort:m.get('codex.effort') || 'medium'};
+}
+export async function openCodex() {
+  if (!localCodexEnabled()) throw new Error('Local Codex is disabled on this deployment.');
+  const cfg=await getCodexConfig();
+  const cwd=path.resolve(UPLOAD_DIR,'../codex-workspace');await mkdir(cwd,{recursive:true});
+  const client=new CodexConnection({executable:cfg.executable,cwd});
+  try {
+    await client.connect();
+    const account=await client.request('account/read',{refreshToken:true});
+    if(!account.account)throw new Error('Codex is not signed in. Sign in to Codex on this computer first.');
+    // Disable inherited MCP servers for this app, without editing the user's Codex config.
+    const {config:inherited}=await client.request('config/read',{includeLayers:false});
+    const config:Record<string,unknown>={};
+    for(const name of Object.keys(inherited?.mcp_servers || {}))config['mcp_servers.'+name+'.enabled']=false;
+    return {client,cfg,cwd,config,account:account.account};
+  } catch(e) {client.close();throw e;}
+}
+export async function diagnoseCodex() {
+  const {client,cfg,account}=await openCodex();
+  try {
+    const models=await client.request('model/list',{});
+    return {authMode:account.type,plan:account.planType || null,model:cfg.model || models.data?.find((m:any)=>m.isDefault)?.model || '',models:(models.data || []).map((m:any)=>({id:m.model,name:m.displayName,efforts:(m.supportedReasoningEfforts || []).map((e:any)=>e.reasoningEffort)}))};
+  } finally {client.close();}
+}

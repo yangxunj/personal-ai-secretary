@@ -1,0 +1,26 @@
+import type { Dict } from '../core';
+export const codex: Dict = {
+  "API 模型配置": "API model configuration",
+  "只用于 API 后端。选择本机 Codex 时可以留空。填自己的 API Key，": "Only used by the API backend. Leave blank when using local Codex. Enter your own API key; ",
+  "对话后端": "Chat backend",
+  "新对话使用这里选择的后端。已有对话保持原来的后端和记忆。": "This selection applies to new chats. Existing chats keep their backend and memory.",
+  "API 模型": "API model",
+  "本机 Codex": "Local Codex",
+  "桌面版支持本机 Codex；本地源码运行需启用 ENABLE_LOCAL_CODEX。": "Local Codex is available in the desktop app. Source installations must enable ENABLE_LOCAL_CODEX.",
+  "先在当前电脑安装并登录 Codex。使用该登录的额度；无需填写 DeepSeek API Key，仍需联网，电脑关闭后无法处理。": "Install Codex and sign in on this computer first. Uses that account’s allowance; no DeepSeek API key is needed. Internet and a running computer are required.",
+  "Codex 可执行文件路径（可留空自动查找）": "Codex executable path (leave blank to detect automatically)",
+  "Codex 模型（留空沿用本机默认）": "Codex model (leave blank for the local default)",
+  "对话推理强度": "Chat reasoning effort",
+  "低": "Low",
+  "中": "Medium",
+  "高": "High",
+  "最高": "Highest",
+  "保存对话后端": "Save chat backend",
+  "测试本机 Codex（会消耗少量额度）": "Test local Codex (uses a small amount of allowance)",
+  "本机 Codex · 使用当前电脑的登录": "Local Codex · Uses this computer’s sign-in",
+  "后台正在处理，完成后会自动更新。": "Processing in the background. This page will update when complete.",
+  "Codex 配置已保存，连接检查失败：": "Codex configuration saved, but connection check failed: ",
+  "已保存，新对话使用所选后端。": "Saved. New chats will use the selected backend.",
+  "Codex 测试失败：": "Codex test failed: ",
+  "Codex 已完成真实回复，登录和模型调用可用。": "Codex completed a real reply. Sign-in and inference are working."
+};

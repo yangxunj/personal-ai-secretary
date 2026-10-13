@@ -7,6 +7,8 @@ import { listConversations, newConversationId } from '@/lib/conversations';
 import { formatTime } from '@/lib/format';
 import { markRead } from '../../actions';
 import { getLocale, getT } from '@/lib/i18n/server';
+import { getChatBackend } from '@/lib/codex/config';
+import { recoverCodexTurns } from '@/lib/codex/chat';
 
 export const dynamic = 'force-dynamic';
 
@@ -59,10 +61,14 @@ export default async function ChatPage({
   // 免得往一个已删对话的 id 上又建出一个同名的来
   const asked = segs?.[0];
   const conv = asked
-    ? await db.conversation.findUnique({ where: { id: asked }, select: { id: true, title: true } })
+    ? await db.conversation.findUnique({ where: { id: asked }, select: { id: true, title: true, backend: true } })
     : null;
   const conversationId = conv?.id ?? newConversationId();
   const where = { conversationId };
+  const backend = conv?.backend ?? await getChatBackend();
+  if (backend === 'codex') await recoverCodexTurns();
+  const lastTurn = backend === 'codex' ? await db.codexTurn.findFirst({where:{conversationId},orderBy:{createdAt:'desc'},select:{status:true,error:true}}) : null;
+  const pending = lastTurn && ['queued','running'].includes(lastTurn.status);
 
   const [list, total] = await Promise.all([
     listConversations(),
@@ -180,6 +186,9 @@ export default async function ChatPage({
           <Chat
             key={conversationId}
             conversationId={conversationId}
+            backend={backend}
+            pending={!!pending}
+            lastError={lastTurn?.status==='failed' ? lastTurn.error ?? '' : ''}
             isNew={!conv}
             history={history}
             draft={draft}

@@ -18,7 +18,8 @@ import { pageDesignGuide, type PageType } from '@/lib/page-design';
  */
 
 export type PageBuilder = {
-  model: LanguageModel;
+  model?: LanguageModel;
+  stream?: (system: string, prompt: string, abortSignal?: AbortSignal) => AsyncIterable<{type: 'text-delta' | 'reasoning-delta'; text: string}>;
   providerOptions?: { ai: { reasoningEffort: string } };
   maxOutputTokens: number;
   /** 界面语言。页面上的文字跟着它 */
@@ -142,8 +143,8 @@ export async function* buildPageHtml(
 ): AsyncGenerator<BuildProgress, { ok: true; html: string } | { ok: false; error: string }> {
   const started = Date.now();
   const today = new Date().toISOString().slice(0, 10);
-  const result = streamText({
-    model: b.model,
+  const result = b.stream ? null : streamText({
+    model: b.model!,
     system: systemPrompt(p.type, b.locale),
     prompt: userPrompt({ ...p, today }),
     maxOutputTokens: b.maxOutputTokens,
@@ -154,7 +155,9 @@ export async function* buildPageHtml(
   let thinking = 0;
   let text = '';
   let last = 0;
-  for await (const part of result.fullStream) {
+  try {
+  const parts = b.stream ? b.stream(systemPrompt(p.type, b.locale), userPrompt({ ...p, today }), p.abortSignal) : result!.fullStream;
+  for await (const part of parts) {
     if (part.type === 'reasoning-delta') thinking += part.text.length;
     else if (part.type === 'text-delta') text += part.text;
     else if (part.type === 'error') {
@@ -175,11 +178,14 @@ export async function* buildPageHtml(
     }
   }
 
-  const reason = await result.finishReason;
-  const usage = await result.usage;
+  } catch (e) {
+    return { ok: false, error: '写页面的模型调用出错：' + (e instanceof Error ? e.message : String(e)) };
+  }
+  const reason = result ? await result.finishReason : 'stop';
+  const usage = result ? await result.usage : null;
   console.log(
     `[page-builder] ${p.type} "${p.title}" ${Math.round((Date.now() - started) / 1000)}s, ` +
-      `reasoning ${usage.outputTokenDetails?.reasoningTokens ?? '?'} / output ${usage.outputTokens ?? '?'} tokens, finish=${reason}`,
+      `reasoning ${usage?.outputTokenDetails?.reasoningTokens ?? '?'} / output ${usage?.outputTokens ?? '?'} tokens, finish=${reason}`,
   );
   const html = extractHtml(text);
   if (!html) {
