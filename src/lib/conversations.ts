@@ -33,6 +33,7 @@ function clip(s: string, n = TITLE_MAX) {
 export async function listConversations(): Promise<ConversationItem[]> {
   const t = await getT();
   const rows = await db.conversation.findMany({
+    where: { taskId: null },
     orderBy: { updatedAt: 'desc' },
     take: 300,
     select: {

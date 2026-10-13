@@ -1,6 +1,7 @@
 import { streamText, convertToModelMessages, stepCountIs, type UIMessage } from 'ai';
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible';
-import { buildAgentTools } from '@/lib/agent-tools';
+import { buildChatTools } from '@/lib/task-chat-tools';
+import { taskChatInstructions } from '@/lib/task-chat-context';
 import { intake } from '@/lib/chat-intake';
 import { systemPrompt } from '@/lib/system-prompt';
 import { getLocale, getT } from '@/lib/i18n/server';
@@ -37,7 +38,7 @@ const CONVERSATION_ID = /^(legacy|[a-z0-9]{20,40})$/;
 
 async function resolveConversation(id: string | undefined): Promise<string | null> {
   if (id === undefined) {
-    const latest = await db.conversation.findFirst({ orderBy: { updatedAt: 'desc' }, select: { id: true } });
+    const latest = await db.conversation.findFirst({ where: { taskId: null }, orderBy: { updatedAt: 'desc' }, select: { id: true } });
     if (latest) return latest.id;
     return (await db.conversation.create({ data: { backend: await getChatBackend() } })).id;
   }
@@ -62,12 +63,14 @@ export async function POST(req: Request) {
   const origin = req.headers.get('origin');
   const expectedHost = req.headers.get('x-forwarded-host') || req.headers.get('host') || new URL(req.url).host;
   if (origin && new URL(origin).host !== expectedHost) return new Response('Invalid origin', {status:403});
-  const body = (await req.json()) as { message?: UIMessage; messages?: UIMessage[]; conversationId?: string };
+  const body = (await req.json()) as { message?: UIMessage; messages?: UIMessage[]; conversationId?: string; taskId?: string };
   const newest = body.message ?? body.messages?.at(-1);
   if (!newest || newest.role !== 'user' || !Array.isArray(newest.parts)) return new Response(t('没有消息'), {status:400});
   const conversationId = await resolveConversation(body.conversationId);
   if (!conversationId) return new Response(t('对话 id 不对'), {status:400});
   const conv = await db.conversation.findUniqueOrThrow({where:{id:conversationId}});
+  if (body.taskId !== undefined && conv.taskId !== body.taskId) return new Response('Task conversation mismatch', {status:409});
+  const taskInstructions = await taskChatInstructions(conv.taskId);
   if(conv.backend === 'codex') {
     if(!localCodexEnabled()) return new Response('Local Codex is disabled on this deployment.', {status:503});
     return codexChatResponse({conversationId,newest,instructions:systemPrompt(false,await getOwners(),locale),locale});
@@ -115,10 +118,10 @@ export async function POST(req: Request) {
 
   const result = streamText({
     model: chatModel,
-    system: systemPrompt(!!search, await getOwners(), locale) + summaryBlock(ctx.summary),
+    system: systemPrompt(!!search, await getOwners(), locale) + taskInstructions + summaryBlock(ctx.summary),
     messages: modelMessages,
     // 页面由同一个模型另起一次调用来写，推理拉满（见 lib/page-builder.ts）
-    tools: buildAgentTools({ incoming, conversationId, t, pageBuilder: { model: chatModel, locale, ...pageBuildOptions(cfg) } }),
+    tools: buildChatTools({ incoming, conversationId, taskId: conv.taskId, t, pageBuilder: { model: chatModel, locale, ...pageBuildOptions(cfg) } }),
     // 允许「调工具 → 看结果 → 再调 → 最后作答」。不给它多步，
     // 模型调完一个工具就停住了，用户只看到一个工具卡片没有回复。
     stopWhen: stepCountIs(8),
@@ -163,7 +166,7 @@ export async function POST(req: Request) {
           const orphans = incoming.filter((f) => !taken.has(f.storedPath));
           if (orphans.length) {
             await db.attachment.createMany({
-              data: orphans.map((f) => ({ ...f, messageId: msg.id, uploadedBy: 'user' })),
+              data: orphans.map((f) => ({ ...f, messageId: msg.id, taskId: conv.taskId, uploadedBy: 'user' })),
             });
           }
         }

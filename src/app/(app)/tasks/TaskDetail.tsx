@@ -3,6 +3,7 @@ import { markTaskRepliesRead } from '../actions';
 import Prose from '@/components/Prose';
 import CopyDoc from '@/components/CopyDoc';
 import TaskComposer from '@/components/TaskComposer';
+import TaskChatDialog from '@/components/TaskChatDialog';
 import { getOwners } from '@/lib/owners';
 import AttachmentRow from '@/components/AttachmentRow';
 import { TASK_STATUS, formatDate, formatTime } from '@/lib/format';
@@ -69,6 +70,7 @@ export default async function TaskDetail({
   id,
   backTo,
   markRead = true,
+  chatOpen = false,
 }: {
   id: string;
   /** 窄屏页头「返回」指向哪。宽屏上那条页头是隐藏的，用不到。 */
@@ -81,6 +83,7 @@ export default async function TaskDetail({
    * 不关掉的话，「管家回了」这个提醒会在人根本没看到的情况下被消掉。
    */
   markRead?: boolean;
+  chatOpen?: boolean;
 }) {
   const task = await db.task.findUnique({
     where: { id },
@@ -156,6 +159,8 @@ export default async function TaskDetail({
             </span>
           )}
         </div>
+
+        <TaskChatDialog key={task.id} taskId={task.id} title={task.title} initiallyOpen={chatOpen} />
 
         {/* ★ 进度条：来回了几条、最新是哪天、**现在轮到谁**。
             只在真的有来回、且任务还没完的时候出现
@@ -274,7 +279,7 @@ export default async function TaskDetail({
         <section className="mt-8">
           <div className="flex items-baseline justify-between gap-3">
             <h2 className="text-[13px] font-medium muted">{t('经过')}</h2>
-            <span className="muted text-[11px] shrink-0">{t('管家不在线上，回复要等下一次')}</span>
+            <span className="muted text-[11px] shrink-0">{t('留言和已保存的进展')}</span>
           </div>
 
           <div className="mt-3 space-y-2">

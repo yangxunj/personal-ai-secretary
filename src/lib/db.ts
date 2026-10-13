@@ -13,4 +13,6 @@ export const db = new Proxy(client, {
   },
 });
 export const inDatabaseTransaction = <T>(tx: Prisma.TransactionClient, work: () => Promise<T>) => scope.run(tx, work);
+export const withDatabaseTransaction = <T>(work: () => Promise<T>): Promise<T> => scope.getStore()
+  ? work() : client.$transaction(tx => inDatabaseTransaction(tx, work), {timeout: 30000});
 if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = client;

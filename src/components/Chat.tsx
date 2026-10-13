@@ -149,6 +149,9 @@ export type Compaction = { firstKeptId: string; summary: string; createdAt: stri
 
 export function Chat({
   conversationId,
+  taskId,
+  embedded = false,
+  onReply,
   backend = 'api',
   pending = false,
   lastError = '',
@@ -162,6 +165,9 @@ export function Chat({
 }: {
   /** 这是哪个对话。新对话的 id 是页面上先生成的，第一句话发出去时服务端才建 */
   conversationId: string;
+  taskId?: string;
+  embedded?: boolean;
+  onReply?: () => Promise<void>;
   backend?: string;
   pending?: boolean;
   lastError?: string;
@@ -178,15 +184,19 @@ export function Chat({
   olderCount?: number;
   olderHref?: string;
 }) {
-  const { messages, sendMessage, status, error, stop } = useChat({
+  const { messages, sendMessage, setMessages, status, error, stop } = useChat({
     transport: new DefaultChatTransport({
       api: '/api/chat',
       // 只发这一轮的新消息：历史由服务端从数据库拼（含压缩后的摘要）。
       // 发整串的话，刷新前后模型看到的上下文就不一样了。
-      prepareSendMessagesRequest: ({ messages }) => ({ body: { message: messages.at(-1), conversationId } }),
+      prepareSendMessagesRequest: ({ messages }) => ({ body: { message: messages.at(-1), conversationId, ...(taskId ? { taskId } : {}) } }),
     }),
     onFinish: ({ message, messages, isError }) => {
       // 列表跟着挪：这个对话刚说过话，排到最上面
+      if(embedded) {
+        if(onReply) void onReply().then(() => { setMessages([]); }).catch(() => {});
+        return;
+      }
       emitConversations();
       if (isError || !needsTitle.current) return;
       needsTitle.current = false;
@@ -218,10 +228,16 @@ export function Chat({
   const [dragging, setDragging] = useState(false);
   const picker = useRef<HTMLInputElement>(null);
   const bottom = useRef<HTMLDivElement>(null);
+  const scroller = useRef<HTMLDivElement>(null);
   const landed = useRef(false);
   const [background, setBackground] = useState(pending);
   const [backgroundError, setBackgroundError] = useState(lastError);
   const busy = background || status === 'submitted' || status === 'streaming';
+  useEffect(() => {
+    if(status !== 'submitted' && status !== 'streaming') {
+      setBackground(pending); setBackgroundError(lastError);
+    }
+  }, [pending, lastError]);
   useEffect(() => {
     if (backend !== 'codex' || !background) return;
     let disposed = false;
@@ -233,7 +249,7 @@ export function Chat({
         if (!disposed && !['queued','running'].includes(data.status)) {
           setBackground(false);
           setBackgroundError(data.error || '');
-          router.refresh();
+          if(onReply)await onReply(); else router.refresh();
         }
       } catch { /* retry when the browser resumes */ }
     };
@@ -248,7 +264,7 @@ export function Chat({
       document.removeEventListener('visibilitychange', visible);
       window.removeEventListener('focus', poll);
     };
-  }, [background, backend, conversationId, router]);
+  }, [background, backend, conversationId, router, onReply]);
   async function stopReply() {
     if (backend === 'codex') {
       await fetch('/api/codex/state', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({conversationId})});
@@ -273,14 +289,19 @@ export function Chat({
     if (window.location.hash) return;
     // 空白的新对话别往下滚：上面那张「跟我说话就行」的卡片会被顶出屏幕
     if (history.length === 0) return;
-    bottom.current?.scrollIntoView({ behavior: 'instant' as ScrollBehavior });
+    if(embedded && scroller.current)scroller.current.scrollTop=scroller.current.scrollHeight;
+    else bottom.current?.scrollIntoView({ behavior: 'instant' as ScrollBehavior });
   }, [focusId]);
 
   // 本次对话新来的内容才跟着滚
   useEffect(() => {
     if (!landed.current || messages.length === 0) return;
-    bottom.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, status]);
+    if(embedded && scroller.current)scroller.current.scrollTop=scroller.current.scrollHeight;
+    else bottom.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages, status, embedded]);
+  useEffect(() => {
+    if(embedded && scroller.current)scroller.current.scrollTop=scroller.current.scrollHeight;
+  }, [embedded, history.length]);
 
   function addFiles(list: FileList | File[] | null) {
     if (!list) return;
@@ -329,7 +350,7 @@ export function Chat({
 
   return (
     <div
-      className="flex flex-col min-h-[calc(100dvh-8.5rem)] lg:min-h-[calc(100dvh-5.5rem)]"
+      className={embedded ? "flex h-full min-h-0 flex-col" : "flex flex-col min-h-[calc(100dvh-8.5rem)] lg:min-h-[calc(100dvh-5.5rem)]"}
       onDragOver={(e) => {
 
         e.preventDefault();
@@ -342,10 +363,10 @@ export function Chat({
         addFiles(e.dataTransfer.files);
       }}
     >
-      <p className="muted text-[11px] mb-2">{backend === 'codex' ? t('本机 Codex · 使用当前电脑的登录') : t('API 模型')}</p>
-      {background && <p className="muted text-[12px] py-2">{t('后台正在处理，完成后会自动更新。')}</p>}
-      {backgroundError && <p className="text-red-500 text-[12px] py-2">{backgroundError}</p>}
-      <div className="flex-1 space-y-4 pb-4">
+      <p className={`muted text-[11px] mb-2 ${embedded ? "px-4 pt-2" : ""}`}>{backend === 'codex' ? t('本机 Codex · 使用当前电脑的登录') : t('API 模型')}</p>
+      {background && <p className="muted text-[12px] px-4 py-2">{t('后台正在处理，完成后会自动更新。')}</p>}
+      {backgroundError && <p className="text-red-500 text-[12px] px-4 py-2">{backgroundError}</p>}
+      <div ref={scroller} className={embedded ? "flex-1 min-h-0 overflow-y-auto overscroll-contain space-y-4 px-4 pb-4" : "flex-1 space-y-4 pb-4"}>
         {olderCount > 0 && olderHref && (
           <div className="text-center">
             <Link
@@ -430,7 +451,7 @@ export function Chat({
 
       {/* 输入区固定在底栏上方。宽屏没有底栏，贴到窗口底边。 */}
       <div
-        className="sticky bottom-[calc(4.4rem+env(safe-area-inset-bottom,0px))] lg:bottom-0 -mx-4 px-4 py-2.5 border-t backdrop-blur"
+        className={embedded ? "shrink-0 px-4 py-2.5 pb-[max(0.625rem,env(safe-area-inset-bottom,0px))] border-t backdrop-blur" : "sticky bottom-[calc(4.4rem+env(safe-area-inset-bottom,0px))] lg:bottom-0 -mx-4 px-4 py-2.5 border-t backdrop-blur"}
         style={{
           borderColor: dragging ? 'var(--brand-500, #6366f1)' : 'var(--border)',
           // 跟着主题走的半透明背景。原来写的 var(--bg-blur, 白) 那个变量从没定义过，深色下一片白

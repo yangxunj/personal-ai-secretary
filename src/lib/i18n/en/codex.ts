@@ -1,5 +1,17 @@
 import type { Dict } from '../core';
 export const codex: Dict = {
+  "留言和已保存的进展": "Comments and saved progress",
+  "截止日期": "Due date",
+  "优先级": "Priority",
+  "标题": "Title",
+  "AI 已更新：{fields}": "AI updated: {fields}",
+  "任务：{title}": "Task: {title}",
+  "查看更早的任务对话（{n} 条）": "View earlier task messages ({n})",
+  "正在读取任务对话…": "Loading task chat…",
+  "收起": "Collapse",
+  "关闭任务聊天": "Close task chat",
+  "任务 AI 对话": "Task AI chat",
+  "和 AI 聊这件任务": "Discuss this task with AI",
   "API 模型配置": "API model configuration",
   "只用于 API 后端。选择本机 Codex 时可以留空。填自己的 API Key，": "Only used by the API backend. Leave blank when using local Codex. Enter your own API key; ",
   "对话后端": "Chat backend",

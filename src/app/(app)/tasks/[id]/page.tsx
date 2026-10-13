@@ -13,10 +13,10 @@ export default async function TaskDetailPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ from?: string }>;
+  searchParams: Promise<{ from?: string; chat?: string }>;
 }) {
   const { id } = await params;
-  const { from } = await searchParams;
+  const { from, chat } = await searchParams;
 
   // 只认站内路径：必须以单个 / 开头 —— 挡掉 //evil.com 这种协议相对网址。
   const safeFrom = from && /^\/(?!\/)/.test(from) ? from : null;
@@ -37,7 +37,7 @@ export default async function TaskDetailPage({
           activeId={id}
         />
       }
-      detail={<TaskDetail id={id} backTo={backTo} />}
+      detail={<TaskDetail id={id} backTo={backTo} chatOpen={chat === '1'} />}
     />
   );
 }

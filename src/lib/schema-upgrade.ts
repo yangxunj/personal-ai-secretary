@@ -37,6 +37,13 @@ const STEPS: Step[] = [
   { name:'Conversation.codexThreadId', needed:async()=>!(await hasColumn('Conversation','codexThreadId')), sql:[
     'ALTER TABLE "Conversation" ADD COLUMN "codexThreadId" TEXT',
   ]},
+  { name:'Conversation.taskId', needed:async()=>!(await hasColumn('Conversation','taskId')), sql:[
+    'ALTER TABLE "Conversation" ADD COLUMN "taskId" TEXT REFERENCES "Task"("id") ON DELETE CASCADE ON UPDATE CASCADE',
+  ]},
+  { name:'Conversation.taskId.index', needed:async()=>{
+    const rows=await db.$queryRawUnsafe<{name:string}[]>('PRAGMA index_list("Conversation")');
+    return !rows.some(r=>r.name==='Conversation_taskId_key');
+  }, sql:['CREATE UNIQUE INDEX "Conversation_taskId_key" ON "Conversation"("taskId")']},
   { name:'CodexTurn', needed:async()=>!(await hasTable('CodexTurn')), sql:[
     'CREATE TABLE "CodexTurn" ("id" TEXT PRIMARY KEY NOT NULL,"requestKey" TEXT NOT NULL,"inputHash" TEXT NOT NULL,"conversationId" TEXT NOT NULL,"userMessageId" TEXT,"codexTurnId" TEXT,"status" TEXT NOT NULL DEFAULT \'queued\',"processKey" TEXT NOT NULL,"error" TEXT,"chunksJson" TEXT,"createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,"updatedAt" DATETIME NOT NULL,FOREIGN KEY ("conversationId") REFERENCES "Conversation"("id") ON DELETE CASCADE ON UPDATE CASCADE)',
     'CREATE UNIQUE INDEX "CodexTurn_requestKey_key" ON "CodexTurn"("requestKey")',
@@ -187,7 +194,7 @@ const STEPS: Step[] = [
 
 export async function upgradeSchema(): Promise<string[]> {
   const done: string[] = [];
-  const codex = STEPS.filter(s => ['Conversation.backend','Conversation.codexThreadId','CodexTurn','CodexToolRun'].includes(s.name));
+  const codex = STEPS.filter(s => ['Conversation.backend','Conversation.codexThreadId','Conversation.taskId','Conversation.taskId.index','CodexTurn','CodexToolRun'].includes(s.name));
   for (const s of [...STEPS.filter(s => !codex.includes(s)), ...codex]) {
     if (!(await s.needed())) continue;
     for (const q of s.sql) await db.$executeRawUnsafe(q);

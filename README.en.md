@@ -153,6 +153,10 @@ project: I'll read them, but can't promise a quick reply.
 version as a service for others (including as a website), you must publish its
 source code too.**
 
+## Task-specific AI chat (source only)
+
+Each task detail page has a “Discuss this task with AI” panel. It keeps an independent conversation, includes current task requirements and progress, and can update that task, save notes, or create linked follow-up tasks. Both API and local Codex backends are supported. Closing the panel preserves the task page and reopening it on the same page keeps the draft. Existing chats keep their original backend. See [task chat details](docs/任务专属AI对话.md). Published v0.3.0 installers do not contain this feature.
+
 ## Local Codex backend (source only)
 
 The current source supports the Codex login on your own computer as an optional chat backend. It uses the same platform tools and database, keeps persistent independent conversations, and generates HTML through a separate Codex turn without requiring a DeepSeek API key. Select it in Settings and start a new chat; existing chats keep their backend. Local source installations must set `ENABLE_LOCAL_CODEX=true`; desktop builds enable it automatically. Internet and account allowance are required. The published v0.3.0 installers do not contain this change. See [local Codex details](docs/Codex本机对话.md).

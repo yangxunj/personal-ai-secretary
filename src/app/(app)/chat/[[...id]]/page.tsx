@@ -1,4 +1,5 @@
 import { db } from '@/lib/db';
+import { redirect } from 'next/navigation';
 import type { Prisma } from '@prisma/client';
 import { Chat, type SeedMessage } from '@/components/Chat';
 import ChatHeader from '@/components/chat/ChatHeader';
@@ -61,8 +62,9 @@ export default async function ChatPage({
   // 免得往一个已删对话的 id 上又建出一个同名的来
   const asked = segs?.[0];
   const conv = asked
-    ? await db.conversation.findUnique({ where: { id: asked }, select: { id: true, title: true, backend: true } })
+    ? await db.conversation.findUnique({ where: { id: asked }, select: { id: true, title: true, backend: true, taskId: true } })
     : null;
+  if(conv?.taskId) redirect('/tasks/'+encodeURIComponent(conv.taskId)+'?chat=1');
   const conversationId = conv?.id ?? newConversationId();
   const where = { conversationId };
   const backend = conv?.backend ?? await getChatBackend();

@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
 import { PassThrough, Writable } from 'node:stream';
-import { CodexConnection, runTurn, denyRequest } from '../src/lib/codex/protocol.mjs';
+import { CodexConnection, runTurn, denyRequest, resolveExecutable } from '../src/lib/codex/protocol.mjs';
 
 function fake(handler) {
   const proc=new EventEmitter();proc.stdout=new PassThrough();proc.stderr=new PassThrough();proc.kill=()=>{};
@@ -43,4 +43,12 @@ test('shell, patch, permissions and unknown server requests are denied',async()=
   denyRequest(client,{id:103,method:'item/permissions/requestApproval'});
   denyRequest(client,{id:104,method:'other/tool'});
   assert.deepEqual(received.at(-4).result,{decision:'decline'});assert.deepEqual(received.at(-3).result,{decision:'decline'});assert.deepEqual(received.at(-2).result,{permissions:{}});assert.equal(received.at(-1).error.code,-32601);client.close();
+});
+
+test('Windows does not accept the extensionless npm shell shim', {skip:process.platform !== 'win32'}, async () => {
+  const {mkdtemp,writeFile,unlink,rmdir}=await import('node:fs/promises');
+  const {tmpdir}=await import('node:os');const {join}=await import('node:path');
+  const dir=await mkdtemp(join(tmpdir(),'codex-shim-test-'));const shim=join(dir,'codex');
+  try {await writeFile(shim,'#!/bin/sh');assert.throws(()=>resolveExecutable(shim),/executable not found/);}
+  finally {await unlink(shim);await rmdir(dir);}
 });

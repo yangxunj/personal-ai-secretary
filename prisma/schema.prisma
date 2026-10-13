@@ -68,6 +68,8 @@ model Conversation {
   backend String @default("api")
   codexThreadId String?
   codexTurns CodexTurn[]
+  taskId String? @unique
+  task Task? @relation(fields: [taskId], references: [id], onDelete: Cascade)
 
   @@index([updatedAt])
 }
@@ -154,6 +156,7 @@ model Task {
   blocksOn String?
   blocker  Task?  @relation("TaskChain", fields: [blocksOn], references: [id], onDelete: SetNull)
   blocked  Task[] @relation("TaskChain")
+  chatConversation Conversation?
 
   /// 指向一份文稿（操作指引、话术、调研任务书）。
   /// 以前只能在 detail 里写「见平台文稿页《…》」—— 手机上点不动，

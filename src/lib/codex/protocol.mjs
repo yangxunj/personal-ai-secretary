@@ -8,17 +8,18 @@ import os from 'node:os';
 // Resolve an installed CLI or desktop executable; never run a string through a shell.
 export function resolveExecutable(explicit = '') {
   const directories = (process.env.PATH || '').split(path.delimiter);
-  const candidates = explicit ? [explicit] : directories.flatMap(p => [path.join(p, 'codex.exe'), path.join(p, 'codex')]);
+  const candidates = explicit ? [explicit] : directories.flatMap(p => process.platform === 'win32' ? [path.join(p, 'codex.exe')] : [path.join(p, 'codex')]);
   if (!explicit && process.platform === 'win32') {
     const roots = [path.join(process.env.LOCALAPPDATA || '', 'OpenAI/Codex/bin'), path.join(os.homedir(), '.codex/packages/app-server-daemon/releases')];
     for (const root of roots) {
+      candidates.push(path.join(root, 'codex.exe'));
       try {
         const dirs = readdirSync(root).map(n => path.join(root, n)).sort((a,b) => statSync(b).mtimeMs - statSync(a).mtimeMs);
         for (const dir of dirs) candidates.push(path.join(dir, 'codex.exe'), path.join(dir, 'bin/codex.exe'));
       } catch { /* installation may be absent */ }
     }
   }
-  const found = candidates.find(p => existsSync(p) && statSync(p).isFile() && !/\.(cmd|bat|ps1)$/i.test(p));
+  const found = candidates.find(p => existsSync(p) && statSync(p).isFile() && (process.platform === 'win32' ? /\.exe$/i.test(p) : !/\.(cmd|bat|ps1)$/i.test(p)));
   if (!found) throw new Error('Codex executable not found. Install Codex or set the full executable path in Settings (use codex.exe, not a .cmd shim).');
   return path.resolve(found);
 }

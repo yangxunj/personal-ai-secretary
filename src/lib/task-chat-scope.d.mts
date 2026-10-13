@@ -1,0 +1,1 @@
+export function taskPatch(taskId: string, args: {id:string; title?:string;status?:string;result?:string;priority?:number;dueDate?:string;owner?:string;detail?:string}): {title?:string;status?:string;result?:string;priority?:number;dueDate?:Date|null;owner?:string|null};
