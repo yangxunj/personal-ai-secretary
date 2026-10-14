@@ -53,7 +53,7 @@ export class CodexConnection extends EventEmitter {
       this.guard.stdin.on('error',()=>{});
       this.guard.on('error',()=>this.fail(new Error('Could not start Codex process supervisor')));
     }
-    await this.request('initialize', { clientInfo: { name: 'personal_ai_secretary', title: 'Personal AI Secretary', version: '0.3.0' }, capabilities: { experimentalApi: true } });
+    await this.request('initialize', { clientInfo: { name: 'personal_ai_secretary', title: 'Personal AI Secretary', version: '0.4.0' }, capabilities: { experimentalApi: true } });
     this.send({ method: 'initialized' });
   }
   send(msg) { if (this.closed || !this.proc?.stdin.writable) throw new Error('Codex connection closed'); this.proc.stdin.write(JSON.stringify(msg) + '\n'); }
