@@ -2,6 +2,7 @@ import PageHeader from '@/components/PageHeader';
 import { MIN_PASSWORD_LENGTH } from '@/lib/auth';
 import { getAiConfig, maskKey } from '@/lib/ai-config';
 import { loadAsrConfig } from '@/lib/asr-config';
+import { loadTtsConfig } from '@/lib/tts-config';
 import ProviderFields from './ProviderFields';
 import LocalCodexSettings from './LocalCodexSettings';
 import { getChatBackend, getCodexConfig, localCodexEnabled } from '@/lib/codex/config';
@@ -10,6 +11,7 @@ import {
   logoutAction,
   saveAiConfigAction,
   saveAsrConfigAction,
+  saveTtsConfigAction,
   testAiConfigAction,
   resetAiConfigAction,
   saveOwnersAction,
@@ -33,12 +35,13 @@ export const dynamic = 'force-dynamic';
 export default async function SettingsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ e?: string; ok?: string; aiE?: string; aiOk?: string; mE?: string; mOk?: string; asrE?: string; asrOk?: string }>;
+  searchParams: Promise<{ e?: string; ok?: string; aiE?: string; aiOk?: string; mE?: string; mOk?: string; asrE?: string; asrOk?: string; ttsE?: string; ttsOk?: string }>;
 }) {
-  const { e, ok, aiE, aiOk, mE, mOk, asrE, asrOk } = await searchParams;
+  const { e, ok, aiE, aiOk, mE, mOk, asrE, asrOk, ttsE, ttsOk } = await searchParams;
   const authOn = process.env.AUTH_ENABLED === 'true';
   const ai = await getAiConfig();
   const asr = await loadAsrConfig();
+  const tts = await loadTtsConfig();
   const owners = await getOwners();
   const locale = await getLocale();
   const t = await getT();
@@ -154,6 +157,30 @@ export default async function SettingsPage({
             <button className="w-full rounded-xl bg-brand-500 text-white py-2.5 text-[15px]">{t('保存语音配置')}</button>
           </form>
           <p className="muted text-[11px] leading-relaxed mt-3">{t('密钥与接口须属于同一服务区域。手机录音需要 HTTPS 地址。')}</p>
+        </section>
+
+        <section id="speech" className="surface border rounded-2xl p-4 scroll-mt-4" style={{ borderColor: 'var(--border)' }}>
+          <h2 className="text-[15px] font-semibold mb-1">{t('回答朗读')}</h2>
+          <p className="muted text-[12px] leading-relaxed mb-3">{t('点击回答下方的朗读按钮，将正文发送给阿里云合成语音。默认不自动播放，与聊天模型和语音输入独立。')}</p>
+          {ttsE && <p className="text-[13px] text-red-500 mb-3">{ttsE}</p>}
+          {ttsOk && <p className="text-[13px] text-emerald-600 mb-3">{t('朗读配置已保存，请回到聊天点击朗读回答测试')}</p>}
+          <form action={saveTtsConfigAction} className="space-y-3">
+            <label className="block text-sm">{t('语音合成地址')}
+              <input name="ttsBaseUrl" type="url" required defaultValue={tts.baseUrl} className="mt-1 w-full rounded-xl border px-3 py-2 bg-transparent" style={{ borderColor: 'var(--border)' }} />
+            </label>
+            <label className="block text-sm">{t('语音合成模型')}
+              <input name="ttsModel" required defaultValue={tts.model} className="mt-1 w-full rounded-xl border px-3 py-2 bg-transparent" style={{ borderColor: 'var(--border)' }} />
+            </label>
+            <label className="block text-sm">{t('音色名称')}
+              <input name="ttsVoice" required defaultValue={tts.voice} placeholder="Cherry" className="mt-1 w-full rounded-xl border px-3 py-2 bg-transparent" style={{ borderColor: 'var(--border)' }} />
+            </label>
+            <label className="block text-sm">{t('语音合成密钥')}
+              <input name="ttsApiKey" type="password" autoComplete="new-password" placeholder={tts.apiKey ? t('已配置，留空不改') : t('还没填')}
+                className="mt-1 w-full rounded-xl border px-3 py-2 bg-transparent" style={{ borderColor: 'var(--border)' }} />
+            </label>
+            <button className="w-full rounded-xl bg-brand-500 text-white py-2.5 text-[15px]">{t('保存朗读配置')}</button>
+          </form>
+          <p className="muted text-[11px] leading-relaxed mt-3">{t('默认使用 qwen3-tts-flash 和 Cherry 音色。接口须与密钥区域一致，使用原生 DashScope 地址，不是聊天兼容接口。')}</p>
         </section>
 
         {/* ---------- 家里的人 ---------- */}

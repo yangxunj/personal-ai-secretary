@@ -195,6 +195,10 @@ async function startServer() {
     ASR_API_KEY: cfg.ASR_API_KEY ?? process.env.ASR_API_KEY ?? '',
     ASR_BASE_URL: cfg.ASR_BASE_URL ?? process.env.ASR_BASE_URL ?? '',
     ASR_MODEL: cfg.ASR_MODEL ?? process.env.ASR_MODEL ?? '',
+    TTS_API_KEY: cfg.TTS_API_KEY ?? process.env.TTS_API_KEY ?? '',
+    TTS_BASE_URL: cfg.TTS_BASE_URL ?? process.env.TTS_BASE_URL ?? '',
+    TTS_MODEL: cfg.TTS_MODEL ?? process.env.TTS_MODEL ?? '',
+    TTS_VOICE: cfg.TTS_VOICE ?? process.env.TTS_VOICE ?? '',
   };
 
   // 用 Electron 自带的 Node 跑 standalone 的 server.js。

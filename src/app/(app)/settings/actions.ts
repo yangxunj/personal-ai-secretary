@@ -118,6 +118,27 @@ export async function saveAsrConfigAction(form: FormData) {
   redirect('/settings?asrOk=1#voice');
 }
 
+export async function saveTtsConfigAction(form: FormData) {
+  if (!(await sessionIsCurrent())) redirect('/login');
+  const t = await getT();
+  const baseUrl = String(form.get('ttsBaseUrl') ?? '').trim().replace(/\/+$/, '');
+  const model = String(form.get('ttsModel') ?? '').trim();
+  const voice = String(form.get('ttsVoice') ?? '').trim();
+  const apiKey = String(form.get('ttsApiKey') ?? '').replace(/\s+/g, '');
+  let validUrl = false;
+  try {
+    const url = new URL(baseUrl);
+    validUrl = url.protocol === 'https:' && !url.username && !url.password && !url.search && !url.hash;
+  } catch { /* invalid */ }
+  if (!validUrl || !model || !/^[a-zA-Z0-9_-]{1,80}$/.test(voice) || (apiKey && apiKey.length < 8)) {
+    redirect('/settings?ttsE=' + encodeURIComponent(t('请检查朗读地址、模型、音色和密钥，地址必须使用 HTTPS')) + '#speech');
+  }
+  const values = [['tts.baseUrl', baseUrl], ['tts.model', model], ['tts.voice', voice], ...(apiKey ? [['tts.apiKey', apiKey]] : [])];
+  await db.$transaction(values.map(([key, value]) => db.setting.upsert({ where: { key }, create: { key, value }, update: { value } })));
+  revalidatePath('/settings');
+  redirect('/settings?ttsOk=1#speech');
+}
+
 // ---------- 家里的人 ----------
 
 /** 任务能派给谁。改名不会连带改已有任务上的名字 —— 那些是历史记录 */

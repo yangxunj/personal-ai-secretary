@@ -13,6 +13,7 @@ import { emitConversations } from '@/components/chat/events';
 import { useLocale, useT } from '@/lib/i18n/client';
 import type { T } from '@/lib/i18n/core';
 import VoiceInput from '@/components/chat/VoiceInput';
+import SpeechButton, { setSpeechRecording, stopSpeechPlayback } from '@/components/chat/SpeechButton';
 
 /** 工具名 → 人话。工具卡片上显示它，用户不该看见 createTask 这种字眼 */
 const toolLabels = (t: T): Record<string, string> => ({
@@ -216,6 +217,7 @@ export function Chat({
   const t = useT();
   const locale = useLocale();
   const [voiceBusy, setVoiceBusy] = useState(false);
+  const recordingOwner = useRef({});
   const inputRef = useRef<HTMLTextAreaElement>(null);
   // 浏览器「后退」回到一个新开过的对话时，地址栏是 /chat/<那个 id>（当初
   // replaceState 换的），可 Next 按路由结构恢复页面，拿的是 /chat 这个路由
@@ -333,6 +335,7 @@ export function Chat({
   async function send() {
     const text = input.trim();
     if ((!text && !files.length) || busy || voiceBusy || !active) return;
+    stopSpeechPlayback();
 
     const attached = files.length
       ? await Promise.all(
@@ -401,7 +404,7 @@ export function Chat({
             <div key={m.id}>
               {newDay && <DayDivider label={dayLabel(m.createdAt, locale)} />}
               {compaction?.firstKeptId === m.id && <CompactionDivider c={compaction} />}
-              <HistoryItem msg={m} focused={m.id === focusId} />
+              <HistoryItem msg={m} focused={m.id === focusId} active={active} speechDisabled={voiceBusy} />
             </div>
           );
         })}
@@ -414,7 +417,7 @@ export function Chat({
           </div>
         )}
 
-        {messages.map((m) => (
+        {messages.map((m, index) => (
           <Bubble key={m.id} role={m.role === 'user' ? 'user' : 'assistant'}>
             <div className="space-y-2">
               {m.parts.map((p, i) => {
@@ -442,6 +445,8 @@ export function Chat({
                 }
                 return null;
               })}
+              {m.role === 'assistant' && (index !== messages.length - 1 || !busy) &&
+                <SpeechButton text={textOf(m.parts)} active={active} disabled={voiceBusy} />}
             </div>
           </Bubble>
         ))}
@@ -564,7 +569,10 @@ export function Chat({
             className="flex-1 min-w-0 resize-none rounded-2xl border px-3.5 py-2.5 text-[15px] bg-transparent outline-none focus:border-brand-500 transition max-h-32"
             style={{ borderColor: 'var(--border)' }}
           />
-          <VoiceInput disabled={busy} active={active} onBusyChange={setVoiceBusy} onTranscript={(text) => {
+          <VoiceInput disabled={busy} active={active} onBusyChange={(recording) => {
+            setSpeechRecording(recordingOwner.current, recording);
+            setVoiceBusy(recording);
+          }} onTranscript={(text) => {
             setInput((previous) => previous ? `${previous}${/\s$/.test(previous) ? '' : '\n'}${text}` : text);
             inputRef.current?.focus({ preventScroll: true });
           }} />
@@ -609,7 +617,7 @@ function DayDivider({ label }: { label: string }) {
  * 跟本次对话的气泡长得一样，但多挂三样东西 —— 这三样原来只在「记录」页有，
  * 所以在对话里发的附件，必须切到另一页才看得见。合并就是为了这个。
  */
-function HistoryItem({ msg, focused }: { msg: SeedMessage; focused: boolean }) {
+function HistoryItem({ msg, focused, active, speechDisabled }: { msg: SeedMessage; focused: boolean; active: boolean; speechDisabled: boolean }) {
   const mine = msg.role === 'user';
   const t = useT();
   const locale = useLocale();
@@ -622,6 +630,7 @@ function HistoryItem({ msg, focused }: { msg: SeedMessage; focused: boolean }) {
         style={mine ? undefined : { borderColor: 'var(--border)' }}
       >
         <MessageBody>{msg.content}</MessageBody>
+        {!mine && <SpeechButton text={msg.content} active={active} disabled={speechDisabled} />}
       </div>
 
       {!!msg.attachments?.length && (
