@@ -32,8 +32,12 @@ test('interruption suppresses old audio without freeing an occupied provider res
   assert.ok(gate.blocked); assert.ok(gate.suppressed.has('old')); assert.equal(gate.playing.size, 0);
   gate.speaking=false;gate.pending=false;assert.ok(gate.blocked);
   gate.active.delete('old');assert.equal(gate.blocked,false);
-  const config=sessionConfiguration('qwen-audio-3.0-realtime-plus','longanqian','test');
-  assert.equal(config.turn_detection.type,'smart_turn');assert.equal(config.tools[0].name,'submit_agent_request');
+  for (const model of ['qwen-audio-3.0-realtime-flash', 'qwen-audio-3.0-realtime-plus']) {
+    const config=sessionConfiguration(model,'longanqian','test');
+    assert.equal(config.turn_detection.type,'server_vad');
+    assert.equal(config.turn_detection.silence_duration_ms,1200);
+    assert.equal(config.tools[0].name,'submit_agent_request');
+  }
 });
 
 const shared = globalThis.__rtMock = {};
@@ -83,6 +87,36 @@ const sessionDbUrl=mockModule('export const db=globalThis.__rtMock.sessionDb;');
 const sessionJobsUrl=mockModule('export const voiceJobStatus=async()=>[];export const submitVoiceJob=(...args)=>globalThis.__rtMock.submit(...args);');
 const sessionUrl=moduleUrl('../src/lib/realtime/session.ts',{'ws':socketUrl,'@/lib/db':sessionDbUrl,'./jobs':sessionJobsUrl,'./protocol':protocolUrl});
 const { RealtimeSession }=await import(sessionUrl);
+test('speech during generation clears playback, cancels only the old response and accepts a later turn',async()=>{
+  const events=[];let submitted=0;
+  shared.submit=async()=>{submitted++;};
+  const session=new RealtimeSession({owner:'test',conversationId:'barge-in',taskId:null,locale:'zh',t:x=>x,
+    config:{apiKey:'test',endpoint:'wss://example.test',model:'qwen-audio-3.0-realtime-flash',voice:'longanqian'}},()=>{});
+  session.attach(event=>events.push(event));await tick();const socket=shared.socket;socket.emit('open');socket.server({type:'session.updated'});await tick();
+  socket.server({type:'response.created',response:{id:'old'}});
+  socket.server({type:'response.audio.delta',response_id:'old',delta:'AAAA'});
+  const boundary=events.length;
+  socket.server({type:'input_audio_buffer.speech_started',item_id:'interruption'});
+  assert.ok(events.slice(boundary).some(event=>event.type==='clear'));
+  assert.ok(socket.sent.some(event=>event.type==='response.cancel'));
+  socket.server({type:'response.audio.delta',response_id:'old',delta:'AAAA'});
+  socket.server({type:'response.audio_transcript.delta',response_id:'old',delta:'stale'});
+  assert.ok(!events.slice(boundary).some(event=>event.type==='audio'||event.role==='assistant'));
+  socket.server({type:'response.done',response:{id:'old',status:'cancelled'}});
+  // 上游通常也会自行取消旧回答；重复取消产生的可恢复错误不能关闭语音会话。
+  socket.server({type:'error',error:{message:'Cancellation failed: no active response found'}});
+  socket.server({type:'input_audio_buffer.speech_stopped',item_id:'interruption'});
+  socket.server({type:'conversation.item.input_audio_transcription.completed',item_id:'interruption',transcript:'换一个话题'});
+  socket.server({type:'response.created',response:{id:'new'}});
+  socket.server({type:'response.audio.delta',response_id:'new',delta:'AAAA'});
+  session.audio(new Uint8Array(5120),0);
+  assert.ok(events.some(event=>event.type==='transcript'&&event.text==='换一个话题'));
+  assert.ok(events.some(event=>event.type==='audio'&&event.responseId==='new'));
+  assert.ok(!events.some(event=>event.type==='closed'||event.type==='error'));
+  assert.equal(submitted,0);
+  session.close();
+});
+
 test('duplex session queues real results through interruption and confirms actual playback',async()=>{
   const events=[],accepted=[];shared.announced=[];let complete;
   shared.submit=async(input,callback)=>{accepted.push(input);complete=callback;return {id:'work1',status:'queued',transcript:input.transcript};};

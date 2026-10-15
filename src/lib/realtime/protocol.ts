@@ -15,7 +15,10 @@ ${JSON.stringify(history).slice(-12000)}`;
 }
 export function sessionConfiguration(model: string, voice: string, instructions: string) {
   return { modalities: ['text', 'audio'], voice, input_audio_format: 'pcm', output_audio_format: 'pcm',
-    turn_detection: { type: 'smart_turn' }, instructions, tools: REALTIME_TOOLS };
+    // smart_turn 可能在用户接近说完时才确认插话，缓存中的回答会继续播放。
+    // 按声音起点立即打断；保留句首音频，容忍句中短暂停顿后再提交下一轮。
+    turn_detection: { type: 'server_vad', threshold: 0.35, prefix_padding_ms: 300, silence_duration_ms: 1200 },
+    instructions, tools: REALTIME_TOOLS };
 }
 
 /** 音频的生成结束与实际播完分别跟踪，迟到音频不能重启被打断的回答。 */
