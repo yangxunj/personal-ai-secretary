@@ -35,6 +35,7 @@ export class RealtimeSession {
   private createdAt = Date.now();
   private touchedAt = Date.now();
   private lastSequence = -1;
+  private lastAudioArrival: { id: string; at: number } | null = null;
   private timer: ReturnType<typeof setInterval>;
   private connectingTimer: ReturnType<typeof setTimeout> | null = null;
   private closeCallback: () => void;
@@ -155,7 +156,10 @@ export class RealtimeSession {
     } else if (event.type === 'response.audio.delta') {
       if (this.gate.suppressed.has(id)) return;
       this.gate.playing.add(id);
-      this.emit({ type: 'audio', responseId: id, audio: event.delta });
+      const at = performance.now();
+      const upstreamGapMs = this.lastAudioArrival?.id === id ? Math.max(0, at - this.lastAudioArrival.at) : 0;
+      this.lastAudioArrival = { id, at };
+      this.emit({ type: 'audio', responseId: id, audio: event.delta, upstreamGapMs });
       this.emit({ type: 'state', state: 'speaking' });
     } else if (['response.audio_transcript.delta', 'response.text.delta', 'response.output_audio_transcript.delta'].includes(event.type)) {
       if (this.gate.suppressed.has(id)) return;

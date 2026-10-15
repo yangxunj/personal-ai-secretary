@@ -5,6 +5,7 @@ import { useT } from '@/lib/i18n/client';
 import { beginVoiceSession, endVoiceSession } from '@/lib/voice-session';
 import { PcmResampler, decodePcm16 } from '@/lib/realtime/audio';
 import { PcmUploadQueue, sendRealtimePacket } from '@/lib/realtime/transport';
+import { PcmPlaybackClock } from '@/lib/realtime/playback';
 import { hasSpeechRecording, setSpeechRecording, stopSpeechPlayback } from './SpeechButton';
 
 type Phase = 'off' | 'connecting' | 'listening' | 'thinking' | 'speaking';
@@ -24,7 +25,7 @@ export default function RealtimeVoice({ conversationId, taskId, active, disabled
   const uploader = useRef<PcmUploadQueue | null>(null), controls = useRef<Promise<void>>(Promise.resolve());
   const sources = useRef(new Set<AudioBufferSourceNode>()), timers = useRef(new Set<ReturnType<typeof setTimeout>>());
   const playback = useRef(new Map<string, { count: number; done: boolean; started: boolean }>());
-  const suppressed = useRef(new Set<string>()), cursor = useRef(0), lastResponse = useRef('');
+  const suppressed = useRef(new Set<string>()), clock = useRef(new PcmPlaybackClock()), lastResponse = useRef('');
   const callbacks = useRef({ onRunningChange, onPersisted, onHeard }); callbacks.current = { onRunningChange, onPersisted, onHeard };
   const change = (next: Phase) => { currentPhase.current = next; setPhase(next); };
   function clearPlayback() {
@@ -32,7 +33,7 @@ export default function RealtimeVoice({ conversationId, taskId, active, disabled
     if (suppressed.current.size > 100) suppressed.current = new Set([...suppressed.current].slice(-50));
     for (const timer of timers.current) clearTimeout(timer); timers.current.clear();
     for (const source of sources.current) { source.onended = null; try { source.stop(); } catch {} source.disconnect(); }
-    sources.current.clear(); playback.current.clear(); cursor.current = 0;
+    sources.current.clear(); playback.current.clear(); clock.current.reset();
   }
   function dispose(update = true) {
     generation.current++; currentPhase.current = 'off';
@@ -72,15 +73,18 @@ export default function RealtimeVoice({ conversationId, taskId, active, disabled
   }
   function finishPlayback(id: string, attempt: number) {
     const item = playback.current.get(id);
-    if (item?.done && !item.count) { playback.current.delete(id); void control('playback.ended', id, attempt); }
+    if (item?.done && !item.count) {
+      // 只记时序统计，不记录用户文本、音频、密钥或个人资料。
+      if (clock.current.stats.underruns) console.info('[realtime voice playback]', clock.current.stats);
+      playback.current.delete(id); void control('playback.ended', id, attempt);
+    }
   }
-  function play(base64: string, id: string, attempt: number) {
+  function play(base64: string, id: string, attempt: number, upstreamGapMs?: number) {
     if (suppressed.current.has(id)) return;
     const context = audio.current!, values = decodePcm16(base64);
     if (!values.length) return;
-    const start = Math.max(context.currentTime + 0.025, cursor.current);
-    if (start - context.currentTime > 30) throw new Error('Playback overflow');
     const buffer = context.createBuffer(1, values.length, 24000); buffer.copyToChannel(new Float32Array(values), 0);
+    const start = clock.current.schedule(context.currentTime, buffer.duration, id, upstreamGapMs);
     const source = context.createBufferSource(); source.buffer = buffer; source.connect(context.destination);
     let item = playback.current.get(id);
     if (!item) { item = { count: 0, done: false, started: false }; playback.current.set(id, item); }
@@ -95,14 +99,14 @@ export default function RealtimeVoice({ conversationId, taskId, active, disabled
       const item = playback.current.get(id); if (item) item.count--;
       if (alive(attempt)) finishPlayback(id, attempt);
     };
-    cursor.current = start + buffer.duration; source.start(start);
+    source.start(start);
   }
   function receive(event: any, attempt: number) {
     if (!alive(attempt)) return;
     if (event.type === 'ready') change('listening');
     if (event.type === 'state' && ['listening', 'thinking', 'speaking'].includes(event.state)) change(event.state);
     if (event.type === 'clear') { clearPlayback(); lastResponse.current = ''; setReply(''); }
-    if (event.type === 'audio') play(event.audio, event.responseId, attempt);
+    if (event.type === 'audio') play(event.audio, event.responseId, attempt, event.upstreamGapMs);
     if (event.type === 'audio.done') {
       const item = playback.current.get(event.responseId);
       if (item) { item.done = true; finishPlayback(event.responseId, attempt); }

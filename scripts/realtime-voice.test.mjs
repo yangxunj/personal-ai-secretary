@@ -123,6 +123,9 @@ test('speech during generation clears playback, cancels only the old response an
   session.attach(event=>events.push(event));await tick();const socket=shared.socket;socket.emit('open');socket.server({type:'session.updated'});await tick();
   socket.server({type:'response.created',response:{id:'old'}});
   socket.server({type:'response.audio.delta',response_id:'old',delta:'AAAA'});
+  assert.equal(events.find(event=>event.type==='audio').upstreamGapMs,0);
+  socket.server({type:'response.audio.delta',response_id:'old',delta:'AAAA'});
+  assert.ok(events.filter(event=>event.type==='audio').every(event=>Number.isFinite(event.upstreamGapMs)&&event.upstreamGapMs>=0));
   const boundary=events.length;
   socket.server({type:'input_audio_buffer.speech_started',item_id:'interruption'});
   assert.ok(events.slice(boundary).some(event=>event.type==='clear'));
