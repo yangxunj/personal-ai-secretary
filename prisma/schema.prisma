@@ -68,10 +68,29 @@ model Conversation {
   backend String @default("api")
   codexThreadId String?
   codexTurns CodexTurn[]
+  voiceJobs VoiceJob[]
   taskId String? @unique
   task Task? @relation(fields: [taskId], references: [id], onDelete: Cascade)
 
   @@index([updatedAt])
+}
+
+/// 实时语音委托的执行回执，与业务待办 Task 独立；失败/重启后不自动重做。
+model VoiceJob {
+  id String @id @default(cuid())
+  requestKey String @unique
+  conversationId String
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  transcript String
+  objective String
+  status String @default("queued")
+  result String?
+  error String?
+  processKey String
+  announcedAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([conversationId, createdAt])
 }
 
 /// 一件我们一起跟进的事：洗牙、买小狗、报税……

@@ -139,8 +139,20 @@ export async function saveTtsConfigAction(form: FormData) {
   redirect('/settings?ttsOk=1#speech');
 }
 
-// ---------- 家里的人 ----------
+// ---------- 实时语音 ----------
+export async function saveRealtimeConfigAction(form: FormData) {
+  if (!(await sessionIsCurrent())) redirect('/login');
+  const { validRealtimeConfig } = await import('@/lib/realtime/config');
+  const t = await getT();
+  const config = { endpoint: String(form.get('realtimeEndpoint') || '').trim(), model: String(form.get('realtimeModel') || '').trim(),
+    voice: String(form.get('realtimeVoice') || '').trim(), apiKey: String(form.get('realtimeApiKey') || '').replace(/\s+/g, '') };
+  if (!validRealtimeConfig(config) || config.apiKey && config.apiKey.length < 8) redirect('/settings?rtE=' + encodeURIComponent(t('实时语音配置无效，请检查地址、模型和音色')) + '#realtime');
+  const values = Object.entries(config).filter(([key, value]) => key !== 'apiKey' || !!value);
+  await db.$transaction(values.map(([key, value]) => db.setting.upsert({ where: { key: `realtime.${key}` }, create: { key: `realtime.${key}`, value }, update: { value } })));
+  revalidatePath('/settings'); redirect('/settings?rtOk=1#realtime');
+}
 
+// ---------- 家里的人 ----------
 /** 任务能派给谁。改名不会连带改已有任务上的名字 —— 那些是历史记录 */
 export async function saveOwnersAction(formData: FormData) {
   const t = await getT();

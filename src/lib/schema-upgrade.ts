@@ -31,6 +31,11 @@ async function hasTable(table: string) {
 }
 
 const STEPS: Step[] = [
+  { name:'VoiceJob', needed:async()=>!(await hasTable('VoiceJob')), sql:[
+    'CREATE TABLE "VoiceJob" ("id" TEXT PRIMARY KEY NOT NULL,"requestKey" TEXT NOT NULL,"conversationId" TEXT NOT NULL,"transcript" TEXT NOT NULL,"objective" TEXT NOT NULL,"status" TEXT NOT NULL DEFAULT \'queued\',"result" TEXT,"error" TEXT,"processKey" TEXT NOT NULL,"announcedAt" DATETIME,"createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,"updatedAt" DATETIME NOT NULL,FOREIGN KEY ("conversationId") REFERENCES "Conversation"("id") ON DELETE CASCADE ON UPDATE CASCADE)',
+    'CREATE UNIQUE INDEX "VoiceJob_requestKey_key" ON "VoiceJob"("requestKey")',
+    'CREATE INDEX "VoiceJob_conversationId_createdAt_idx" ON "VoiceJob"("conversationId","createdAt")',
+  ]},
   { name:'Conversation.backend', needed:async()=>!(await hasColumn('Conversation','backend')), sql:[
     'ALTER TABLE "Conversation" ADD COLUMN "backend" TEXT NOT NULL DEFAULT \'api\'',
   ]},

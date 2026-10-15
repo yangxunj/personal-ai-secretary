@@ -33,6 +33,7 @@ const AI_FACING = [
   'src/lib/page-design.ts',
   'src/lib/page-builder.ts',
   'src/lib/codex/',
+  'src/lib/realtime/',
   'src/lib/task-chat-context.ts',
   'src/lib/task-chat-tools.ts',
   'src/lib/page-data.ts',

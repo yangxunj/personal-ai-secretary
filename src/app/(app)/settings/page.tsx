@@ -3,6 +3,7 @@ import { MIN_PASSWORD_LENGTH } from '@/lib/auth';
 import { getAiConfig, maskKey } from '@/lib/ai-config';
 import { loadAsrConfig } from '@/lib/asr-config';
 import { loadTtsConfig } from '@/lib/tts-config';
+import { loadRealtimeConfig, REALTIME_MODELS } from '@/lib/realtime/config';
 import ProviderFields from './ProviderFields';
 import LocalCodexSettings from './LocalCodexSettings';
 import { getChatBackend, getCodexConfig, localCodexEnabled } from '@/lib/codex/config';
@@ -12,6 +13,7 @@ import {
   saveAiConfigAction,
   saveAsrConfigAction,
   saveTtsConfigAction,
+  saveRealtimeConfigAction,
   testAiConfigAction,
   resetAiConfigAction,
   saveOwnersAction,
@@ -35,13 +37,14 @@ export const dynamic = 'force-dynamic';
 export default async function SettingsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ e?: string; ok?: string; aiE?: string; aiOk?: string; mE?: string; mOk?: string; asrE?: string; asrOk?: string; ttsE?: string; ttsOk?: string }>;
+  searchParams: Promise<{ e?: string; ok?: string; aiE?: string; aiOk?: string; mE?: string; mOk?: string; asrE?: string; asrOk?: string; ttsE?: string; ttsOk?: string; rtE?: string; rtOk?: string }>;
 }) {
-  const { e, ok, aiE, aiOk, mE, mOk, asrE, asrOk, ttsE, ttsOk } = await searchParams;
+  const { e, ok, aiE, aiOk, mE, mOk, asrE, asrOk, ttsE, ttsOk, rtE, rtOk } = await searchParams;
   const authOn = process.env.AUTH_ENABLED === 'true';
   const ai = await getAiConfig();
   const asr = await loadAsrConfig();
   const tts = await loadTtsConfig();
+  const realtime = await loadRealtimeConfig();
   const owners = await getOwners();
   const locale = await getLocale();
   const t = await getT();
@@ -181,6 +184,32 @@ export default async function SettingsPage({
             <button className="w-full rounded-xl bg-brand-500 text-white py-2.5 text-[15px]">{t('保存朗读配置')}</button>
           </form>
           <p className="muted text-[11px] leading-relaxed mt-3">{t('默认使用 qwen3-tts-flash 和 Cherry 音色。接口须与密钥区域一致，使用原生 DashScope 地址，不是聊天兼容接口。')}</p>
+        </section>
+
+        <section id="realtime" className="surface border rounded-2xl p-4 scroll-mt-4" style={{ borderColor: 'var(--border)' }}>
+          <h2 className="text-[15px] font-semibold mb-1">{t('实时语音')}</h2>
+          <p className="muted text-[12px] leading-relaxed mb-3">{t('实时交谈、随时插话，后台 Agent 处理完成后自动报告结果。使用独立的阿里云实时模型。')}</p>
+          {rtE && <p role="alert" className="text-red-500 text-sm mb-3">{rtE}</p>}
+          {rtOk && <p className="text-emerald-600 text-sm mb-3">{t('实时语音配置已保存')}</p>}
+          <form action={saveRealtimeConfigAction} className="space-y-3">
+            <label className="block text-sm">{t('实时语音地址')}
+              <input name="realtimeEndpoint" type="url" required defaultValue={realtime.endpoint} className="mt-1 w-full rounded-xl border px-3 py-2 bg-transparent" style={{ borderColor: 'var(--border)' }} />
+            </label>
+            <label className="block text-sm">{t('实时语音模型')}
+              <select name="realtimeModel" defaultValue={realtime.model} className="mt-1 w-full rounded-xl border px-3 py-2 bg-transparent" style={{ borderColor: 'var(--border)' }}>
+                {REALTIME_MODELS.map(model => <option key={model} value={model}>{model}</option>)}
+              </select>
+            </label>
+            <label className="block text-sm">{t('音色名称')}
+              <input name="realtimeVoice" required defaultValue={realtime.voice} className="mt-1 w-full rounded-xl border px-3 py-2 bg-transparent" style={{ borderColor: 'var(--border)' }} />
+            </label>
+            <label className="block text-sm">{t('实时语音密钥')}
+              <input name="realtimeApiKey" type="password" autoComplete="new-password" placeholder={realtime.apiKey ? t('已配置，留空不改') : t('还没填')}
+                className="mt-1 w-full rounded-xl border px-3 py-2 bg-transparent" style={{ borderColor: 'var(--border)' }} />
+            </label>
+            <button className="w-full rounded-xl bg-brand-500 text-white py-2.5 text-[15px]">{t('保存实时语音配置')}</button>
+          </form>
+          <p className="muted text-[11px] leading-relaxed mt-3">{t('开启后持续向阿里云发送麦克风音频。密钥与地址须属于同一区域，手机需要 HTTPS。')}</p>
         </section>
 
         {/* ---------- 家里的人 ---------- */}

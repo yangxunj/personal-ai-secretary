@@ -2,6 +2,28 @@ import type { Dict } from '../core';
 
 /** 中文原文 → 英文。key 必须跟 t('…') 里的字符串一字不差。对话页、对话列表、/api/chat */
 export const chat: Dict = {
+  '实时语音': 'Realtime voice',
+  '实时语音配置无效，请检查地址、模型和音色': 'Invalid realtime voice configuration. Check the endpoint, model and voice.',
+  '实时交谈、随时插话，后台 Agent 处理完成后自动报告结果。使用独立的阿里云实时模型。': 'Talk and interrupt naturally while the agent works in the background and reports results. Uses a separate Alibaba Cloud realtime model.',
+  '实时语音配置已保存': 'Realtime voice settings saved.',
+  '实时语音地址': 'Realtime voice endpoint',
+  '实时语音模型': 'Realtime voice model',
+  '实时语音密钥': 'Realtime voice API key',
+  '保存实时语音配置': 'Save realtime voice settings',
+  '开启后持续向阿里云发送麦克风音频。密钥与地址须属于同一区域，手机需要 HTTPS。': 'Microphone audio is continuously sent to Alibaba Cloud while enabled. The key and endpoint must use the same region. Phones require HTTPS.',
+  '尚未配置实时语音，请在设置中填写实时语音密钥': 'Set a realtime voice API key in Settings first.',
+  '后台正在处理此对话，请稍后再发送': 'The agent is working on this conversation. Please send later.',
+  '无法开启实时语音，请检查配置后重试': 'Could not start realtime voice. Check the settings and try again.',
+  '实时语音连接中断，请检查模型、密钥和网络后重新开启': 'Realtime voice disconnected. Check the model, API key and network, then start again.',
+  '网络过慢，实时语音已停止，请检查网络后重试': 'The connection is too slow. Realtime voice stopped. Check your network and try again.',
+  '正在连接实时语音…': 'Connecting realtime voice…',
+  '正在聆听，可以随时插话': 'Listening. You can interrupt anytime.',
+  '正在理解你的话…': 'Understanding your request…',
+  '正在回答，可以直接插话': 'Speaking. You can interrupt.',
+  '开启实时语音': 'Start realtime voice',
+  '结束实时语音': 'End realtime voice',
+  '开启后持续发送麦克风音频，可在 AI 说话时插话；切到后台会结束。': 'Microphone audio streams continuously. You can interrupt the AI. Moving to the background ends the session.',
+  '后台正在处理 {n} 个请求，你可以继续交谈': 'The agent is handling {n} requests. You can keep talking.',
   // ---------- 持续语音对话 ----------
   开启语音对话: 'Start voice conversation',
   退出语音对话: 'End voice conversation',

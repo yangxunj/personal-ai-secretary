@@ -15,6 +15,7 @@ import type { T } from '@/lib/i18n/core';
 import VoiceInput from '@/components/chat/VoiceInput';
 import SpeechButton, { setSpeechRecording, stopSpeechPlayback } from '@/components/chat/SpeechButton';
 import VoiceConversation from '@/components/chat/VoiceConversation';
+import RealtimeVoice from '@/components/chat/RealtimeVoice';
 
 /** 工具名 → 人话。工具卡片上显示它，用户不该看见 createTask 这种字眼 */
 const toolLabels = (t: T): Record<string, string> => ({
@@ -222,7 +223,9 @@ export function Chat({
   const t = useT();
   const locale = useLocale();
   const [voiceBusy, setVoiceBusy] = useState(false);
-  const [autoVoice, setAutoVoice] = useState(false);
+  const [continuousVoice, setContinuousVoice] = useState(false);
+  const [realtimeVoice, setRealtimeVoice] = useState(false);
+  const autoVoice = continuousVoice || realtimeVoice;
   const recordingOwner = useRef({});
   const inputRef = useRef<HTMLTextAreaElement>(null);
   // 浏览器「后退」回到一个新开过的对话时，地址栏是 /chat/<那个 id>（当初
@@ -509,7 +512,13 @@ export function Chat({
           background: 'color-mix(in srgb, var(--bg) 85%, transparent)',
         }}
       >
-        <VoiceConversation active={active} disabled={busy || voiceBusy} onRunningChange={setAutoVoice} onSubmit={sendVoice} />
+        <RealtimeVoice conversationId={conversationId} taskId={taskId} active={active} disabled={busy || voiceBusy || continuousVoice}
+          onRunningChange={setRealtimeVoice} onHeard={rememberAddress} onPersisted={() => {
+            emitConversations();
+            if (embedded && onReply) void onReply().catch(() => {});
+            else router.refresh();
+          }} />
+        <VoiceConversation active={active} disabled={busy || voiceBusy || realtimeVoice} onRunningChange={setContinuousVoice} onSubmit={sendVoice} />
         {/* 待发送的附件。发出去之前一直看得见、点得掉 —— 传错一张图不该只能整条重来 */}
         {files.length > 0 && (
           <div className="flex flex-wrap gap-2 mb-2">

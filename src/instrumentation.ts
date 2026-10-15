@@ -8,6 +8,8 @@ export async function register() {
   try {
     const done = await upgradeSchema();
     if (done.length) console.log(`[schema] 已补上：${done.join('、')}`);
+    const { recoverVoiceJobs } = await import('@/lib/realtime/job-state');
+    await recoverVoiceJobs();
   } catch (e) {
     // 补不上也照常起服务：新装的库本来就是全的，别因为这一步整个起不来
     console.error('[schema] 表结构升级失败', e);

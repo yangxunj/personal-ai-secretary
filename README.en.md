@@ -22,6 +22,8 @@ replies in English and saves what it records in English too.
 
 ## What it does
 
+Current source also supports **realtime voice** with interruptions and background agent work. Configure the separate Alibaba Cloud realtime model under Settings, then start it from a chat. While enabled, microphone audio streams continuously to Alibaba Cloud; ending the session or moving the page to the background stops capture. See the [implementation notes](docs/实时语音对话.md).
+
 Talk to it like you'd text a person:
 
 | You say | It does |

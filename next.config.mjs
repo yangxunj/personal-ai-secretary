@@ -26,7 +26,7 @@ const nextConfig = {
   // 带原生二进制的包不让 webpack 打进 bundle，运行时从 node_modules 加载。
   // @napi-rs/canvas 是扫描版 PDF 渲染页面用的（lib/doc-extract.ts），里面是 .node 文件，
   // 打进 bundle 就找不到了。standalone 构建会把它们跟踪进 node_modules。
-  serverExternalPackages: ['@napi-rs/canvas', 'unpdf'],
+  serverExternalPackages: ['@napi-rs/canvas', 'unpdf', 'ws'],
 
   // dev 模式那个悬浮圆圈正好压在底部导航第一个标签（记录）上，关掉。
   devIndicators: false,

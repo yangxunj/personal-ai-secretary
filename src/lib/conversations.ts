@@ -71,6 +71,7 @@ export async function renameConversation(id: string, title: string) {
  * 附件跟着外键 SetNull 留在文件页；对话里建的任务、存的资料本来就在各自的表里，不受影响。
  */
 export async function deleteConversation(id: string) {
+  if (await db.voiceJob.findFirst({where:{conversationId:id,status:{in:['queued','running']}}})) throw new Error('Wait for this conversation to finish before deleting it.');
   if (await db.codexTurn.findFirst({where:{conversationId:id,status:{in:['queued','running']}}})) throw new Error('Wait for this conversation to finish before deleting it.');
   await db.$transaction([
     db.message.updateMany({ where: { conversationId: id, taskId: { not: null } }, data: { conversationId: null } }),
