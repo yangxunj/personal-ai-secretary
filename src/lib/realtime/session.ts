@@ -5,6 +5,7 @@ import type { T, Locale } from '@/lib/i18n/core';
 import { type realtimeDefaults } from './config';
 import { realtimeInstructions, sessionConfiguration, ResponseGate } from './protocol';
 import { submitVoiceJob, voiceJobStatus } from './jobs';
+import { AUDIO_PACKET_MAX_SAMPLES, REALTIME_IDLE_TIMEOUT_MS } from './transport';
 
 export type VoiceEvent = { type: string; [key: string]: unknown };
 type Options = { owner: string; conversationId: string; taskId: string | null; locale: Locale; t: T; config: ReturnType<typeof realtimeDefaults> };
@@ -41,7 +42,7 @@ export class RealtimeSession {
   constructor(readonly options: Options, onClose: () => void) {
     this.closeCallback = onClose;
     this.timer = setInterval(() => {
-      if (Date.now() - this.touchedAt > 12_000 || Date.now() - this.createdAt > 30 * 60_000) this.close();
+      if (Date.now() - this.touchedAt > REALTIME_IDLE_TIMEOUT_MS || Date.now() - this.createdAt > 30 * 60_000) this.close();
       else {
         this.emit({ type: 'heartbeat' });
         if (this.ready) void this.refreshResults().catch(() => this.fail());
@@ -97,8 +98,10 @@ export class RealtimeSession {
   audio(bytes: Uint8Array, sequence: number) {
     this.touchedAt = Date.now();
     if (this.closed || !this.ready) throw new Error('Voice session not ready');
-    if (sequence === this.lastSequence) return;
-    if (sequence !== this.lastSequence + 1 || bytes.length % 2 || bytes.length > 16000 || bytes.length < 2) throw new Error('Invalid audio sequence');
+    if (!Number.isSafeInteger(sequence) || sequence < 0 || bytes.length % 2 || bytes.length > AUDIO_PACKET_MAX_SAMPLES * 2 || bytes.length < 2) throw new Error('Invalid audio sequence');
+    // 超时的原请求可能在重试成功、后续音频已接受后才到达；旧序号只确认，不重放。
+    if (sequence <= this.lastSequence) return;
+    if (sequence !== this.lastSequence + 1) throw new Error('Invalid audio sequence');
     this.lastSequence = sequence;
     this.send({ type: 'input_audio_buffer.append', audio: Buffer.from(bytes).toString('base64') });
   }

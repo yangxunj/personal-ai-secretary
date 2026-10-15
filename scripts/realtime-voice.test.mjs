@@ -12,6 +12,7 @@ const moduleUrl = (file, imports = {}) => {
 };
 const mockModule = code => 'data:text/javascript;base64,' + Buffer.from(code).toString('base64');
 const protocolUrl = moduleUrl('../src/lib/realtime/protocol.ts');
+const transportUrl = moduleUrl('../src/lib/realtime/transport.ts');
 const { ResponseGate, sessionConfiguration } = await import(protocolUrl);
 const { PcmResampler, decodePcm16 } = await import(moduleUrl('../src/lib/realtime/audio.ts'));
 
@@ -85,8 +86,35 @@ shared.Socket=Socket;
 const sessionDb={message:{findMany:async()=>[]},voiceJob:{findMany:async()=>shared.recoveredResults||[],updateMany:async(...args)=>shared.announced.push(args)}};
 const sessionDbUrl=mockModule('export const db=globalThis.__rtMock.sessionDb;');shared.sessionDb=sessionDb;
 const sessionJobsUrl=mockModule('export const voiceJobStatus=async()=>[];export const submitVoiceJob=(...args)=>globalThis.__rtMock.submit(...args);');
-const sessionUrl=moduleUrl('../src/lib/realtime/session.ts',{'ws':socketUrl,'@/lib/db':sessionDbUrl,'./jobs':sessionJobsUrl,'./protocol':protocolUrl});
+const sessionUrl=moduleUrl('../src/lib/realtime/session.ts',{'ws':socketUrl,'@/lib/db':sessionDbUrl,'./jobs':sessionJobsUrl,'./protocol':protocolUrl,'./transport':transportUrl});
 const { RealtimeSession }=await import(sessionUrl);
+test('a lost upload acknowledgment can retry the same bounded packet without duplicating upstream audio',async()=>{
+  const session=new RealtimeSession({owner:'test',conversationId:'retry-audio',taskId:null,locale:'zh',t:x=>x,
+    config:{apiKey:'test',endpoint:'wss://example.test',model:'qwen-audio-3.0-realtime-flash',voice:'longanqian'}},()=>{});
+  session.attach(()=>{});await tick();const socket=shared.socket;socket.emit('open');socket.server({type:'session.updated'});await tick();
+  const packet=new Uint8Array(64000);session.audio(packet,0);session.audio(packet,0);
+  assert.equal(socket.sent.filter(event=>event.type==='input_audio_buffer.append').length,1);
+  assert.throws(()=>session.audio(new Uint8Array(64002),1));
+  session.audio(new Uint8Array(5120),1);
+  session.audio(packet,0);
+  assert.equal(socket.sent.filter(event=>event.type==='input_audio_buffer.append').length,2);
+  for(const sequence of [NaN,-1,0.5,3])assert.throws(()=>session.audio(new Uint8Array(5120),sequence));
+  session.close();
+});
+
+test('brief upload gaps retain the voice session, while abandoned microphones are still cleaned up',async(context)=>{
+  context.mock.timers.enable({apis:['setInterval','Date'],now:Date.now()});
+  const events=[];
+  const session=new RealtimeSession({owner:'test',conversationId:'upload-gap',taskId:null,locale:'zh',t:x=>x,
+    config:{apiKey:'test',endpoint:'wss://example.test',model:'qwen-audio-3.0-realtime-flash',voice:'longanqian'}},()=>{});
+  session.attach(event=>events.push(event));await tick();shared.socket.emit('open');shared.socket.server({type:'session.updated'});await tick();
+  context.mock.timers.tick(15000);await tick();assert.ok(!events.some(event=>event.type==='closed'));
+  session.audio(new Uint8Array(5120),0);
+  context.mock.timers.tick(20000);await tick();assert.ok(!events.some(event=>event.type==='closed'));
+  context.mock.timers.tick(15000);await tick();assert.ok(events.some(event=>event.type==='closed'));
+  session.close();context.mock.timers.reset();
+});
+
 test('speech during generation clears playback, cancels only the old response and accepts a later turn',async()=>{
   const events=[];let submitted=0;
   shared.submit=async()=>{submitted++;};

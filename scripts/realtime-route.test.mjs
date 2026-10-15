@@ -13,6 +13,7 @@ const imports = {
   '@/lib/codex/config': data('export const getChatBackend=async()=>"api";'),
   '@/lib/realtime/config': data('export const validRealtimeConfig=()=>true;export const loadRealtimeConfig=async()=>({apiKey:globalThis.__realtimeRoute.key});'),
   '@/lib/realtime/session': data('export const realtimeSessions=globalThis.__realtimeRoute.sessions;export const createRealtimeSession=()=>{globalThis.__realtimeRoute.created++;return{id:"synthetic-id"}};'),
+  '@/lib/realtime/transport': data('export const AUDIO_PACKET_MAX_SAMPLES=32000;'),
 };
 let source=readFileSync(new URL('../src/app/api/realtime/route.ts',import.meta.url),'utf8');
 for(const [from,to]of Object.entries(imports))source=source.replaceAll(`'${from}'`,JSON.stringify(to));
@@ -44,4 +45,16 @@ test('invalid audio ends only the owned session, while valid audio never returns
   mock.sessions.get('test').audio=()=>{throw new Error('Invalid audio')};
   assert.equal((await route.PATCH(request('PATCH','ab',{'Content-Type':'application/octet-stream'}))).status,400);assert.equal(closed,1);
   mock.sessions.delete('test');
+});
+test('catch-up audio remains bounded and network-aborted uploads preserve the owned session for retry',async()=>{
+  const owner=createHash('sha256').update('synthetic-session').digest('hex');let closed=0,packets=0;
+  mock.sessions.set('test',{options:{owner},audio:()=>packets++,close:()=>closed++});
+  assert.equal((await route.PATCH(request('PATCH','a'.repeat(64000),{'Content-Type':'application/octet-stream'}))).status,204);
+  assert.equal(packets,1);
+  const abort=new AbortController();
+  const body=new ReadableStream({start(controller){abort.abort();controller.error(new Error('Connection reset'));}});
+  const interrupted=new Request('http://localhost/api/realtime?id=test&sequence=1',{method:'PATCH',headers:{'Content-Type':'application/octet-stream'},body,signal:abort.signal,duplex:'half'});
+  assert.equal((await route.PATCH(interrupted)).status,408);assert.equal(closed,0);assert.equal(packets,1);
+  assert.equal((await route.PATCH(request('PATCH','a'.repeat(64002),{'Content-Type':'application/octet-stream'}))).status,400);
+  assert.equal(closed,1);mock.sessions.delete('test');
 });

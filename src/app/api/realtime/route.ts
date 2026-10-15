@@ -6,6 +6,7 @@ import { db } from '@/lib/db';
 import { getChatBackend } from '@/lib/codex/config';
 import { loadRealtimeConfig, validRealtimeConfig } from '@/lib/realtime/config';
 import { createRealtimeSession, realtimeSessions } from '@/lib/realtime/session';
+import { AUDIO_PACKET_MAX_SAMPLES } from '@/lib/realtime/transport';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -77,13 +78,17 @@ export async function PATCH(req: Request) {
   const params = new URL(req.url).searchParams, session = realtimeSessions.get(params.get('id') || '');
   if (!session || session.options.owner !== owner) return json({ error: 'Voice session unavailable' }, 404);
   try {
-    const bytes = await limitedBody(req);
     const type = req.headers.get('content-type');
+    const bytes = await limitedBody(req, type === 'application/octet-stream' ? AUDIO_PACKET_MAX_SAMPLES * 2 : 16000);
     if (type === 'application/octet-stream') session.audio(bytes, Number(params.get('sequence')));
     else if (type?.startsWith('application/json')) session.control(JSON.parse(Buffer.from(bytes).toString('utf8')));
     else return json({ error: 'Invalid content type' }, 415);
     return new Response(null, { status: 204 });
-  } catch { session.close(); return json({ error: 'Invalid voice packet' }, 400); }
+  } catch {
+    // 请求上传被网络中断时没有完整音频可接受，保留会话供相同序号重试。
+    if (req.signal.aborted) return json({ error: 'Voice upload interrupted' }, 408);
+    session.close(); return json({ error: 'Invalid voice packet' }, 400);
+  }
 }
 export async function DELETE(req: Request) {
   const owner = await authorize(req); if (!owner) return json({ error: 'Unauthorized' }, 401);

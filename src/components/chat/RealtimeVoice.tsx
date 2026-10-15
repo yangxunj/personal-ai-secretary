@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useT } from '@/lib/i18n/client';
 import { beginVoiceSession, endVoiceSession } from '@/lib/voice-session';
 import { PcmResampler, decodePcm16 } from '@/lib/realtime/audio';
+import { PcmUploadQueue, sendRealtimePacket } from '@/lib/realtime/transport';
 import { hasSpeechRecording, setSpeechRecording, stopSpeechPlayback } from './SpeechButton';
 
 type Phase = 'off' | 'connecting' | 'listening' | 'thinking' | 'speaking';
@@ -14,11 +15,13 @@ export default function RealtimeVoice({ conversationId, taskId, active, disabled
 }) {
   const t = useT();
   const [phase, setPhase] = useState<Phase>('off'), [error, setError] = useState('');
+  const [congested, setCongested] = useState(false);
   const [heard, setHeard] = useState(''), [reply, setReply] = useState(''), [jobs, setJobs] = useState<Job[]>([]);
   const currentPhase = useRef<Phase>('off'), generation = useRef(0), owner = useRef({});
   const audio = useRef<AudioContext | null>(null), media = useRef<MediaStream | null>(null);
   const capture = useRef<AudioWorkletNode | null>(null), input = useRef<MediaStreamAudioSourceNode | null>(null);
   const controller = useRef<AbortController | null>(null), sessionId = useRef('');
+  const uploader = useRef<PcmUploadQueue | null>(null), controls = useRef<Promise<void>>(Promise.resolve());
   const sources = useRef(new Set<AudioBufferSourceNode>()), timers = useRef(new Set<ReturnType<typeof setTimeout>>());
   const playback = useRef(new Map<string, { count: number; done: boolean; started: boolean }>());
   const suppressed = useRef(new Set<string>()), cursor = useRef(0), lastResponse = useRef('');
@@ -34,6 +37,7 @@ export default function RealtimeVoice({ conversationId, taskId, active, disabled
   function dispose(update = true) {
     generation.current++; currentPhase.current = 'off';
     controller.current?.abort(); controller.current = null;
+    uploader.current?.stop(); uploader.current = null; controls.current = Promise.resolve();
     const id = sessionId.current; sessionId.current = '';
     if (id) void fetch(`/api/realtime?id=${id}`, { method: 'DELETE', keepalive: true }).catch(() => {});
     clearPlayback();
@@ -43,7 +47,7 @@ export default function RealtimeVoice({ conversationId, taskId, active, disabled
     const context = audio.current; audio.current = null;
     if (context) { context.onstatechange = null; void context.close().catch(() => {}); }
     setSpeechRecording(owner.current, false); endVoiceSession(owner.current); callbacks.current.onRunningChange(false);
-    if (update) setPhase('off');
+    if (update) { setPhase('off'); setCongested(false); }
   }
   function fail(message: string) { dispose(); setError(message); }
   const alive = (attempt: number) => generation.current === attempt && currentPhase.current !== 'off';
@@ -57,10 +61,13 @@ export default function RealtimeVoice({ conversationId, taskId, active, disabled
 
   async function control(type: string, responseId: string, attempt: number) {
     if (!alive(attempt)) return;
+    const signal = controller.current!.signal, id = sessionId.current;
+    const pending = controls.current.catch(() => {}).then(async () => {
+      if (alive(attempt)) await sendRealtimePacket(`/api/realtime?id=${id}`, JSON.stringify({ type, responseId }), signal);
+    });
+    controls.current = pending;
     try {
-      const response = await fetch(`/api/realtime?id=${sessionId.current}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ type, responseId }), signal: AbortSignal.any([controller.current!.signal, AbortSignal.timeout(8000)]) });
-      if (!response.ok && alive(attempt)) fail(t('实时语音连接中断，请检查模型、密钥和网络后重新开启'));
+      await pending;
     } catch { if (alive(attempt)) fail(t('实时语音连接中断，请检查模型、密钥和网络后重新开启')); }
   }
   function finishPlayback(id: string, attempt: number) {
@@ -135,7 +142,7 @@ export default function RealtimeVoice({ conversationId, taskId, active, disabled
     if (!navigator.mediaDevices?.getUserMedia || typeof AudioContext === 'undefined' || typeof AudioWorkletNode === 'undefined') {
       setError(t('当前浏览器不支持连续语音，请使用新版 Chrome、Edge 或 Safari')); return;
     }
-    dispose(); setError(''); setHeard(''); setReply(''); setJobs([]); suppressed.current.clear();
+    dispose(); setError(''); setCongested(false); setHeard(''); setReply(''); setJobs([]); suppressed.current.clear();
     beginVoiceSession(owner.current, () => dispose()); setSpeechRecording(owner.current, true); stopSpeechPlayback();
     change('connecting'); callbacks.current.onRunningChange(true);
     const attempt = generation.current, abort = new AbortController(); controller.current = abort;
@@ -156,24 +163,17 @@ export default function RealtimeVoice({ conversationId, taskId, active, disabled
       const node = new AudioWorkletNode(context, 'voice-capture', { outputChannelCount: [1] }); capture.current = node;
       input.current = context.createMediaStreamSource(stream);
       const resampler = new PcmResampler(context.sampleRate);
-      let chunks: Int16Array[] = [], samples = 0, uploading = false, sequence = 0;
-      const upload = async () => {
-        if (uploading || samples < 2560 || !alive(attempt)) return;
-        uploading = true;
-        const packet = new Int16Array(samples); let offset = 0;
-        for (const chunk of chunks) { packet.set(chunk, offset); offset += chunk.length; } chunks = []; samples = 0;
-        try {
-          const sent = await fetch(`/api/realtime?id=${data.id}&sequence=${sequence++}`, { method: 'PATCH', headers: { 'Content-Type': 'application/octet-stream' },
-            body: packet.buffer, signal: AbortSignal.any([abort.signal, AbortSignal.timeout(8000)]) });
-          if (!sent.ok) throw new Error('Voice upload failed');
-        } catch { if (alive(attempt)) fail(t('实时语音连接中断，请检查模型、密钥和网络后重新开启')); }
-        finally { uploading = false; if (alive(attempt)) void upload(); }
-      };
+      const queue = new PcmUploadQueue({
+        send: (packet, sequence) => sendRealtimePacket(`/api/realtime?id=${data.id}&sequence=${sequence}`, new Int16Array(packet).buffer, abort.signal),
+        onCongestion: value => { if (alive(attempt)) setCongested(value); },
+        onError: reason => { if (alive(attempt)) fail(reason === 'overflow'
+          ? t('网络持续拥堵，实时语音已停止。请检查聊天记录后重新开启，避免重复提交。')
+          : t('实时语音连接中断，请检查模型、密钥和网络后重新开启')); },
+      });
+      uploader.current = queue;
       node.port.onmessage = (event: MessageEvent<Float32Array>) => {
         if (!alive(attempt) || currentPhase.current === 'connecting') return;
-        const pcm = resampler.push(event.data); chunks.push(pcm); samples += pcm.length;
-        if (samples > 8000) { fail(t('网络过慢，实时语音已停止，请检查网络后重试')); return; }
-        void upload();
+        queue.push(resampler.push(event.data));
       };
       node.onprocessorerror = () => { if (alive(attempt)) fail(t('语音检测中断，请重新开启语音对话')); };
       context.onstatechange = () => { if (alive(attempt) && context.state !== 'running') fail(t('音频已暂停，请重新开启语音对话')); };
@@ -191,6 +191,7 @@ export default function RealtimeVoice({ conversationId, taskId, active, disabled
       <button type="button" onClick={phase === 'off' ? start : () => dispose()} disabled={phase === 'off' && (disabled || !active)} aria-pressed={phase !== 'off'}
         className="rounded-full border px-3 py-2 text-brand-600 dark:text-brand-300 disabled:opacity-30" style={{ borderColor: 'var(--border)' }}>{phase === 'off' ? t('开启实时语音') : t('结束实时语音')}</button>
       {phase !== 'off' && <span role="status" aria-live="polite" className="muted">{labels[phase]}</span>}
+      {phase !== 'off' && congested && <span role="status" className="text-amber-600 dark:text-amber-400">{t('网络有延迟，正在恢复上传，请稍候…')}</span>}
     </div>
     {phase !== 'off' && <div className="muted mt-1 space-y-1 leading-relaxed break-words">
       <p>{t('开启后持续发送麦克风音频，可在 AI 说话时插话；切到后台会结束。')}</p>
