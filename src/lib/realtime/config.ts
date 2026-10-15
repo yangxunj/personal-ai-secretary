@@ -1,6 +1,6 @@
 import { db } from '@/lib/db';
 
-export const REALTIME_MODELS = ['qwen-audio-3.0-realtime-plus', 'qwen-audio-3.0-realtime-flash'] as const;
+export const REALTIME_MODELS = ['qwen-audio-3.0-realtime-flash', 'qwen-audio-3.0-realtime-plus'] as const;
 export function realtimeDefaults(env = process.env) {
   return {
     apiKey: (env.REALTIME_API_KEY || env.DASHSCOPE_API_KEY || '').trim(),
