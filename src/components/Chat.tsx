@@ -161,7 +161,7 @@ export function Chat({
   pending = false,
   lastError = '',
   isNew = false,
-  history,
+  history: initialHistory,
   focusId,
   olderCount = 0,
   olderHref,
@@ -191,6 +191,9 @@ export function Chat({
   olderCount?: number;
   olderHref?: string;
 }) {
+  const [history, setHistory] = useState(initialHistory);
+  const [historyRevision, setHistoryRevision] = useState(0);
+  useEffect(() => { setHistory(initialHistory); }, [initialHistory]);
   const voiceTurn = useRef<{ finish: (text?: string, error?: Error) => void } | null>(null);
   const { messages, sendMessage, setMessages, status, error, stop } = useChat({
     transport: new DefaultChatTransport({
@@ -226,6 +229,29 @@ export function Chat({
   const [continuousVoice, setContinuousVoice] = useState(false);
   const [realtimeVoice, setRealtimeVoice] = useState(false);
   const autoVoice = continuousVoice || realtimeVoice;
+  useEffect(() => {
+    if (!historyRevision || !realtimeVoice) return;
+    const controller = new AbortController();
+    let retry: ReturnType<typeof setTimeout> | undefined;
+    const refresh = async () => {
+      try {
+        const response = await fetch(`/api/chat/history?conversationId=${encodeURIComponent(conversationId)}&take=${Math.max(60, initialHistory.length)}`,
+          { signal: controller.signal, cache: 'no-store' });
+        if (!response.ok || !response.headers.get('content-type')?.startsWith('application/json')) throw new Error('History unavailable');
+        const rows: SeedMessage[] = await response.json();
+        if (controller.signal.aborted) return;
+        setHistory(previous => [...new Map([...previous, ...rows].map(message => [message.id, message])).values()]
+          .sort((a, b) => a.createdAt.localeCompare(b.createdAt)));
+        // 已落库的文字轮次由快照接管，避免与 useChat 的本地气泡重复。
+        setMessages([]);
+      } catch {
+        // 消息同步失败不结束麦克风；短暂网络故障恢复后继续显示结果。
+        if (!controller.signal.aborted) retry = setTimeout(refresh, 2000);
+      }
+    };
+    void refresh();
+    return () => { controller.abort(); clearTimeout(retry); };
+  }, [historyRevision, realtimeVoice, conversationId, initialHistory.length, setMessages]);
   const recordingOwner = useRef({});
   const inputRef = useRef<HTMLTextAreaElement>(null);
   // 浏览器「后退」回到一个新开过的对话时，地址栏是 /chat/<那个 id>（当初
@@ -516,7 +542,7 @@ export function Chat({
           onRunningChange={setRealtimeVoice} onHeard={rememberAddress} onPersisted={() => {
             emitConversations();
             if (embedded && onReply) void onReply().catch(() => {});
-            else router.refresh();
+            else setHistoryRevision(revision => revision + 1);
           }} />
         <VoiceConversation active={active} disabled={busy || voiceBusy || realtimeVoice} onRunningChange={setContinuousVoice} onSubmit={sendVoice} />
         {/* 待发送的附件。发出去之前一直看得见、点得掉 —— 传错一张图不该只能整条重来 */}
