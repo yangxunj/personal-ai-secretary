@@ -97,6 +97,27 @@ export async function resetAiConfigAction() {
   redirect('/settings?aiOk=' + encodeURIComponent(t('已恢复成默认配置')));
 }
 
+/** ASR 独立保存；空密钥保留原值，密钥不放进 URL 或返回给浏览器。 */
+export async function saveAsrConfigAction(form: FormData) {
+  if (!(await sessionIsCurrent())) redirect('/login');
+  const t = await getT();
+  const baseUrl = String(form.get('asrBaseUrl') ?? '').trim().replace(/\/+$/, '');
+  const model = String(form.get('asrModel') ?? '').trim();
+  const apiKey = String(form.get('asrApiKey') ?? '').replace(/\s+/g, '');
+  let validUrl = false;
+  try {
+    const url = new URL(baseUrl);
+    validUrl = url.protocol === 'https:' && !url.username && !url.password && !url.search && !url.hash;
+  } catch { /* invalid */ }
+  if (!validUrl || !model || (apiKey && apiKey.length < 8)) {
+    redirect('/settings?asrE=' + encodeURIComponent(t('请检查语音识别地址、模型和密钥，地址必须使用 HTTPS')) + '#voice');
+  }
+  const values = [['asr.baseUrl', baseUrl], ['asr.model', model], ...(apiKey ? [['asr.apiKey', apiKey]] : [])];
+  await db.$transaction(values.map(([key, value]) => db.setting.upsert({ where: { key }, create: { key, value }, update: { value } })));
+  revalidatePath('/settings');
+  redirect('/settings?asrOk=1#voice');
+}
+
 // ---------- 家里的人 ----------
 
 /** 任务能派给谁。改名不会连带改已有任务上的名字 —— 那些是历史记录 */

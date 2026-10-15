@@ -12,6 +12,7 @@ import { titleConversation } from '@/app/(app)/chat/actions';
 import { emitConversations } from '@/components/chat/events';
 import { useLocale, useT } from '@/lib/i18n/client';
 import type { T } from '@/lib/i18n/core';
+import VoiceInput from '@/components/chat/VoiceInput';
 
 /** 工具名 → 人话。工具卡片上显示它，用户不该看见 createTask 这种字眼 */
 const toolLabels = (t: T): Record<string, string> => ({
@@ -151,6 +152,7 @@ export function Chat({
   conversationId,
   taskId,
   embedded = false,
+  active = true,
   onReply,
   backend = 'api',
   pending = false,
@@ -167,6 +169,8 @@ export function Chat({
   conversationId: string;
   taskId?: string;
   embedded?: boolean;
+  /** 任务聊天收起时也要释放录音资源。 */
+  active?: boolean;
   onReply?: () => Promise<void>;
   backend?: string;
   pending?: boolean;
@@ -211,6 +215,8 @@ export function Chat({
   const pathname = usePathname();
   const t = useT();
   const locale = useLocale();
+  const [voiceBusy, setVoiceBusy] = useState(false);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
   // 浏览器「后退」回到一个新开过的对话时，地址栏是 /chat/<那个 id>（当初
   // replaceState 换的），可 Next 按路由结构恢复页面，拿的是 /chat 这个路由
   // **最近一次**的渲染 —— 也就是后来又点的那个空白新对话。于是地址写着 A，
@@ -223,6 +229,14 @@ export function Chat({
   const needsTitle = useRef(history.length === 0);
   const addressed = useRef(!isNew);
   const [input, setInput] = useState(draft ?? '');
+  // 转写通常有几句话，展开输入框方便核对，最多八行高度。
+  useEffect(() => {
+    const textarea = inputRef.current;
+    if (!textarea) return;
+    textarea.style.height = 'auto';
+    textarea.style.height = `${Math.min(128, Math.max(44, textarea.scrollHeight))}px`;
+    textarea.style.overflowY = textarea.scrollHeight > 128 ? 'auto' : 'hidden';
+  }, [input, active]);
   const [files, setFiles] = useState<File[]>([]);
   const [note, setNote] = useState('');
   const [dragging, setDragging] = useState(false);
@@ -318,7 +332,7 @@ export function Chat({
 
   async function send() {
     const text = input.trim();
-    if ((!text && !files.length) || busy) return;
+    if ((!text && !files.length) || busy || voiceBusy || !active) return;
 
     const attached = files.length
       ? await Promise.all(
@@ -506,7 +520,7 @@ export function Chat({
         )}
         {note && <div className="text-[11px] text-amber-600 mb-1.5">{note}</div>}
 
-        <div className="flex items-end gap-2">
+        <div className="flex flex-wrap items-end gap-2">
           <input
             ref={picker}
             type="file"
@@ -527,6 +541,7 @@ export function Chat({
             +
           </button>
           <textarea
+            ref={inputRef}
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onPaste={(e) => {
@@ -546,13 +561,17 @@ export function Chat({
             }}
             rows={1}
             placeholder={files.length ? t('说说这是什么（可留空）…') : t('跟我说点什么，也可以传张图…')}
-            className="flex-1 resize-none rounded-2xl border px-3.5 py-2.5 text-[15px] bg-transparent outline-none focus:border-brand-500 transition max-h-32"
+            className="flex-1 min-w-0 resize-none rounded-2xl border px-3.5 py-2.5 text-[15px] bg-transparent outline-none focus:border-brand-500 transition max-h-32"
             style={{ borderColor: 'var(--border)' }}
           />
+          <VoiceInput disabled={busy} active={active} onBusyChange={setVoiceBusy} onTranscript={(text) => {
+            setInput((previous) => previous ? `${previous}${/\s$/.test(previous) ? '' : '\n'}${text}` : text);
+            inputRef.current?.focus({ preventScroll: true });
+          }} />
           {busy ? (
             <button
               onClick={stopReply}
-              className="shrink-0 rounded-full w-10 h-10 border text-sm"
+              className="order-1 shrink-0 rounded-full w-10 h-10 border text-sm"
               style={{ borderColor: 'var(--border)' }}
               aria-label={t('停止')}
             >
@@ -561,8 +580,8 @@ export function Chat({
           ) : (
             <button
               onClick={send}
-              disabled={!input.trim() && !files.length}
-              className="shrink-0 rounded-full w-10 h-10 bg-brand-500 text-white disabled:opacity-30 transition"
+              disabled={voiceBusy || (!input.trim() && !files.length)}
+              className="order-1 shrink-0 rounded-full w-10 h-10 bg-brand-500 text-white disabled:opacity-30 transition"
               aria-label={t('发送')}
             >
               ↑

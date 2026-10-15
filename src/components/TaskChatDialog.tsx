@@ -69,7 +69,7 @@ export default function TaskChatDialog({ taskId, title, initiallyOpen = false }:
               try { await refresh(); } catch (e) { setError(String(e)); }
             }}>{t('查看更早的任务对话（{n} 条）', { n: data.older })}</button>}
             <div className="flex-1 min-h-0">
-              <Chat key={data.id} conversationId={data.id} taskId={taskId} embedded history={data.history}
+              <Chat key={data.id} conversationId={data.id} taskId={taskId} embedded active={open} history={data.history}
                 backend={data.backend} pending={data.pending} lastError={data.lastError} onReply={refresh} />
             </div>
           </>}

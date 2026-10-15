@@ -1,6 +1,7 @@
 import PageHeader from '@/components/PageHeader';
 import { MIN_PASSWORD_LENGTH } from '@/lib/auth';
 import { getAiConfig, maskKey } from '@/lib/ai-config';
+import { loadAsrConfig } from '@/lib/asr-config';
 import ProviderFields from './ProviderFields';
 import LocalCodexSettings from './LocalCodexSettings';
 import { getChatBackend, getCodexConfig, localCodexEnabled } from '@/lib/codex/config';
@@ -8,6 +9,7 @@ import {
   changePasswordAction,
   logoutAction,
   saveAiConfigAction,
+  saveAsrConfigAction,
   testAiConfigAction,
   resetAiConfigAction,
   saveOwnersAction,
@@ -31,11 +33,12 @@ export const dynamic = 'force-dynamic';
 export default async function SettingsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ e?: string; ok?: string; aiE?: string; aiOk?: string; mE?: string; mOk?: string }>;
+  searchParams: Promise<{ e?: string; ok?: string; aiE?: string; aiOk?: string; mE?: string; mOk?: string; asrE?: string; asrOk?: string }>;
 }) {
-  const { e, ok, aiE, aiOk, mE, mOk } = await searchParams;
+  const { e, ok, aiE, aiOk, mE, mOk, asrE, asrOk } = await searchParams;
   const authOn = process.env.AUTH_ENABLED === 'true';
   const ai = await getAiConfig();
+  const asr = await loadAsrConfig();
   const owners = await getOwners();
   const locale = await getLocale();
   const t = await getT();
@@ -130,6 +133,27 @@ export default async function SettingsPage({
           <p className="muted text-[11px] leading-relaxed mt-3">
             {t('你发给 AI 的内容会传给这个服务商 —— AI 要读到账单才能帮你录入。不想让它看的东西就别发给它。')}
           </p>
+        </section>
+
+        <section id="voice" className="surface border rounded-2xl p-4 scroll-mt-4" style={{ borderColor: 'var(--border)' }}>
+          <h2 className="text-[15px] font-semibold mb-1">{t('语音输入')}</h2>
+          <p className="muted text-[12px] leading-relaxed mb-3">{t('使用阿里云百炼将录音转成文字，与聊天模型独立。录音会发送给语音服务商，识别后不在本应用保存。')}</p>
+          {asrE && <p className="text-[13px] text-red-500 mb-3">{asrE}</p>}
+          {asrOk && <p className="text-[13px] text-emerald-600 mb-3">{t('语音配置已保存，请回到聊天录一段话测试')}</p>}
+          <form action={saveAsrConfigAction} className="space-y-3">
+            <label className="block text-sm">{t('语音识别地址')}
+              <input name="asrBaseUrl" type="url" required defaultValue={asr.baseUrl} className="mt-1 w-full rounded-xl border px-3 py-2 bg-transparent" style={{ borderColor: 'var(--border)' }} />
+            </label>
+            <label className="block text-sm">{t('语音识别模型')}
+              <input name="asrModel" required defaultValue={asr.model} className="mt-1 w-full rounded-xl border px-3 py-2 bg-transparent" style={{ borderColor: 'var(--border)' }} />
+            </label>
+            <label className="block text-sm">{t('语音识别密钥')}
+              <input name="asrApiKey" type="password" autoComplete="new-password" placeholder={asr.apiKey ? t('已配置，留空不改') : t('还没填')}
+                className="mt-1 w-full rounded-xl border px-3 py-2 bg-transparent" style={{ borderColor: 'var(--border)' }} />
+            </label>
+            <button className="w-full rounded-xl bg-brand-500 text-white py-2.5 text-[15px]">{t('保存语音配置')}</button>
+          </form>
+          <p className="muted text-[11px] leading-relaxed mt-3">{t('密钥与接口须属于同一服务区域。手机录音需要 HTTPS 地址。')}</p>
         </section>
 
         {/* ---------- 家里的人 ---------- */}

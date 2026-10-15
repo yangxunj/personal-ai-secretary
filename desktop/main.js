@@ -192,6 +192,9 @@ async function startServer() {
     AI_BASE_URL: cfg.AI_BASE_URL ?? '',
     AI_API_KEY: cfg.AI_API_KEY ?? '',
     AI_MODEL: cfg.AI_MODEL ?? '',
+    ASR_API_KEY: cfg.ASR_API_KEY ?? process.env.ASR_API_KEY ?? '',
+    ASR_BASE_URL: cfg.ASR_BASE_URL ?? process.env.ASR_BASE_URL ?? '',
+    ASR_MODEL: cfg.ASR_MODEL ?? process.env.ASR_MODEL ?? '',
   };
 
   // 用 Electron 自带的 Node 跑 standalone 的 server.js。
