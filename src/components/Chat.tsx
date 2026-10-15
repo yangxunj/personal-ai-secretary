@@ -14,6 +14,7 @@ import { useLocale, useT } from '@/lib/i18n/client';
 import type { T } from '@/lib/i18n/core';
 import VoiceInput from '@/components/chat/VoiceInput';
 import SpeechButton, { setSpeechRecording, stopSpeechPlayback } from '@/components/chat/SpeechButton';
+import VoiceConversation from '@/components/chat/VoiceConversation';
 
 /** 工具名 → 人话。工具卡片上显示它，用户不该看见 createTask 这种字眼 */
 const toolLabels = (t: T): Record<string, string> => ({
@@ -189,6 +190,7 @@ export function Chat({
   olderCount?: number;
   olderHref?: string;
 }) {
+  const voiceTurn = useRef<{ finish: (text?: string, error?: Error) => void } | null>(null);
   const { messages, sendMessage, setMessages, status, error, stop } = useChat({
     transport: new DefaultChatTransport({
       api: '/api/chat',
@@ -196,7 +198,10 @@ export function Chat({
       // 发整串的话，刷新前后模型看到的上下文就不一样了。
       prepareSendMessagesRequest: ({ messages }) => ({ body: { message: messages.at(-1), conversationId, ...(taskId ? { taskId } : {}) } }),
     }),
-    onFinish: ({ message, messages, isError }) => {
+    onError: (error) => voiceTurn.current?.finish(undefined, error),
+    onFinish: ({ message, messages, isError, isAbort }) => {
+      voiceTurn.current?.finish(isError || isAbort ? undefined : textOf(message.parts),
+        isError || isAbort ? new Error(t('AI 处理未完成，请先查看聊天记录，不要重复提交')) : undefined);
       // 列表跟着挪：这个对话刚说过话，排到最上面
       if(embedded) {
         if(onReply) void onReply().then(() => { setMessages([]); }).catch(() => {});
@@ -217,6 +222,7 @@ export function Chat({
   const t = useT();
   const locale = useLocale();
   const [voiceBusy, setVoiceBusy] = useState(false);
+  const [autoVoice, setAutoVoice] = useState(false);
   const recordingOwner = useRef({});
   const inputRef = useRef<HTMLTextAreaElement>(null);
   // 浏览器「后退」回到一个新开过的对话时，地址栏是 /chat/<那个 id>（当初
@@ -320,7 +326,7 @@ export function Chat({
   }, [embedded, history.length]);
 
   function addFiles(list: FileList | File[] | null) {
-    if (!list) return;
+    if (!list || autoVoice) return;
     const incoming = Array.from(list);
     const tooBig = incoming.filter((f) => f.size > MAX_BYTES);
     if (tooBig.length) {
@@ -334,7 +340,7 @@ export function Chat({
 
   async function send() {
     const text = input.trim();
-    if ((!text && !files.length) || busy || voiceBusy || !active) return;
+    if ((!text && !files.length) || busy || voiceBusy || autoVoice || !active) return;
     stopSpeechPlayback();
 
     const attached = files.length
@@ -355,15 +361,41 @@ export function Chat({
 
     // 新对话的第一句：地址换成 /chat/<id>（不重新加载，这一轮不能断），
     // 列表先乐观地放一条上去，标题等这一轮聊完再起
-    if (!addressed.current) {
-      addressed.current = true;
-      window.history.replaceState(null, '', `/chat/${conversationId}`);
-      emitConversations({ id: conversationId, title: [...said].slice(0, 20).join(''), provisional: true });
-    }
+    rememberAddress(said);
     setInput('');
     setFiles([]);
     setNote('');
   }
+
+  function rememberAddress(said: string) {
+    if (addressed.current || embedded) return;
+    addressed.current = true;
+    window.history.replaceState(null, '', `/chat/${conversationId}`);
+    emitConversations({ id: conversationId, title: [...said].slice(0, 20).join(''), provisional: true });
+  }
+
+  function sendVoice(text: string, signal: AbortSignal): Promise<string> {
+    if (!active || busy || voiceTurn.current || signal.aborted) return Promise.reject(new Error(t('AI 正在处理，请稍等')));
+    return new Promise((resolve, reject) => {
+      const pending = { finish: (reply?: string, failure?: Error) => {
+        if (voiceTurn.current !== pending) return;
+        voiceTurn.current = null; clearTimeout(timeout); signal.removeEventListener('abort', cancelled);
+        if (failure) reject(failure);
+        else if (!reply?.trim()) reject(new Error(t('AI 没有返回文字，请查看聊天记录')));
+        else resolve(reply);
+      } };
+      const cancelled = () => pending.finish(undefined, new DOMException('Cancelled', 'AbortError'));
+      const timeout = setTimeout(() => pending.finish(undefined, new Error(t('AI 处理超时，请查看聊天记录，不要重复提交'))), 600_000);
+      voiceTurn.current = pending;
+      signal.addEventListener('abort', cancelled, { once: true });
+      setBackgroundError('');
+      try {
+        Promise.resolve(sendMessage({ text })).catch(error => pending.finish(undefined, error instanceof Error ? error : new Error(String(error))));
+        rememberAddress(text);
+      } catch (error) { pending.finish(undefined, error instanceof Error ? error : new Error(String(error))); }
+    });
+  }
+  useEffect(() => () => voiceTurn.current?.finish(undefined, new DOMException('Unmounted', 'AbortError')), []);
 
   return (
     <div
@@ -477,6 +509,7 @@ export function Chat({
           background: 'color-mix(in srgb, var(--bg) 85%, transparent)',
         }}
       >
+        <VoiceConversation active={active} disabled={busy || voiceBusy} onRunningChange={setAutoVoice} onSubmit={sendVoice} />
         {/* 待发送的附件。发出去之前一直看得见、点得掉 —— 传错一张图不该只能整条重来 */}
         {files.length > 0 && (
           <div className="flex flex-wrap gap-2 mb-2">
@@ -539,6 +572,7 @@ export function Chat({
           />
           <button
             onClick={() => picker.current?.click()}
+            disabled={autoVoice}
             className="shrink-0 rounded-full w-10 h-10 border text-lg muted"
             style={{ borderColor: 'var(--border)' }}
             aria-label={t('添加文件')}
@@ -547,6 +581,7 @@ export function Chat({
           </button>
           <textarea
             ref={inputRef}
+            readOnly={autoVoice}
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onPaste={(e) => {
@@ -569,7 +604,7 @@ export function Chat({
             className="flex-1 min-w-0 resize-none rounded-2xl border px-3.5 py-2.5 text-[15px] bg-transparent outline-none focus:border-brand-500 transition max-h-32"
             style={{ borderColor: 'var(--border)' }}
           />
-          <VoiceInput disabled={busy} active={active} onBusyChange={(recording) => {
+          <VoiceInput disabled={busy || autoVoice} active={active} onBusyChange={(recording) => {
             setSpeechRecording(recordingOwner.current, recording);
             setVoiceBusy(recording);
           }} onTranscript={(text) => {
@@ -579,6 +614,7 @@ export function Chat({
           {busy ? (
             <button
               onClick={stopReply}
+              disabled={autoVoice}
               className="order-1 shrink-0 rounded-full w-10 h-10 border text-sm"
               style={{ borderColor: 'var(--border)' }}
               aria-label={t('停止')}
@@ -588,7 +624,7 @@ export function Chat({
           ) : (
             <button
               onClick={send}
-              disabled={voiceBusy || (!input.trim() && !files.length)}
+              disabled={autoVoice || voiceBusy || (!input.trim() && !files.length)}
               className="order-1 shrink-0 rounded-full w-10 h-10 bg-brand-500 text-white disabled:opacity-30 transition"
               aria-label={t('发送')}
             >

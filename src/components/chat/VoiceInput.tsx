@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { subscribeVoiceSession, voiceSessionOwner, serverVoiceSessionOwner } from '@/lib/voice-session';
 import { useT } from '@/lib/i18n/client';
 import { encodeVoiceWav, VOICE_MAX_SECONDS, VOICE_SAMPLE_RATE } from '@/lib/voice-audio';
 
@@ -13,6 +14,7 @@ export default function VoiceInput({ disabled, active, onBusyChange, onTranscrip
   onTranscript: (text: string) => void;
 }) {
   const t = useT();
+  const automaticSession = useSyncExternalStore(subscribeVoiceSession, voiceSessionOwner, serverVoiceSessionOwner);
   const [phase, setPhase] = useState<Phase>('idle');
   const [seconds, setSeconds] = useState(0);
   const [error, setError] = useState('');
@@ -137,7 +139,7 @@ export default function VoiceInput({ disabled, active, onBusyChange, onTranscrip
   }
 
   async function start() {
-    if (disabled || !active || phase !== 'idle') return;
+    if (disabled || !active || voiceSessionOwner() || phase !== 'idle') return;
     cancel();
     if (!window.isSecureContext) { setError(t('语音输入需要 HTTPS，请使用安全地址或在本机打开')); return; }
     if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === 'undefined' || typeof AudioContext === 'undefined') {
@@ -182,7 +184,7 @@ export default function VoiceInput({ disabled, active, onBusyChange, onTranscrip
   }
 
   return <>
-    <button type="button" onClick={phase === 'recording' ? finish : start} disabled={disabled || phase === 'requesting' || phase === 'processing'}
+    <button type="button" onClick={phase === 'recording' ? finish : start} disabled={disabled || !!automaticSession || phase === 'requesting' || phase === 'processing'}
       aria-label={phase === 'recording' ? t('完成录音') : t('语音输入')} aria-pressed={phase === 'recording'}
       className={`shrink-0 rounded-full w-10 h-10 border flex items-center justify-center disabled:opacity-30 ${phase === 'recording' ? 'text-red-500 bg-red-500/10 border-red-500' : 'muted'}`}
       style={phase === 'recording' ? undefined : { borderColor: 'var(--border)' }}>

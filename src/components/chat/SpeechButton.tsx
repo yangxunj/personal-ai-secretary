@@ -17,6 +17,7 @@ const subscribeRecording = (listener: () => void) => {
   return () => { recordingListeners.delete(listener); };
 };
 const recordingSnapshot = () => recordingOwners.size > 0;
+export const hasSpeechRecording = recordingSnapshot;
 const serverRecordingSnapshot = () => false;
 export function setSpeechRecording(owner: object, recording: boolean) {
   const previous = recordingSnapshot();

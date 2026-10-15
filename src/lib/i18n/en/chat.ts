@@ -2,6 +2,26 @@ import type { Dict } from '../core';
 
 /** 中文原文 → 英文。key 必须跟 t('…') 里的字符串一字不差。对话页、对话列表、/api/chat */
 export const chat: Dict = {
+  // ---------- 持续语音对话 ----------
+  开启语音对话: 'Start voice conversation',
+  退出语音对话: 'End voice conversation',
+  请先完成或取消当前录音: 'Please finish or cancel the current recording first.',
+  '语音检测中断，请重新开启语音对话': 'Voice detection was interrupted. Please start voice conversation again.',
+  '正在聆听，你可以说话': 'Listening. You can speak now.',
+  '听到你在说话，停顿后会自动发送': 'Hearing your voice. A pause will send it automatically.',
+  'AI 正在处理，请稍等': 'The AI is working. Please wait.',
+  '正在合成并朗读，播完后继续听': 'Generating and speaking the reply, then listening again.',
+  '说完停顿约 1.2 秒后自动发送，每轮最长 60 秒。AI 回答时暂停收音。': 'Pause for about 1.2 seconds to send automatically, up to 60 seconds per turn. The microphone is muted while the AI replies.',
+  '当前草稿和附件会保留，语音对话只发送你说的话。': 'Your draft and attachments are kept. Voice conversation sends only what you say.',
+  '已听到：{text}': 'Heard: {text}',
+  回答已显示在聊天中: 'The reply is shown in the chat.',
+  '当前浏览器不支持连续语音，请使用新版 Chrome、Edge 或 Safari': 'Continuous voice is not supported. Use a recent version of Chrome, Edge or Safari.',
+  '无法开启语音对话，请检查麦克风和浏览器支持': 'Could not start voice conversation. Check your microphone and browser support.',
+  '音频已暂停，请重新开启语音对话': 'Audio was suspended. Please start voice conversation again.',
+  '语音对话中断，请检查网络后重新开启': 'Voice conversation was interrupted. Check your network and start it again.',
+  'AI 处理未完成，请先查看聊天记录，不要重复提交': 'The AI did not finish. Check the chat before submitting again.',
+  'AI 处理超时，请查看聊天记录，不要重复提交': 'The AI timed out. Check the chat before submitting again.',
+  'AI 没有返回文字，请查看聊天记录': 'The AI returned no text. Please check the chat.',
   // ---------- 回答朗读 ----------
   朗读回答: 'Read aloud',
   取消合成: 'Cancel synthesis',
