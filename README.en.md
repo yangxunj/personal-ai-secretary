@@ -6,9 +6,8 @@ An AI life secretary that runs on your own computer. You tell it things in a cha
 and it files away your to-dos, accounts, bills, medical checkup reports and insurance
 policies, so they're right there when you need them.
 
-**All your data stays on your own computer.** No server, no account, no telemetry.
-The one exception: when you chat with the AI, what you send goes to the model
-provider you chose.
+**Your database, uploaded originals and backups stay on your computer.** The app sends no telemetry.
+AI conversations go to your chosen model provider. Voice features also send recordings or text to the separately configured Alibaba Cloud voice services, even when chat uses local Codex.
 
 The interface comes in **English and Chinese**. It follows your system language on
 first launch; switch any time under **Settings → Language**. In English, the AI
@@ -22,7 +21,7 @@ replies in English and saves what it records in English too.
 
 ## What it does
 
-Current source also supports **realtime voice** with interruptions and background agent work. Configure the separate Alibaba Cloud realtime model under Settings, then start it from a chat. While enabled, microphone audio streams continuously to Alibaba Cloud; ending the session or moving the page to the background stops capture. See the [implementation notes](docs/实时语音对话.md).
+The **v0.5.0 Windows packages include four voice modes**, including realtime voice with interruptions and background agent work. See the voice guide below.
 
 Talk to it like you'd text a person:
 
@@ -41,13 +40,28 @@ Talk to it like you'd text a person:
 Also:
 
 - **Multiple conversations**: one topic per conversation, auto-titled. The vault, tasks and pages are shared, so every conversation can see them.
+- **Local Codex backend (v0.4.0+)**: use the Codex login on this computer for persistent chat, business tools and independent HTML generation. The API backend remains available. See [local Codex details](docs/Codex本机对话.md).
+- **Task-specific AI chat (v0.4.0+)**: discuss a task from its detail page with current requirements, progress and linked records. Both API and Codex backends are supported. See [task chat details](docs/任务专属AI对话.md).
 - **Insurance ledger**: when each policy's next premium is due.
 - **Topics**: an ongoing matter (renovation, buying a car) with its related tasks and a list of "things we haven't figured out yet".
 - **Phone access**: pair your phone by QR code on the same Wi-Fi and use it in the mobile browser. Add it to your home screen and it feels like an app.
 - **Household members**: tasks can be assigned to different people at home.
 - **English / Chinese interface**: switch under Settings → Language.
 
-## Recent page-building improvements (current source)
+## Voice modes (v0.5.0)
+
+Configure Alibaba Cloud speech recognition, speech synthesis and realtime voice separately in Settings, then allow microphone access in chat.
+
+| Mode | How it works | Configuration and details |
+| --- | --- | --- |
+| Voice input | Record, transcribe to a draft, then edit and send | [ASR](docs/语音输入.md) |
+| Read aloud | Play an AI answer; pause, resume or stop | [TTS](docs/语音朗读.md) |
+| Continuous voice | Detect a pause, transcribe, run the agent, read the answer and listen again | [Continuous voice](docs/连续语音对话.md) |
+| Realtime voice | Stream audio both ways, interrupt speech and delegate database work to the background agent | [Realtime voice](docs/实时语音对话.md) |
+
+The default realtime model is `qwen-audio-3.0-realtime-flash`; Plus is also supported. Voice services are billed separately by Alibaba Cloud. Upload retries and playback buffering reduce network jitter, but upstream connections can still drop and the full cause remains unresolved. Moving the page to the background or leaving chat ends capture; realtime sessions last at most 30 minutes. Interrupting speech does not undo accepted background work. Phone microphone access requires HTTPS; the desktop app's plain HTTP LAN gateway does not guarantee phone voice support.
+
+## Page building and persistent storage (v0.3.0+)
 
 - **A separate model call for each page**: the chat AI prepares the requirements and real data, then a separate call builds the page with design guidance for reports, games and learning activities. The Bailian and official DeepSeek configurations use `max` reasoning effort to give the model more room to think; this parameter is not forced on other custom providers.
 - **Visible progress**: see whether the model is thinking or how much HTML it has written while a complex page is being generated.
@@ -63,7 +77,7 @@ Also:
 
 Grab one from [Releases](../../releases):
 
-> `v0.3.0` includes the page-building and persistent-storage improvements above. Download the matching version from Releases; existing users can install over the old version to keep their data.
+> Latest: [v0.5.0](../../releases/tag/v0.5.0), with all four voice modes, local Codex, task-specific chat and persistent pages. See the [release notes](docs/releases/v0.5.0.md) for upgrades, validation and known limitations.
 
 | File | Where your data lives | Best for |
 | --- | --- | --- |
@@ -87,12 +101,15 @@ Windows only for now.
 2. **Settings → Household members**: list who's in your household so tasks can be assigned to them.
 3. Go to **Chat** and say something.
 
-It works without a key too: tasks, the vault and so on can all be edited by hand, you just can't chat.
+Alternatively, select **Settings → Chat backend → Local Codex** after installing and signing in to Codex on this computer, then start a new chat. Existing chats keep their backend. This uses your Codex account allowance and still needs internet. Source installations must set `ENABLE_LOCAL_CODEX=true`; desktop builds enable it automatically. Voice services still require separate configuration.
+
+Without an AI backend, tasks and the vault can still be edited by hand.
 
 ## Privacy
 
 - The database (SQLite), uploaded originals and backups all live in that `data` folder. Menu **Settings → Open data folder** takes you there.
 - The app itself sends no telemetry. **Text and images you send in a chat go to your chosen model provider**; the AI has to read a bill to enter it for you. If you don't want the AI to see something, don't send it; enter it by hand.
+- Voice input sends recordings to ASR; read-aloud sends answer text to TTS; continuous voice combines both. Realtime voice streams microphone audio to Alibaba Cloud while enabled, stopping when ended or backgrounded. Raw recordings are not persisted; transcripts and work results are saved in local chat and execution records. These cloud voice services are separate from local Codex.
 - Sensitive values are stored **in plain text** in the local database (that's how the AI can look them up). Protection relies on the computer itself: don't hand the `data` folder to anyone.
 - Phone access is off by default. When on, only devices paired by QR code can get in. Pairing codes are single-use and expire after 10 minutes, and devices can be removed at any time.
 
@@ -136,7 +153,7 @@ docs/              Developer notes (Chinese)
 Before changing code, read [`docs/开发笔记.md`](docs/开发笔记.md) and
 [`desktop/README.md`](desktop/README.md) (both in Chinese; code comments are in Chinese too).
 
-Planned work: [local Codex integration](docs/Codex接入方案.md) (plan in Chinese; development is deferred, and the existing API backend is retained).
+Local Codex shipped in v0.4.0. See the [usage and validation notes](docs/Codex本机对话.md); the [original design](docs/Codex接入方案.md) remains available for historical context.
 
 ## Status
 
@@ -154,11 +171,3 @@ project: I'll read them, but can't promise a quick reply.
 [AGPL-3.0](LICENSE). Free to use, modify and redistribute. **If you run a modified
 version as a service for others (including as a website), you must publish its
 source code too.**
-
-## Task-specific AI chat (v0.4.0+)
-
-Each task detail page has a “Discuss this task with AI” panel. It keeps an independent conversation, includes current task requirements and progress, and can update that task, save notes, or create linked follow-up tasks. Both API and local Codex backends are supported. Closing the panel preserves the task page and reopening it on the same page keeps the draft. Existing chats keep their original backend. See [task chat details](docs/任务专属AI对话.md). Included in the v0.4.0 Windows installers.
-
-## Local Codex backend (v0.4.0+)
-
-The current source supports the Codex login on your own computer as an optional chat backend. It uses the same platform tools and database, keeps persistent independent conversations, and generates HTML through a separate Codex turn without requiring a DeepSeek API key. Select it in Settings and start a new chat; existing chats keep their backend. Local source installations must set `ENABLE_LOCAL_CODEX=true`; desktop builds enable it automatically. Internet and account allowance are required. Included in the v0.4.0 Windows installers. See [local Codex details](docs/Codex本机对话.md).
