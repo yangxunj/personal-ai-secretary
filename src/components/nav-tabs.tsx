@@ -23,11 +23,13 @@ export const TABS = [
   // AI 在对话里做的网页（lib/pages.ts）。只上侧栏不上底栏：底栏七格已满，
   // 手机上的入口在专题页底部，跟文稿一样。wideOnly 就是这个意思
   { href: '/pages', label: '页面', icon: 'page', wideOnly: true },
+  { href: '/mail', label: '邮件', icon: 'mail', wideOnly: true },
 ] as const satisfies readonly { href: string; label: string; icon: string; wideOnly?: boolean }[];
 
 export type TabIcon = (typeof TABS)[number]['icon'];
 
 const PATHS: Record<string, React.ReactNode> = {
+  mail: <><rect x="3" y="5" width="18" height="14" rx="2" /><path d="m3 6 9 7 9-7" /></>,
   chat: <path d="M21 12a8 8 0 0 1-8 8H7l-4 3V12a8 8 0 0 1 8-8h2a8 8 0 0 1 8 8Z" />,
   check: <path d="M4 6h16M4 12h16M4 18h10" />,
   vault: (

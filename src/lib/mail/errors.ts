@@ -1,0 +1,18 @@
+export const MAIL_ERRORS: Record<string, string> = {
+  MAIL_CLIENT_INVALID: '请选择 Google Desktop 应用的 OAuth JSON 配置。',
+  MAIL_CLIENT_REQUIRED: '请先导入 Google OAuth 配置。',
+  MAIL_TOOL_MISSING: '安装包缺少 Gmail 工具，请重新安装完整桌面版。',
+  MAIL_AUTH_FAILED: 'Gmail 授权未完成，请检查网络、Google 测试用户和 API 配置后重试。',
+  MAIL_AUTH_TIMEOUT: '授权等待超时，请重新连接。',
+  MAIL_AUTH_REQUIRED: '请重新连接 Gmail，授权可能已过期或被撤销。',
+  MAIL_STATE_INVALID: '邮件台账损坏，已停止同步。请先备份数据，再断开并重新连接。',
+  MAIL_CONSENT_CHANGED: '分析模型已变化，请重新确认邮件处理授权。',
+  MAIL_ANALYSIS_CONSENT_REQUIRED: '请先保存邮件 AI 分析授权。',
+  MAIL_AI_CONFIG_REQUIRED: '请先在设置中配置聊天模型或本机 Codex。',
+  MAIL_EPHEMERAL_REQUIRED: '本机 Codex 未确认临时会话，未发送邮件正文。请升级或切换 API 模型。',
+  MAIL_INVALID_RESULT: 'AI 未返回完整有效的结果，本次扫描位置已保留。',
+  MAIL_INVALID_EVIDENCE: 'AI 结论缺少有效原文证据，本次扫描位置已保留。',
+  MAIL_DISCONNECT_FIRST: '请先断开当前连接，再更换账号或配置。',
+  MAIL_SCAN_FAILED: '邮件同步失败，请检查网络、授权和分析模型。此前结果仍保留。',
+  MAIL_BUSY: '正在同步，请稍后再操作。',
+};

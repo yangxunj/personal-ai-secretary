@@ -39,6 +39,7 @@ Talk to it like you'd text a person:
 
 Also:
 
+- **Gmail desktop pilot (current source `0.6.0-beta.1`)**: connect Gmail read-only through GWS, explicitly allow AI analysis, review findings and create tasks yourself. Both API and local Codex analysis are supported. Checks pause when the app exits. Requires your own Google Desktop OAuth configuration; the v0.5.0 stable packages do not include this feature. See the [pilot guide](docs/Gmail桌面试点.md).
 - **Multiple conversations**: one topic per conversation, auto-titled. The vault, tasks and pages are shared, so every conversation can see them.
 - **Local Codex backend (v0.4.0+)**: use the Codex login on this computer for persistent chat, business tools and independent HTML generation. The API backend remains available. See [local Codex details](docs/Codex本机对话.md).
 - **Task-specific AI chat (v0.4.0+)**: discuss a task from its detail page with current requirements, progress and linked records. Both API and Codex backends are supported. See [task chat details](docs/任务专属AI对话.md).

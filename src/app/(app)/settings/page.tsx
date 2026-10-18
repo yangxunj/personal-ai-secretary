@@ -22,6 +22,7 @@ import {
 import { getLocale, getT } from '@/lib/i18n/server';
 import { LOCALES, LOCALE_NAMES } from '@/lib/i18n/core';
 import { getOwners } from '@/lib/owners';
+import Link from 'next/link';
 
 export const dynamic = 'force-dynamic';
 
@@ -54,6 +55,9 @@ export default async function SettingsPage({
       <PageHeader title={t('设置')} back="/" settings={false} />
 
       <div className="px-4 py-4 space-y-4">
+        {process.env.DESKTOP_APP === '1' && <section className="surface border rounded-2xl p-4" style={{ borderColor: 'var(--border)' }}>
+          <Link href="/mail" className="text-brand-500">{t('Gmail 邮件连接与提醒')}</Link>
+        </section>}
         {/* ---------- 界面语言 ----------
             标题固定写两种语言、不过 t()：切错了语言的人，得在一堆看不懂的字里
             认得出这一块。 */}

@@ -22,4 +22,10 @@ export async function register() {
   } catch (e) {
     console.error('[samples] 示例页面没放上', e);
   }
+  if (process.env.NEXT_RUNTIME === 'nodejs') {
+    try {
+      const { startMailScheduler } = await import('@/lib/mail/service');
+      await startMailScheduler();
+    } catch { console.error('[mail] Scheduler unavailable; check the desktop mail connection.'); }
+  }
 }

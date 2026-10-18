@@ -34,6 +34,8 @@ const AI_FACING = [
   'src/lib/page-builder.ts',
   'src/lib/codex/',
   'src/lib/realtime/',
+  'src/lib/mail/gws.mjs',
+  'src/lib/mail/scan-core.mjs',
   'src/lib/task-chat-context.ts',
   'src/lib/task-chat-tools.ts',
   'src/lib/page-data.ts',
@@ -52,7 +54,7 @@ const AI_FACING = [
  */
 const KEY_FILES = ['src/lib/format.ts', 'src/components/nav-tabs.tsx',
   'src/lib/finance.ts', 'src/lib/ai-providers.ts', 'src/app/(app)/health/shared.ts',
-  'src/lib/topic.ts', 'src/lib/sample-pages.ts'];
+  'src/lib/topic.ts', 'src/lib/sample-pages.ts', 'src/lib/mail/errors.ts'];
 
 /**
  * 故意不翻的原文片段（比如设置页那个双语标题）。

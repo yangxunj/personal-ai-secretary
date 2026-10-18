@@ -16,7 +16,9 @@
  *     而且卸载/升级会被清掉）
  *   - 不往任何地方上报
  */
-const { app, BrowserWindow, Menu, shell, dialog, ipcMain } = require('electron');
+const { app, BrowserWindow, Menu, shell, dialog, ipcMain, Notification } = require('electron');
+const { randomBytes } = require('node:crypto');
+const { setupGmail } = require('./gmail');
 const path = require('node:path');
 const fs = require('node:fs');
 const net = require('node:net');
@@ -37,6 +39,10 @@ let baseUrl = '';
 let serverPort = 0;
 let lan = null;
 let lanWin = null;
+let gmail = null;
+let gmailClosing = false, gmailStopped = false;
+const gmailToken = randomBytes(32).toString('hex');
+const gmailTool = path.join(__dirname, 'tools', 'gws-0.22.5', 'gws.exe');
 
 // ---------- 数据目录 ----------
 /**
@@ -188,6 +194,10 @@ async function startServer() {
     AUTH_ENABLED: 'false',
     // 设置页据此显示「用手机访问在菜单里」—— 网页版没有这个功能
     DESKTOP_APP: '1',
+    DESKTOP_SYSTEM_LOCALE: app.getLocale(),
+    DESKTOP_GMAIL_TOKEN: gmailToken,
+    GMAIL_DATA_DIR: path.join(p.root, 'gmail'),
+    GMAIL_GWS_PATH: gmailTool,
 
     AI_BASE_URL: cfg.AI_BASE_URL ?? '',
     AI_API_KEY: cfg.AI_API_KEY ?? '',
@@ -269,6 +279,7 @@ function createWindow(url) {
       // 页面里没有任何需要 Node 的地方，关掉是基本功
       nodeIntegration: false,
       contextIsolation: true,
+      preload: path.join(__dirname, 'gmail-preload.js'),
     },
   });
   win.loadURL(url);
@@ -431,12 +442,15 @@ if (!app.requestSingleInstanceLock()) {
   });
 
   app.whenReady().then(async () => {
+    if (process.platform === 'win32') app.setAppUserModelId('com.aisecretary.desktop');
     // 服务还没起来，先按系统语言猜；页面加载后 syncLocale 会以设置页为准
     i18n.setLocale(i18n.fromSystem(app.getLocale()));
     buildMenu();
     try {
       const url = await startServer();
       createWindow(url);
+      gmail = setupGmail({ ipcMain, dialog, shell, Notification, getWindow: () => win, getBaseUrl: () => baseUrl,
+        token: gmailToken, root: path.join(dataRoot(), 'gmail'), executable: gmailTool, getLocale: () => i18n.getLocale?.() || app.getLocale() });
       startLan();
       // 只给开发时用：自动化测试没法点原生菜单
       if (!app.isPackaged && process.env.HS_OPEN_LAN) openLanWindow();
@@ -449,9 +463,20 @@ if (!app.requestSingleInstanceLock()) {
 
 app.on('window-all-closed', () => app.quit());
 
-app.on('before-quit', () => {
+app.on('before-quit', (event) => {
   app.isQuitting = true;
+  if (gmail && !gmailStopped) {
+    event.preventDefault();
+    if (!gmailClosing) {
+      gmailClosing = true;
+      let timer;
+      const deadline = new Promise(resolve => { timer = setTimeout(resolve, 5000); });
+      void Promise.race([gmail.shutdown(), deadline]).finally(() => { clearTimeout(timer); gmailStopped = true; app.quit(); });
+    }
+    return;
+  }
   lan?.dispose();
+  gmail?.dispose();
   // 不杀的话后台那个 node 会留着，下次启动又起一个，慢慢堆一堆孤儿进程
   if (serverProc && !serverProc.killed) serverProc.kill();
 });

@@ -17,6 +17,7 @@ import { execFileSync } from 'node:child_process';
 import { cpSync, rmSync, mkdirSync, existsSync, readdirSync, readFileSync, writeFileSync, statSync } from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
+import { prepareGws } from './prepare-gws.mjs';
 
 const HERE = path.resolve(import.meta.dirname, '..');   // desktop/
 const CLOUD = path.resolve(HERE, '..');                 // 仓库根目录（Next 应用）
@@ -39,6 +40,8 @@ const node = (script, args, extraEnv = {}) =>
   });
 
 // ---------- 1. 构建 ----------
+say('准备固定版本 GWS（Windows x64，无用户凭据）');
+await prepareGws();
 say('构建（DESKTOP_BUILD=1 → standalone）');
 node(PRISMA_BIN, ['generate']);
 node(NEXT_BIN, ['build'], { DESKTOP_BUILD: '1', NODE_OPTIONS: '--max-old-space-size=2048' });

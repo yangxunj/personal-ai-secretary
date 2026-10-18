@@ -1,4 +1,5 @@
 runtime/
+tools/
 dist/
 node_modules/
 .smoke-data/
