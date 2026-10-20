@@ -38,7 +38,40 @@ function trustedSender(event, win, baseUrl) {
   catch { return false; }
 }
 
-function setupGmail({ ipcMain, dialog, shell, Notification, getWindow, getBaseUrl, token, root, executable, getLocale }) {
+function readBundledClient(file) {
+  if (!file || !fs.existsSync(file)) return null;
+  try {
+    if (fs.statSync(file).size > 65536) throw new Error();
+    const preset = JSON.parse(fs.readFileSync(file, 'utf8'));
+    if (preset.version !== 1 || typeof preset.testing !== 'boolean') throw new Error();
+    return { client: validClient(preset.client), testing: preset.testing };
+  } catch { throw new Error('MAIL_CLIENT_INVALID'); }
+}
+function clientStatus(account, bundledClientPath) {
+  const saved = path.join(account, 'client_secret.json');
+  let bundled = null;
+  try { bundled = readBundledClient(bundledClientPath); } catch {}
+  let source = fs.existsSync(saved) ? 'custom' : bundled ? 'bundled' : 'none';
+  if (source === 'custom' && bundled) {
+    try { if (JSON.parse(fs.readFileSync(saved, 'utf8')).installed?.client_id === bundled.client.installed.client_id) source = 'bundled'; } catch {}
+  }
+  return { clientReady: source !== 'none', clientSource: source, bundledClientReady: !!bundled, clientTesting: source === 'bundled' && !!bundled?.testing };
+}
+async function ensureGmailClient(account, bundledClientPath) {
+  const file = path.join(account, 'client_secret.json');
+  if (fs.existsSync(file)) {
+    try { validClient(JSON.parse(await fsp.readFile(file, 'utf8'))); } catch { throw new Error('MAIL_CLIENT_INVALID'); }
+    return;
+  }
+  const bundled = readBundledClient(bundledClientPath);
+  if (!bundled) throw new Error('MAIL_CLIENT_REQUIRED');
+  await fsp.mkdir(account, { recursive: true });
+  // Do not replace a user-imported client if another action installed it meanwhile.
+  try { await fsp.writeFile(file, JSON.stringify(bundled.client), { mode: 0o600, flag: 'wx' }); }
+  catch (error) { if (error.code !== 'EEXIST') throw error; }
+}
+
+function setupGmail({ ipcMain, dialog, shell, Notification, getWindow, getBaseUrl, token, root, executable, getLocale, bundledClientPath }) {
   const account = path.join(root, 'account');
   let auth = null, authError = null, authUrl = null, timer, polling = false, disposed = false;
   async function call(action, input) {
@@ -47,8 +80,13 @@ function setupGmail({ ipcMain, dialog, shell, Notification, getWindow, getBaseUr
     const result = await response.json(); if (!response.ok) throw new Error(result.error || 'MAIL_OPERATION_FAILED'); return result;
   }
   async function status() {
-    return { ...(await call('status')), toolReady: fs.existsSync(executable), clientReady: fs.existsSync(path.join(account, 'client_secret.json')),
+    return { ...(await call('status')), toolReady: fs.existsSync(executable), ...clientStatus(account, bundledClientPath),
       authorizing: !!auth, authError, authUrl };
+  }
+  async function clearAccount() {
+    if (!fs.existsSync(account)) return;
+    if ((await fsp.lstat(account)).isSymbolicLink() || path.dirname(path.resolve(account)) !== path.resolve(root)) throw new Error('MAIL_DIRECTORY_INVALID');
+    await fsp.rm(account, { recursive: true, force: true });
   }
   async function cancelAuth() {
     const active = auth;
@@ -58,7 +96,7 @@ function setupGmail({ ipcMain, dialog, shell, Notification, getWindow, getBaseUr
     if (auth) return status();
     if ((await call('status')).connected) throw new Error('MAIL_DISCONNECT_FIRST');
     if (!fs.existsSync(executable)) throw new Error('MAIL_TOOL_MISSING');
-    if (!fs.existsSync(path.join(account, 'client_secret.json'))) throw new Error('MAIL_CLIENT_REQUIRED');
+    await ensureGmailClient(account, bundledClientPath);
     const proc = spawn(executable, ['auth', 'login', '--scopes', SCOPE], { cwd: account, env: gmailEnvironment(account), windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
     const active = { proc, cancelled: false, profileAbort: new AbortController(), done: null }; auth = active; authError = null;
     let buffer = ''; authUrl = null;
@@ -98,16 +136,17 @@ function setupGmail({ ipcMain, dialog, shell, Notification, getWindow, getBaseUr
           const json = validClient(JSON.parse(await fsp.readFile(file, 'utf8')));
           await fsp.mkdir(account, { recursive: true }); await fsp.writeFile(path.join(account, 'client_secret.json'), JSON.stringify(json), { mode: 0o600 });
         }
+      } else if (action === 'default') {
+        if (auth || (await call('status')).connected) throw new Error('MAIL_DISCONNECT_FIRST');
+        if (!readBundledClient(bundledClientPath)) throw new Error('MAIL_CLIENT_REQUIRED');
+        await clearAccount(); authError = null;
       } else if (action === 'connect') return await connect();
       else if (action === 'cancel') await cancelAuth();
       else if (action === 'disconnect') {
         await cancelAuth(); await call('disconnect');
-        if (fs.existsSync(account)) {
-          if ((await fsp.lstat(account)).isSymbolicLink() || path.dirname(path.resolve(account)) !== path.resolve(root)) throw new Error('MAIL_DIRECTORY_INVALID');
-          await fsp.rm(account, { recursive: true, force: true });
-        }
+        await clearAccount();
         authError = null;
-      } else if (FORWARDED.has(action)) { const result = await call(action, input); return { ...result, toolReady: fs.existsSync(executable), clientReady: fs.existsSync(path.join(account, 'client_secret.json')), authorizing: !!auth, authError, authUrl }; }
+      } else if (FORWARDED.has(action)) { const result = await call(action, input); return { ...result, toolReady: fs.existsSync(executable), ...clientStatus(account, bundledClientPath), authorizing: !!auth, authError, authUrl }; }
       else throw new Error('MAIL_INVALID_ACTION');
       return await status();
     } catch (error) { return { error: /^MAIL_[A-Z_]+$/.test(error.message) ? error.message : 'MAIL_OPERATION_FAILED' }; }
@@ -128,4 +167,4 @@ function setupGmail({ ipcMain, dialog, shell, Notification, getWindow, getBaseUr
     dispose() { disposed = true; clearInterval(timer); if (auth) { auth.cancelled = true; auth.profileAbort.abort(); auth.proc.kill(); } ipcMain.removeHandler('gmail:command'); },
   };
 }
-module.exports = { setupGmail, gmailEnvironment, validClient, authorizationUrl, trustedSender };
+module.exports = { setupGmail, gmailEnvironment, validClient, authorizationUrl, trustedSender, readBundledClient, clientStatus, ensureGmailClient };

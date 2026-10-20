@@ -18,6 +18,7 @@ import { cpSync, rmSync, mkdirSync, existsSync, readdirSync, readFileSync, write
 import path from 'node:path';
 import os from 'node:os';
 import { prepareGws } from './prepare-gws.mjs';
+import { prepareBundledGmail } from './prepare-gmail.mjs';
 
 const HERE = path.resolve(import.meta.dirname, '..');   // desktop/
 const CLOUD = path.resolve(HERE, '..');                 // 仓库根目录（Next 应用）
@@ -209,6 +210,12 @@ if (noKey) {
   console.log(`  带上了 key（${cfg.AI_API_KEY.slice(0, 6)}…）。别把安装包发到公开地方。`);
 }
 writeFileSync(path.join(OUT, 'resources', 'ai.json'), JSON.stringify(cfg, null, 2));
+
+// Only an explicitly supplied Desktop client file may be bundled. --no-key still
+// strips model keys; it does not strip this intentionally distributed OAuth client.
+const gmailSource = process.argv.find(arg => arg.startsWith('--gmail-oauth='))?.slice('--gmail-oauth='.length);
+const gmailBundled = prepareBundledGmail(gmailSource, path.join(OUT, 'resources', 'gmail-oauth.json'));
+console.log(gmailBundled ? '  Gmail: bundled Desktop client (Testing; each user authorizes separately)' : '  Gmail: no bundled client; advanced JSON import remains available');
 
 say('好了');
 console.log(`产物在 ${OUT}`);

@@ -6,6 +6,7 @@ import { MAIL_ERRORS } from '@/lib/mail/errors';
 
 type Finding = { id: string; importance: string; summary: string; action: string; evidence: string; subject: string; from: string; date: string; dueDate: string | null; sourceUrl: string | null; status?: string; taskId?: string; bodyTruncated?: boolean; attachments?: string[] };
 type Snapshot = { connected: boolean; account: string | null; toolReady: boolean; clientReady: boolean; authorizing: boolean; authError?: string; authUrl?: string;
+  clientSource: 'bundled' | 'custom' | 'none'; bundledClientReady: boolean; clientTesting: boolean;
   running: boolean; enabled: boolean; analysisApproved: boolean; notifications: boolean; intervalMinutes: number; lastSuccessAt: string | null;
   lastError: string | null; totalAnalyzed: number; morePending: boolean; findings: Finding[]; analysisTarget: { label: string; key: string } };
 declare global { interface Window { desktopGmail?: { invoke(action: string, input?: unknown): Promise<Snapshot & { error?: string; taskId?: string }> } } }
@@ -72,13 +73,21 @@ export default function MailPanel() {
         <h2 className="font-semibold">{t('Gmail 连接')}</h2>
         <p className="text-sm break-all">{data.connected ? data.account : t('尚未连接 Gmail')}</p>
         {!data.connected && <>
-          <p className="muted text-sm">{t('在 Google Cloud 启用 Gmail API，创建 Desktop 应用的 OAuth 客户端，并将自己加入测试用户。下载 JSON 后在这里导入，再通过系统浏览器授权。')}</p>
-          <a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener noreferrer" className="text-sm text-brand-500 underline">{t('打开 Google Cloud 配置')}</a>
+          {data.clientSource === 'bundled' ? <>
+            <p className="muted text-sm">{t('点击连接 Gmail，在系统浏览器中选择自己的 Google 账号并授予只读权限，然后返回应用。无需自行配置 Google Cloud 或导入 JSON。')}</p>
+            {data.clientTesting && <p role="note" className="text-sm text-amber-600">{t('内置连接目前处于 Google 测试阶段，仅已加入测试名单的账号可以授权。其他账号会被 Google 拒绝；高级用户可使用自己的 OAuth 配置。')}</p>}
+          </> : <p className="muted text-sm">{data.clientSource === 'custom' ? t('当前使用你导入的 OAuth 配置。点击连接后，在系统浏览器中选择账号并授权。') : t('此构建未内置 Google 连接配置。请在高级设置中导入自己的 Desktop OAuth JSON。')}</p>}
           <p className="muted text-sm">{t('首次同步范围是最近 7 天，正文最多读取 12000 字符，附件仅显示名称。之后只处理新增邮件。')}</p>
           <div className="flex flex-wrap gap-2">
-            <button className={button} disabled={locked} onClick={() => void command('import')}>{data.clientReady ? t('更换 OAuth 配置') : t('导入 OAuth 配置')}</button>
             <button className={button} disabled={locked || !data.clientReady || !data.toolReady} onClick={() => void command('connect')}>{t('连接 Gmail')}</button>
           </div>
+          <details className="text-sm space-y-2"><summary className="cursor-pointer muted">{t('高级：使用自己的 Google 应用')}</summary>
+            <p className="muted">{t('在 Google Cloud 启用 Gmail API，创建 Desktop 应用的 OAuth 客户端，并将自己加入测试用户。下载 JSON 后在这里导入，再通过系统浏览器授权。')}</p>
+            <a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener noreferrer" className="text-brand-500 underline">{t('打开 Google Cloud 配置')}</a>
+            <div className="flex flex-wrap gap-2"><button className={button} disabled={locked} onClick={() => void command('import')}>{data.clientSource === 'custom' ? t('更换 OAuth 配置') : t('导入 OAuth 配置')}</button>
+              {data.clientSource === 'custom' && data.bundledClientReady && <button className={button} disabled={locked} onClick={() => void command('default')}>{t('使用内置连接配置')}</button>}
+            </div>
+          </details>
           {!data.toolReady && <p role="alert" className="text-sm text-red-500">{describeError('MAIL_TOOL_MISSING')}</p>}
         </>}
         {data.authorizing && <div role="status" className="space-y-2">
@@ -87,7 +96,7 @@ export default function MailPanel() {
           <button className={button} disabled={busy} onClick={() => void command('cancel')}>{t('取消授权')}</button>
         </div>}
         {data.authError && <p className="text-sm text-red-500" role="alert">{describeError(data.authError)}</p>}
-        <p className="muted text-xs">{t('Google Testing 状态下授权通常 7 天过期；需要时重新连接。凭据保存在本机独立目录，不随安装包分发。')}</p>
+        <p className="muted text-xs">{t('Google Testing 状态下授权通常 7 天过期；需要时重新连接。你的邮箱授权令牌保存在本机独立目录，不随安装包分发。')}</p>
       </section>
       {data.connected && <>
         <section className={surface} style={{ borderColor: 'var(--border)' }}>

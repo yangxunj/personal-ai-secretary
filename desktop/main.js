@@ -450,7 +450,7 @@ if (!app.requestSingleInstanceLock()) {
       const url = await startServer();
       createWindow(url);
       gmail = setupGmail({ ipcMain, dialog, shell, Notification, getWindow: () => win, getBaseUrl: () => baseUrl,
-        token: gmailToken, root: path.join(dataRoot(), 'gmail'), executable: gmailTool, getLocale: () => i18n.getLocale?.() || app.getLocale() });
+        token: gmailToken, root: path.join(dataRoot(), 'gmail'), executable: gmailTool, bundledClientPath: path.join(RES_DIR, 'gmail-oauth.json'), getLocale: () => i18n.getLocale?.() || app.getLocale() });
       startLan();
       // 只给开发时用：自动化测试没法点原生菜单
       if (!app.isPackaged && process.env.HS_OPEN_LAN) openLanWindow();

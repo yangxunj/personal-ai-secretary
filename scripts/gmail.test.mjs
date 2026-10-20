@@ -11,7 +11,8 @@ import { scanBatch } from '../src/lib/mail/scan-core.mjs';
 import { validateDecisions } from '../src/lib/mail/decisions.mjs';
 import { MailStore, initialMailState } from '../src/lib/mail/store.mjs';
 const require = createRequire(import.meta.url);
-const { validClient, authorizationUrl, trustedSender, setupGmail } = require('../desktop/gmail.js');
+const { validClient, authorizationUrl, trustedSender, setupGmail, readBundledClient, clientStatus, ensureGmailClient } = require('../desktop/gmail.js');
+const { prepareBundledGmail } = await import('../desktop/scripts/prepare-gmail.mjs');
 const data = code => 'data:text/javascript;base64,' + Buffer.from(code).toString('base64');
 function loadTs(file, replacements) {
   let source = readFileSync(new URL(file, import.meta.url), 'utf8');
@@ -46,6 +47,51 @@ test('OAuth accepts only Desktop clients and validated Google readonly authoriza
   const url = 'https://accounts.google.com/o/oauth2/v2/auth?response_type=code&scope=' + encodeURIComponent('https://www.googleapis.com/auth/gmail.readonly');
   assert.equal(authorizationUrl(url), url); assert.equal(authorizationUrl(url.replace('gmail.readonly', 'gmail.modify')), null);
   assert.equal(authorizationUrl(url.replace('accounts.google.com', 'evil.invalid')), null);
+});
+
+const fictionalClient = { installed: { client_id: 'bundled-fixture.apps.googleusercontent.com', client_secret: 'fictional-native-client', auth_uri: 'https://accounts.google.com/o/oauth2/auth', token_uri: 'https://oauth2.googleapis.com/token' } };
+test('bundling copies only native client fields and never copies grants or provider keys', async t => {
+  const root = await temp(t), source = path.join(root, 'source.json'), output = path.join(root, 'resources/gmail-oauth.json');
+  await writeFile(source, JSON.stringify({ ...fictionalClient, access_token: 'fictional-user-token', AI_API_KEY: 'fictional-model-key' }));
+  assert(prepareBundledGmail(source, output));
+  const text = await readFile(output, 'utf8'); assert(!text.includes('fictional-user-token')); assert(!text.includes('fictional-model-key'));
+  assert.equal(readBundledClient(output).testing, true);
+  assert.equal(readBundledClient(output).client.installed.client_id, fictionalClient.installed.client_id);
+  assert.equal(prepareBundledGmail(undefined, output), false); await assert.rejects(access(output));
+  await writeFile(source, '{"client_secret":"private-invalid-input"');
+  assert.throws(() => prepareBundledGmail(source, output), error => !error.message.includes('private-invalid-input'));
+});
+
+test('built-in login is ready without a personal credential directory and preserves imported clients', async t => {
+  const root = await temp(t), source = path.join(root, 'source.json'), preset = path.join(root, 'resources/gmail-oauth.json'), account = path.join(root, 'user/account');
+  await writeFile(source, JSON.stringify(fictionalClient)); prepareBundledGmail(source, preset);
+  const status = clientStatus(account, preset);
+  assert.deepEqual(status, { clientReady: true, clientSource: 'bundled', bundledClientReady: true, clientTesting: true });
+  await assert.rejects(access(account)); assert(!JSON.stringify(status).includes('fictional-native-client'));
+  await ensureGmailClient(account, preset);
+  assert.equal(JSON.parse(await readFile(path.join(account, 'client_secret.json'), 'utf8')).installed.client_id, fictionalClient.installed.client_id);
+  const custom = { installed: { ...fictionalClient.installed, client_id: 'custom-fixture.apps.googleusercontent.com' } };
+  await writeFile(path.join(account, 'client_secret.json'), JSON.stringify(custom)); await ensureGmailClient(account, preset);
+  assert.equal(clientStatus(account, preset).clientSource, 'custom');
+  assert.equal(JSON.parse(await readFile(path.join(account, 'client_secret.json'), 'utf8')).installed.client_id, custom.installed.client_id);
+  assert.equal(clientStatus(path.join(root, 'empty'), undefined).clientReady, false);
+  await assert.rejects(ensureGmailClient(path.join(root, 'empty'), undefined), /MAIL_CLIENT_REQUIRED/);
+});
+
+test('switching to the bundled client and disconnect clear user credentials but retain app configuration', async t => {
+  const root = await temp(t), source = path.join(root, 'source.json'), preset = path.join(root, 'resources/gmail-oauth.json'), account = path.join(root, 'account');
+  await writeFile(source, JSON.stringify(fictionalClient)); prepareBundledGmail(source, preset);
+  const frame = { url: 'http://127.0.0.1:3000/mail' }, win = { webContents: { mainFrame: frame } }; let handler, connected = false;
+  t.mock.method(globalThis, 'fetch', async () => Response.json({ connected, findings: [] }));
+  const bridge = setupGmail({ ipcMain: { handle: (_, fn) => { handler = fn; }, removeHandler() {} }, dialog: {}, Notification: { isSupported: () => false },
+    getWindow: () => win, getBaseUrl: () => 'http://127.0.0.1:3000', token: 'fictional-token', root, executable: '', getLocale: () => 'en', bundledClientPath: preset });
+  t.after(() => bridge.dispose()); const event = { sender: win.webContents, senderFrame: frame };
+  assert.equal((await handler(event, 'status')).clientSource, 'bundled');
+  await ensureGmailClient(account, preset); await writeFile(path.join(account, 'credentials.enc'), 'fictional-grant');
+  connected = true; assert.equal((await handler(event, 'default')).error, 'MAIL_DISCONNECT_FIRST'); await access(path.join(account, 'credentials.enc'));
+  connected = false; const result = await handler(event, 'default'); assert.equal(result.clientSource, 'bundled'); await assert.rejects(access(account));
+  await ensureGmailClient(account, preset); await handler(event, 'disconnect'); await assert.rejects(access(account));
+  assert.equal((await handler(event, 'status')).clientReady, true); await access(preset);
 });
 test('only the native main window and its local origin can access Gmail IPC', () => {
   const frame = { url: 'http://127.0.0.1:3000/mail' }, win = { webContents: { mainFrame: frame } };
