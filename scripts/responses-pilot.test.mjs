@@ -1,6 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { clientFor, fakeTaskExecutor, sseEvents, textOf } from './responses-pilot.mjs';
+import { clientFor, fakeTaskExecutor, loadConfig, sseEvents, textOf } from './responses-pilot.mjs';
+import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 
 const config = { baseUrl: 'https://api.openai.com/v1', apiKey: 'fictional-key-must-not-leak', model: 'fictional-model' };
 const message = text => ({ status: 'completed', id: 'resp_fixture', output: [{ type: 'message', content: [{ type: 'output_text', text }] }] });
@@ -39,4 +42,20 @@ test('fictional task tool validates scope and rejects changed arguments on a rep
   assert.throws(() => tool.execute({ ...call, arguments: JSON.stringify({ title: 'Fictional pilot task other', dueDate: '2026-12-15' }) }), /mismatch/);
   assert.throws(() => tool.execute({ ...call, name: 'deleteTask' }), /invalid_tool/);
   assert.throws(() => tool.execute({ ...call, arguments: JSON.stringify({ title: 'real task', dueDate: '2026-12-15' }) }), /arguments/);
+});
+test('DeepSeek profile selects only its dedicated key and does not reuse another provider key', t => {
+  const root = mkdtempSync(path.join(os.tmpdir(), 'responses-config-test-'));
+  t.after(() => { const rel = path.relative(os.tmpdir(), root); assert(rel && !rel.startsWith('..') && !path.isAbsolute(rel)); rmSync(root, { recursive: true, force: true }); });
+  const variables = ['DEEPSEEK_API_KEY', 'AI_BASE_URL', 'AI_API_KEY'];
+  const inherited = new Map(variables.map(k => [k, process.env[k]])); for (const k of variables) delete process.env[k];
+  t.after(() => { for (const [k,v] of inherited) { if (v === undefined) delete process.env[k]; else process.env[k] = v; } });
+  writeFileSync(path.join(root, '.env'), 'AI_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1\nAI_API_KEY=fictional-alibaba-key\n');
+  assert.throws(() => loadConfig(root, { provider: 'deepseek' }), /missing_deepseek_key/);
+  writeFileSync(path.join(root, '.env'), 'DEEPSEEK_API_KEY=fictional-official-key\nAI_API_KEY=fictional-alibaba-key\n');
+  assert.deepEqual(loadConfig(root, { provider: 'deepseek' }), { baseUrl: 'https://api.deepseek.com', apiKey: 'fictional-official-key', model: 'deepseek-flash' });
+});
+test('HTTP 200 with ignored previous-response state is distinguished from a linked response', async () => {
+  const client = clientFor(config, { fetchImpl: async () => Response.json({ ...message('UNKNOWN'), store: false, previous_response_id: null }) });
+  const { summary } = await client.post('ignored_state', '/responses', { previous_response_id: 'resp_fixture', store: true });
+  assert.equal(summary.ok, true); assert.equal(summary.stored, false); assert.equal(summary.previousResponseLinked, false);
 });

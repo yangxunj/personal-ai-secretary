@@ -16,9 +16,19 @@ const usageOf = value => {
 };
 const fingerprint = config => createHash('sha256').update(config.baseUrl + '\n' + config.model).digest('hex');
 
-export function loadConfig(root = process.cwd()) {
-  const local = fs.existsSync(path.join(root, '.env')) ? parseEnv(fs.readFileSync(path.join(root, '.env'), 'utf8')) : {};
+export function loadConfig(root = process.cwd(), { provider = 'current', envFile = '.env' } = {}) {
+  if (!['current', 'deepseek'].includes(provider)) throw new Error('pilot_unknown_provider');
+  const file = path.resolve(root, envFile);
+  const local = fs.existsSync(file) ? parseEnv(fs.readFileSync(file, 'utf8')) : {};
   const env = { ...local, ...process.env };
+  if (provider === 'deepseek') {
+    // Never send the active Alibaba key to DeepSeek or rewrite the active model settings.
+    let sameProvider = false;
+    try { sameProvider = new URL(env.AI_BASE_URL).hostname === 'api.deepseek.com'; } catch {}
+    const apiKey = (env.DEEPSEEK_API_KEY || (sameProvider ? env.AI_API_KEY : '') || '').trim();
+    if (!apiKey || /\s/.test(apiKey)) throw new Error('pilot_missing_deepseek_key');
+    return { baseUrl: 'https://api.deepseek.com', apiKey, model: 'deepseek-flash' };
+  }
   const dbUrl = env.DATABASE_URL || 'file:../data/secretary.db';
   if (!dbUrl.startsWith('file:')) throw new Error('pilot_requires_sqlite');
   // Read only model settings; never load messages, documents or business records.
@@ -34,7 +44,7 @@ export function loadConfig(root = process.cwd()) {
   const config = { baseUrl: pick('ai.baseUrl', env.AI_BASE_URL).replace(/\/+$/, ''), apiKey: pick('ai.apiKey', env.AI_API_KEY), model: pick('ai.model', env.AI_MODEL) };
   const u = new URL(config.baseUrl);
   if (u.protocol !== 'https:' || u.username || u.password || u.search || u.hash || !config.apiKey || !config.model || /[\r\n]/.test(config.apiKey)) throw new Error('pilot_invalid_config');
-  if (!(u.hostname === 'api.openai.com' || /^dashscope(?:-intl|-us)?\.aliyuncs\.com$/.test(u.hostname) || /^[\w-]+\.(?:cn-beijing|ap-southeast-1|us-east-1|eu-central-1|ap-northeast-1|cn-hongkong)\.maas\.aliyuncs\.com$/.test(u.hostname))) throw new Error('pilot_provider_not_allowlisted');
+  if (!(u.hostname === 'api.openai.com' || u.hostname === 'api.deepseek.com' || /^dashscope(?:-intl|-us)?\.aliyuncs\.com$/.test(u.hostname) || /^[\w-]+\.(?:cn-beijing|ap-southeast-1|us-east-1|eu-central-1|ap-northeast-1|cn-hongkong)\.maas\.aliyuncs\.com$/.test(u.hostname))) throw new Error('pilot_provider_not_allowlisted');
   return config;
 }
 
@@ -82,6 +92,8 @@ export function clientFor(config, { fetchImpl = fetch, limit = MAX_REQUESTS, onR
       if (!response.ok) summary.error = response.status === 401 || response.status === 403 ? 'credentials_or_access' : response.status === 404 ? 'endpoint_or_response_not_found' : 'provider_rejected_request';
       if (summary.ok) {
         summary.responseStatus = data.status || null; summary.idPresent = typeof data.id === 'string';
+        if (typeof data.store === 'boolean') summary.stored = data.store;
+        if (payload.previous_response_id) summary.previousResponseLinked = data.previous_response_id === payload.previous_response_id;
         summary.outputTypes = [...new Set((data.output || []).map(i => i.type))];
         summary.usage = usageOf(data.usage); summary.textCharacters = textOf(data).length;
       }
@@ -110,8 +122,8 @@ export function fakeTaskExecutor() {
   };
 }
 
-async function resumeCheckpoint(file) {
-  const checkpoint = JSON.parse(fs.readFileSync(file, 'utf8')), config = loadConfig();
+async function resumeCheckpoint(file, options) {
+  const checkpoint = JSON.parse(fs.readFileSync(file, 'utf8')), config = loadConfig(process.cwd(), options);
   if (checkpoint.version !== 1 || checkpoint.fingerprint !== fingerprint(config) || typeof checkpoint.responseId !== 'string' || !/^pilot-[a-f0-9-]{36}$/.test(checkpoint.marker)) throw new Error('pilot_invalid_checkpoint');
   const client = clientFor(config, { limit: 1 });
   const result = await client.post('independent_process_resume', '/responses', { model: config.model, instructions: INSTRUCTIONS, previous_response_id: checkpoint.responseId, input: 'What exact marker did I ask you to remember? Reply with that marker only.', max_output_tokens: 256, reasoning: { effort: 'none' }, store: true });
@@ -121,30 +133,39 @@ async function resumeCheckpoint(file) {
 
 async function main() {
   const resume = process.argv.find(a => a.startsWith('--resume='));
-  if (!process.argv.includes('--live')) { console.log('Usage: node scripts/responses-pilot.mjs --live\nUses current model settings read-only, synthetic data, at most 12 POSTs, no retries. Results: data/responses-pilot/. No production chat changes.'); return; }
-  if (resume) { console.log(JSON.stringify(await resumeCheckpoint(resume.slice(9)))); return; }
-  const config = loadConfig(), dir = path.resolve('data/responses-pilot', new Date().toISOString().replace(/[:.]/g, '-'));
+  const provider = process.argv.find(a => a.startsWith('--provider='))?.slice(11) || 'current';
+  const envFile = process.argv.find(a => a.startsWith('--env-file='))?.slice(11) || '.env';
+  const options = { provider, envFile };
+  if (!process.argv.includes('--live')) { console.log('Usage: node scripts/responses-pilot.mjs --live [--provider=deepseek] [--env-file=/path/to/.env]\nDeepSeek uses DEEPSEEK_API_KEY and model deepseek-flash, without changing current settings. Synthetic data, at most 12 POSTs, no retries. Results: data/responses-pilot/.'); return; }
+  if (resume) { console.log(JSON.stringify(await resumeCheckpoint(resume.slice(9), options))); return; }
+  const config = loadConfig(process.cwd(), options), dir = path.resolve('data/responses-pilot', new Date().toISOString().replace(/[:.]/g, '-'));
   fs.mkdirSync(dir, { recursive: true });
   const report = { version: 1, at: new Date().toISOString(), providerHost: new URL(config.baseUrl).host, model: config.model, maxRequests: MAX_REQUESTS, syntheticOnly: true, productionWrites: false, applicationIntegrationVerified: false, requests: [], checks: {}, usage: {}, conclusion: 'not_evaluated' };
   const save = () => fs.writeFileSync(path.join(dir, 'report.json'), JSON.stringify(report, null, 2), { mode: 0o600 });
   const client = clientFor(config, { limit: MAX_REQUESTS - 1, onResult: s => { report.requests.push(s); save(); console.log(JSON.stringify(s)); } });
   const base = { model: config.model, instructions: INSTRUCTIONS, reasoning: { effort: 'none' }, max_output_tokens: 512, store: true };
   try {
-    const control = await client.post('chat_completions_control', '/chat/completions', { model: config.model, messages: [{ role: 'user', content: 'Reply exactly OK.' }], max_tokens: 256, stream: false, ...(/aliyuncs\.com$/.test(new URL(config.baseUrl).host) ? { enable_thinking: false } : {}) });
+    const control = await client.post('chat_completions_control', '/chat/completions', { model: config.model, messages: [{ role: 'user', content: 'Reply exactly OK.' }], max_tokens: 256, stream: false, ...(new URL(config.baseUrl).host === 'api.deepseek.com' ? { thinking: { type: 'disabled' } } : /aliyuncs\.com$/.test(new URL(config.baseUrl).host) ? { enable_thinking: false } : {}) });
     report.checks.currentEndpointWorks = control.summary.ok && control.data?.choices?.[0]?.message?.content?.trim() === 'OK';
     const marker = 'pilot-' + randomUUID();
-    const seed = await client.post('responses_memory_seed', '/responses', { ...base, input: `Remember this exact synthetic marker for later: ${marker}. Reply only OK.` });
+    const seedInput = `Remember this exact synthetic marker for later: ${marker}. Reply only OK.`;
+    const seed = await client.post('responses_memory_seed', '/responses', { ...base, input: seedInput });
     report.checks.responsesBasic = seed.summary.ok && seed.data?.status === 'completed' && textOf(seed.data).trim() === 'OK' && typeof seed.data.id === 'string';
     if (!report.checks.responsesBasic) { report.conclusion = 'responses_basic_failed'; return; }
     const checkpoint = path.join(dir, 'checkpoint.json');
     fs.writeFileSync(checkpoint, JSON.stringify({ version: 1, fingerprint: fingerprint(config), responseId: seed.data.id, marker }), { mode: 0o600 });
     try {
-      const resumed = JSON.parse(execFileSync(process.execPath, [path.resolve('scripts/responses-pilot.mjs'), '--live', '--resume=' + checkpoint], { encoding: 'utf8', timeout: 75000, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] }));
+      const resumed = JSON.parse(execFileSync(process.execPath, [path.resolve('scripts/responses-pilot.mjs'), '--live', '--provider=' + provider, '--env-file=' + envFile, '--resume=' + checkpoint], { encoding: 'utf8', timeout: 75000, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] }));
       report.requests.push(resumed); report.checks.independentProcessResume = resumed.passed === true; save(); console.log(JSON.stringify(resumed));
     } catch { report.checks.independentProcessResume = false; report.requests.push({ label: 'independent_process_resume', ok: false, error: 'independent_process_failed', executionUncertain: true }); }
+    if (!report.checks.independentProcessResume) {
+      const replayed = await client.post('explicit_history_replay', '/responses', { ...base, input: [{ role: 'user', content: seedInput }, ...seed.data.output, { role: 'user', content: 'What exact marker did I ask you to remember? Reply with that marker only.' }] });
+      report.checks.explicitHistoryReplay = replayed.summary.ok && textOf(replayed.data).trim() === marker;
+    }
     const title = 'Fictional pilot task ' + randomUUID().slice(0, 8);
     const tools = [{ type: 'function', name: 'createTask', description: 'Creates one fictional task in an isolated in-memory test store.', parameters: { type: 'object', properties: { title: { type: 'string' }, dueDate: { type: 'string' } }, required: ['title', 'dueDate'], additionalProperties: false }, strict: true }];
-    const called = await client.post('function_call', '/responses', { ...base, tools, tool_choice: 'required', input: `Call createTask exactly once with title "${title}" and dueDate "2026-12-15". After receiving the result, report its exact saved id and title.` });
+    const toolInput = `Call createTask exactly once with title "${title}" and dueDate "2026-12-15". After receiving the result, report its exact saved id and title.`;
+    const called = await client.post('function_call', '/responses', { ...base, tools, tool_choice: 'required', input: toolInput });
     const calls = (called.data?.output || []).filter(i => i.type === 'function_call');
     const store = fakeTaskExecutor();
     if (called.summary.ok && calls.length === 1) {
@@ -152,6 +173,11 @@ async function main() {
       report.checks.toolArgumentsAndDeduplication = result.title === title && store.size === 1;
       const reply = await client.post('function_output_stream', '/responses', { ...base, previous_response_id: called.data.id, tools, tool_choice: 'none', stream: true, input: [{ type: 'function_call_output', call_id: calls[0].call_id, output: JSON.stringify(result) }] });
       report.checks.toolOutputAndStreaming = reply.summary.ok && reply.summary.streamMatchesFinal && textOf(reply.data).includes('fictional-task-001') && textOf(reply.data).includes(title);
+      if (!report.checks.independentProcessResume) {
+        // A separate stateless protocol check; reuse the saved result, never execute a write again.
+        const replayed = await client.post('explicit_tool_history_stream', '/responses', { ...base, tools, tool_choice: 'none', stream: true, input: [{ role: 'user', content: toolInput }, ...called.data.output, { type: 'function_call_output', call_id: calls[0].call_id, output: JSON.stringify(result) }] });
+        report.checks.explicitToolHistoryStream = replayed.summary.ok && replayed.summary.streamMatchesFinal && textOf(replayed.data).includes('fictional-task-001') && textOf(replayed.data).includes(title);
+      }
     } else { report.checks.toolArgumentsAndDeduplication = false; report.checks.toolOutputAndStreaming = false; }
     const isolated = await client.post('new_conversation_isolation', '/responses', { ...base, input: 'What exact marker did I ask you to remember? If none is present in this conversation, reply exactly UNKNOWN.' });
     report.checks.newConversationIsolated = isolated.summary.ok && textOf(isolated.data).trim() === 'UNKNOWN';
@@ -165,11 +191,12 @@ async function main() {
     const long = await client.post('server_compaction_threshold', '/responses', { ...base, context_management: [{ type: 'compaction', compact_threshold: 1024 }], input: `Keep the exact synthetic code ${compactMarker}.\n` + 'Synthetic filler: sky, river, stone, tree.\n'.repeat(650) + '\nReply only OK. Keep the code for later.' });
     report.checks.serverCompactionItem = long.summary.ok && (long.data?.output || []).some(i => i.type === 'compaction' && typeof i.encrypted_content === 'string');
     report.checks.compactionThresholdExceeded = (long.summary.usage?.input_tokens || 0) > 1024;
-    if (long.summary.ok && long.data?.id) {
+    if (report.checks.independentProcessResume && long.summary.ok && long.data?.id) {
       const recall = await client.post('after_threshold_recall', '/responses', { ...base, previous_response_id: long.data.id, input: 'What exact synthetic code was at the beginning? Reply with that code only.' });
       report.checks.afterThresholdRecall = recall.summary.ok && textOf(recall.data).trim() === compactMarker;
     }
     report.conclusion = report.checks.independentProcessResume && report.checks.toolArgumentsAndDeduplication && report.checks.toolOutputAndStreaming && report.checks.newConversationIsolated && report.checks.invalidIdRejected ? 'core_protocol_passed' : 'core_protocol_incomplete';
+    if (!report.checks.independentProcessResume && report.checks.explicitHistoryReplay && report.checks.toolArgumentsAndDeduplication && report.checks.explicitToolHistoryStream && report.checks.newConversationIsolated) report.conclusion = 'stateless_protocol_passed';
   } finally {
     for (const r of report.requests) for (const [k, v] of Object.entries(r.usage || {})) report.usage[k] = (report.usage[k] || 0) + v;
     report.observedRequests = report.requests.length;
