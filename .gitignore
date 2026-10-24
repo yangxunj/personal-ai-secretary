@@ -1,5 +1,6 @@
 node_modules/
 .next/
+.next-pi-qa*/
 out/
 *.tsbuildinfo
 next-env.d.ts

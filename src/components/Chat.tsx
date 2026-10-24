@@ -290,11 +290,11 @@ export function Chat({
     }
   }, [pending, lastError]);
   useEffect(() => {
-    if (backend !== 'codex' || !background) return;
+    if (!['codex','pi'].includes(backend) || !background) return;
     let disposed = false;
     const poll = async () => {
       try {
-        const res = await fetch('/api/codex/state?conversationId=' + encodeURIComponent(conversationId));
+        const res = await fetch('/api/agent/state?conversationId=' + encodeURIComponent(conversationId));
         if (!res.ok || disposed) return;
         const data = await res.json();
         if (!disposed && !['queued','running'].includes(data.status)) {
@@ -317,8 +317,8 @@ export function Chat({
     };
   }, [background, backend, conversationId, router, onReply]);
   async function stopReply() {
-    if (backend === 'codex') {
-      await fetch('/api/codex/state', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({conversationId})});
+    if (['codex','pi'].includes(backend)) {
+      await fetch('/api/agent/state', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({conversationId})});
       setBackground(true);
     }
     stop();
@@ -441,7 +441,7 @@ export function Chat({
         addFiles(e.dataTransfer.files);
       }}
     >
-      <p className={`muted text-[11px] mb-2 ${embedded ? "px-4 pt-2" : ""}`}>{backend === 'codex' ? t('本机 Codex · 使用当前电脑的登录') : t('API 模型')}</p>
+      <p className={`muted text-[11px] mb-2 ${embedded ? "px-4 pt-2" : ""}`}>{backend === 'codex' ? t('本机 Codex · 使用当前电脑的登录') : backend==='pi'?t('内置 Pi（试用）'):t('API 模型')}</p>
       {background && <p className="muted text-[12px] px-4 py-2">{t('后台正在处理，完成后会自动更新。')}</p>}
       {backgroundError && <p className="text-red-500 text-[12px] px-4 py-2">{backgroundError}</p>}
       <div ref={scroller} className={embedded ? "flex-1 min-h-0 overflow-y-auto overscroll-contain space-y-4 px-4 pb-4" : "flex-1 space-y-4 pb-4"}>

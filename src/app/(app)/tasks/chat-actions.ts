@@ -16,14 +16,14 @@ export async function loadTaskChat(taskId: string, take = 60) {
     where: { taskId }, update: {},
     create: { taskId, backend: await getChatBackend(), title: t('任务：{title}', { title: task.title }) },
   });
-  if (conversation.backend === 'codex') await recoverCodexTurns();
+  if (['codex','pi'].includes(conversation.backend)) await recoverCodexTurns();
   const limit = Math.min(2000, Math.max(60, Math.floor(Number(take) || 60)));
   const where = { conversationId: conversation.id };
   const [rows, count, turn] = await Promise.all([
     db.message.findMany({ where, orderBy: { createdAt: 'desc' }, take: limit,
       include: { attachments: { select: { id: true, filename: true, size: true } } } }),
     db.message.count({ where }),
-    conversation.backend === 'codex' ? db.codexTurn.findFirst({ where, orderBy: { createdAt: 'desc' } }) : null,
+    ['codex','pi'].includes(conversation.backend) ? db.codexTurn.findFirst({ where, orderBy: { createdAt: 'desc' } }) : null,
   ]);
   return { id: conversation.id, backend: conversation.backend,
     pending: !!turn && ['queued', 'running'].includes(turn.status),

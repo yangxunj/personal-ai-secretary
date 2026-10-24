@@ -1,5 +1,8 @@
 import type { Dict } from '../core';
 export const codex: Dict = {
+  '内置 Pi（试用）': 'Built-in Pi (preview)',
+  '使用上方 API 配置，由 Pi 管理会话、工具循环与压缩。支持按附件读取及生成文件；更换模型后请新建对话。': 'Uses the API configuration above. Pi manages sessions, tool loops and compaction, with attachment reading and output files. Start a new chat after changing models.',
+  'Pi 上下文窗口（token，不超过模型实际支持值）': 'Pi context window (tokens, no higher than the model supports)',
   "留言和已保存的进展": "Comments and saved progress",
   "截止日期": "Due date",
   "优先级": "Priority",

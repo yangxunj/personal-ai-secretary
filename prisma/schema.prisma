@@ -651,6 +651,7 @@ model PageData {
 
 
 /// Durable request and tool audit for local Codex. Interrupted writes are never replayed.
+/// Codex / Pi 共用的持久执行与请求去重记录。保留历史表名以兼容已安装的数据库。
 model CodexTurn {
   id String @id @default(cuid())
   requestKey String @unique

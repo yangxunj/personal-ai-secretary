@@ -33,6 +33,7 @@ const AI_FACING = [
   'src/lib/page-design.ts',
   'src/lib/page-builder.ts',
   'src/lib/codex/',
+  'src/lib/pi/',
   'src/lib/realtime/',
   'src/lib/mail/gws.mjs',
   'src/lib/mail/scan-core.mjs',

@@ -4,6 +4,8 @@ import { db } from '@/lib/db';
 import { getAiConfig } from '@/lib/ai-config';
 import { getLocale, getT } from '@/lib/i18n/server';
 import { cleanTitle, titleInput, titlePrompt } from '@/lib/system-prompt';
+import { rm } from 'node:fs/promises';
+import { piDirectory } from '@/lib/pi/storage';
 
 /**
  * 多个对话：列表、改名、删除、自动起标题。
@@ -71,6 +73,7 @@ export async function renameConversation(id: string, title: string) {
  * 附件跟着外键 SetNull 留在文件页；对话里建的任务、存的资料本来就在各自的表里，不受影响。
  */
 export async function deleteConversation(id: string) {
+  const directory=piDirectory(id);
   if (await db.voiceJob.findFirst({where:{conversationId:id,status:{in:['queued','running']}}})) throw new Error('Wait for this conversation to finish before deleting it.');
   if (await db.codexTurn.findFirst({where:{conversationId:id,status:{in:['queued','running']}}})) throw new Error('Wait for this conversation to finish before deleting it.');
   await db.$transaction([
@@ -79,6 +82,7 @@ export async function deleteConversation(id: string) {
     db.chatSummary.deleteMany({ where: { conversationId: id } }),
     db.conversation.deleteMany({ where: { id } }),
   ]);
+  await rm(directory,{recursive:true,force:true});
 }
 
 /**

@@ -6,7 +6,8 @@ import { CodexConnection } from './protocol.mjs';
 
 export const localCodexEnabled = () => process.env.DESKTOP_APP === '1' || process.env.ENABLE_LOCAL_CODEX === 'true';
 export async function getChatBackend() {
-  return (await db.setting.findUnique({where:{key:'ai.backend'}}))?.value === 'codex' && localCodexEnabled() ? 'codex' : 'api';
+  const selected=(await db.setting.findUnique({where:{key:'ai.backend'}}))?.value;
+  return selected==='pi'?'pi':selected==='codex'&&localCodexEnabled()?'codex':'api';
 }
 export async function getCodexConfig() {
   const rows=await db.setting.findMany({where:{key:{in:['codex.path','codex.model','codex.effort']}}});

@@ -93,7 +93,7 @@ node scripts/restore.mjs            # 列出所有备份
 node scripts/restore.mjs latest     # 解开最新一份到 restored-<时间戳>/
 \`\`\`
 
-确认内容无误后，把里面的 \`secretary.db\`、\`uploads/\` 和那几个 \`.json\`（邮件台账、待缴账单）复制回项目的 \`data/\`。
+确认内容无误后，把里面的 \`secretary.db\`、\`uploads/\`、\`pi-sessions/\`（如有）和那几个 \`.json\`（邮件台账、待缴账单）复制回项目的 \`data/\`。
 
 ## 万一项目本身也没了
 
@@ -121,7 +121,7 @@ console.log('已解密为 recovered.tar，用 tar -xf recovered.tar 解开');
 \`\`\`
 
 解出来的 \`recovered.tar\` 是标准 tar 包，任何解压工具都能打开，里面是
-\`secretary.db\`（标准 SQLite 文件，可用任意 SQLite 工具查看）和 \`uploads/\`。
+\`secretary.db\`（标准 SQLite 文件，可用任意 SQLite 工具查看）、\`uploads/\` 和 \`pi-sessions/\`（如有）。恢复前先关闭应用，数据库和 Pi 会话目录一起恢复。
 
 ## 加密参数
 
@@ -151,13 +151,18 @@ async function main() {
   }
 
   const tag = stamp();
-  const stage = path.resolve('.backup-stage');
+  const stage = path.resolve(process.env.BACKUP_STAGE_DIR || '.backup-stage');
+  const stageRelative=path.relative(process.cwd(),stage);
+  if(!stageRelative||stageRelative==='..'||stageRelative.startsWith('..'+path.sep)||path.isAbsolute(stageRelative)||!['.backup-stage','backup-stage'].includes(path.basename(stage)))throw new Error('Backup staging must be a dedicated backup-stage directory inside this workspace.');
   await rm(stage, { recursive: true, force: true });
   await mkdir(stage, { recursive: true });
   await mkdir(BACKUP_DIR, { recursive: true });
 
   // 1. 数据库一致性快照（不能直接复制文件，写入中途会拿到半截数据）
   const db = new PrismaClient();
+  const piState=()=>db.codexTurn.findMany({where:{conversation:{backend:'pi'}},select:{id:true,status:true,updatedAt:true},orderBy:{id:'asc'}});
+  const piBefore=await piState();
+  if(piBefore.some(t=>['queued','running'].includes(t.status))){await db.$disconnect();throw new Error('Pi is processing a chat. Wait for it to finish before backing up.');}
   const snapshot = path.join(stage, 'secretary.db').replace(/\\/g, '/');
   await db.$executeRawUnsafe(`VACUUM INTO '${snapshot}'`);
   const counts = {
@@ -166,7 +171,6 @@ async function main() {
     任务: await db.task.count(),
     文件: await db.attachment.count(),
   };
-  await db.$disconnect();
 
   // 2. 上传的文件一起打包
   await cp(path.resolve(UPLOAD_DIR), path.join(stage, 'uploads'), { recursive: true });
@@ -177,11 +181,19 @@ async function main() {
   //     重建的成本比数据库还高：数据库能从月结单重导，这些只能重新翻一遍邮箱。
   //     .thumbs/ 不收 —— 那个删了随时能再生成。
   const extras = [];
-  for (const name of await readdir(path.resolve('data'))) {
+  const piSessions=path.resolve(UPLOAD_DIR,'../pi-sessions');
+  try {
+    await cp(piSessions,path.join(stage,'pi-sessions'),{recursive:true});
+    extras.push('pi-sessions');
+  }catch(e){if(e.code!=='ENOENT')throw e;}
+  const dataRoot=path.resolve(UPLOAD_DIR,'..');
+  for (const name of await readdir(dataRoot)) {
     if (!name.endsWith('.json')) continue;
-    await cp(path.resolve('data', name), path.join(stage, name));
+    await cp(path.join(dataRoot, name), path.join(stage, name));
     extras.push(name);
   }
+  const piAfter=await piState();await db.$disconnect();
+  if(JSON.stringify(piBefore)!==JSON.stringify(piAfter))throw new Error('Pi changed during backup. Run backup again after the chat finishes.');
 
   // 3. 打成标准 tar —— 最坏情况下用任何解压工具都能打开
   //    注意：路径一律用 cwd + 相对路径。GNU tar 会把 "C:\..." 里的冒号

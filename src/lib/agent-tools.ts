@@ -62,6 +62,12 @@ export type ToolContext = {
 };
 
 export function buildAgentTools({ incoming, conversationId, t = makeT(null), pageBuilder }: ToolContext) {
+  // Durable runtimes archive uploads before the model runs. Reuse those IDs so
+  // citations and the upload message remain valid when a tool classifies a file.
+  const attachUpload=async(data:import('@prisma/client').Prisma.AttachmentUncheckedCreateInput)=>{
+    const existing=await db.attachment.findFirst({where:{storedPath:data.storedPath}});
+    return existing?db.attachment.update({where:{id:existing.id},data}):db.attachment.create({data});
+  };
   return {
     // ---------- 任务 ----------
 
@@ -272,9 +278,7 @@ export function buildAgentTools({ incoming, conversationId, t = makeT(null), pag
         }
         const saved = [];
         for (const f of incoming) {
-          const a = await db.attachment.create({
-            data: { ...f, category, note: note ?? null, uploadedBy: 'user' },
-          });
+          const a = await attachUpload({ ...f, category, note: note ?? null, uploadedBy: 'user' });
           saved.push({ id: a.id, filename: a.filename });
         }
         refresh('/files', '/chat');
@@ -383,15 +387,14 @@ export function buildAgentTools({ incoming, conversationId, t = makeT(null), pag
             where: { statementId: st.id },
             select: { id: true, storedPath: true },
           });
-          if (old.length) {
-            await db.attachment.deleteMany({ where: { id: { in: old.map((a) => a.id) } } });
-            await removeStored(old.map((a) => a.storedPath));
+          const obsolete=old.filter(a=>!incoming.some(f=>f.storedPath===a.storedPath));
+          if (obsolete.length) {
+            await db.attachment.deleteMany({ where: { id: { in: obsolete.map((a) => a.id) } } });
+            await removeStored(obsolete.map((a) => a.storedPath));
           }
-          await db.attachment.createMany({
-            data: incoming.map((f) => ({
+          for(const f of incoming)await attachUpload({
               ...f, category: '账单', statementId: st.id, uploadedBy: 'user',
               note: `${p.period} 账单原件`,
-            })),
           });
         }
 
@@ -465,8 +468,9 @@ export function buildAgentTools({ incoming, conversationId, t = makeT(null), pag
             select: { id: true, storedPath: true },
           });
           if (incoming.length && old.length) {
-            await db.attachment.deleteMany({ where: { id: { in: old.map((a) => a.id) } } });
-            await removeStored(old.map((a) => a.storedPath));
+            const obsolete=old.filter(a=>!incoming.some(f=>f.storedPath===a.storedPath));
+            await db.attachment.deleteMany({ where: { id: { in: obsolete.map((a) => a.id) } } });
+            await removeStored(obsolete.map((a) => a.storedPath));
           } else {
             carryOver = old.map((a) => a.id);
           }
@@ -510,11 +514,9 @@ export function buildAgentTools({ incoming, conversationId, t = makeT(null), pag
           });
         }
         if (incoming.length) {
-          await db.attachment.createMany({
-            data: incoming.map((f) => ({
+          for(const f of incoming)await attachUpload({
               ...f, category: '医疗', healthReportId: report.id, uploadedBy: 'user',
               note: `${p.title} 原件`,
-            })),
           });
         }
 

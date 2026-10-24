@@ -68,8 +68,8 @@ export default async function ChatPage({
   const conversationId = conv?.id ?? newConversationId();
   const where = { conversationId };
   const backend = conv?.backend ?? await getChatBackend();
-  if (backend === 'codex') await recoverCodexTurns();
-  const lastTurn = backend === 'codex' ? await db.codexTurn.findFirst({where:{conversationId},orderBy:{createdAt:'desc'},select:{status:true,error:true}}) : null;
+  if (['codex','pi'].includes(backend)) await recoverCodexTurns();
+  const lastTurn = ['codex','pi'].includes(backend) ? await db.codexTurn.findFirst({where:{conversationId},orderBy:{createdAt:'desc'},select:{status:true,error:true}}) : null;
   const pending = lastTurn && ['queued','running'].includes(lastTurn.status);
 
   const [list, total] = await Promise.all([

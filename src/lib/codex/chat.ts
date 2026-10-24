@@ -1,7 +1,6 @@
-import { createHash, randomUUID } from 'node:crypto';
-import { createUIMessageStream, createUIMessageStreamResponse, type UIMessage, type UIMessageChunk } from 'ai';
+import { type UIMessage, type UIMessageChunk } from 'ai';
 import { z } from 'zod';
-import { db, inDatabaseTransaction } from '@/lib/db';
+import { db } from '@/lib/db';
 import { intake } from '@/lib/chat-intake';
 import { buildChatTools } from '@/lib/task-chat-tools';
 import { taskChatInstructions } from '@/lib/task-chat-context';
@@ -13,60 +12,10 @@ import { EN } from '@/lib/i18n/en';
 import type { StoredFile } from '@/lib/ingest';
 import type { CodexTurn } from '@prisma/client';
 
-type Active = {chunks:UIMessageChunk[]; listeners:Set<(chunk:UIMessageChunk)=>void>; done:Promise<void>; cancel:()=>void};
-const g=globalThis as unknown as { secretaryCodex?: {key:string; tail:Promise<void>; initialized?:Promise<void>; jobs:Map<string,Active>} };
-const state=g.secretaryCodex ??= {key:randomUUID(),tail:Promise.resolve(),jobs:new Map(),initialized:undefined as Promise<void>|undefined};
-const errorText=(e:unknown)=>e instanceof Error?e.message:String(e);
-
-export async function recoverCodexTurns() {
-  state.initialized ??= db.codexTurn.updateMany({where:{status:{in:['queued','running']},processKey:{not:state.key}},data:{status:'failed',error:'Codex backend restarted. Some changes may have been saved; check results before submitting again.'}}).then(()=>{});
-  await state.initialized;
-}
-
-async function archiveFiles(incoming:StoredFile[],messageId:string,taskId:string|null) {
-  const claimed=await db.attachment.findMany({where:{storedPath:{in:incoming.map(f=>f.storedPath)}},select:{storedPath:true}});
-  const taken=new Set(claimed.map(f=>f.storedPath));
-  const files=incoming.filter(f=>!taken.has(f.storedPath));
-  if(files.length)await db.attachment.createMany({data:files.map(f=>({...f,messageId,taskId,uploadedBy:'user'}))});
-}
-
+export {recoverAgentTurns as recoverCodexTurns, cancelAgentConversation as cancelCodexConversation} from '@/lib/agent-turns';
+import {durableAgentResponse, archiveAgentFiles as archiveFiles, executeAgentTool, agentError as errorText} from '@/lib/agent-turns';
 export async function codexChatResponse({conversationId,newest,instructions,locale}:{conversationId:string;newest:UIMessage;instructions:string;locale:string}) {
-  await recoverCodexTurns();
-  if(newest.parts.filter(p=>p.type==='file').length>6 || newest.parts.some(p=>p.type==='text' && p.text.length>20000 || p.type==='file' && (!p.url.startsWith('data:') || p.url.length>14*1024*1024)))return new Response('Message or attachment too large or invalid',{status:413});
-  if(!/^[a-zA-Z0-9_-]{8,100}$/.test(newest.id))return new Response('Invalid message id',{status:400});
-  const requestKey=conversationId+':'+newest.id;
-  const inputHash=createHash('sha256').update(JSON.stringify(newest.parts)).digest('hex');
-  let turn=await db.codexTurn.findUnique({where:{requestKey}});
-  if(turn && turn.inputHash!==inputHash)return new Response('Message id already belongs to different content',{status:409});
-  if(!turn) {
-    // Serialize acceptance in SQLite: one active request per conversation.
-    try {
-      turn=await db.$transaction(async tx=>{
-        const same=await tx.codexTurn.findUnique({where:{requestKey}});if(same)return same;
-        if(await tx.codexTurn.findFirst({where:{conversationId,status:{in:['queued','running']}}}))throw new Error('This conversation is still processing. Wait for the reply.');
-        return tx.codexTurn.create({data:{requestKey,inputHash,conversationId,processKey:state.key}});
-      });
-    }catch(e){return new Response(errorText(e),{status:409});}
-  }
-  if(turn.inputHash!==inputHash)return new Response('Message id already belongs to different content',{status:409});
-  let job=state.jobs.get(turn.id);
-  if(!job && turn.status==='queued' && turn.processKey===state.key) {
-    const chunks:UIMessageChunk[]=[];const listeners=new Set<(chunk:UIMessageChunk)=>void>();
-    const emit=(chunk:UIMessageChunk)=>{chunks.push(chunk);for(const l of listeners)l(chunk);};
-    const abort=new AbortController();
-    const accepted=turn;
-    const work=state.tail.then(()=>generate(accepted,newest,instructions,locale,emit,abort.signal));
-    state.tail=work.catch(()=>{});
-    job={chunks,listeners,done:work,cancel:()=>abort.abort()};state.jobs.set(turn.id,job);
-    work.finally(()=>{state.jobs.delete(accepted.id);}).catch(()=>{});
-  }
-  const active=job,stored=turn;
-  const stream=createUIMessageStream({execute:async({writer})=>{
-    if(active){for(const c of active.chunks)writer.write(c);const listener=(c:UIMessageChunk)=>writer.write(c);active.listeners.add(listener);try{await active.done;}finally{active.listeners.delete(listener);}}
-    else if(stored.chunksJson){for(const c of JSON.parse(stored.chunksJson))writer.write(c);}
-    else {writer.write({type:'start',messageId:stored.id});writer.write({type:'error',errorText:stored.error || 'Turn unavailable; check conversation history.'});writer.write({type:'finish',finishReason:'error'});}
-  },onError:errorText});
-  return createUIMessageStreamResponse({stream});
+  return durableAgentResponse({conversationId,newest,generate:(turn,emit,signal)=>generate(turn,newest,instructions,locale,emit,signal)});
 }
 
 async function generate(turn:CodexTurn,newest:UIMessage,instructions:string,locale:string,emit:(chunk:UIMessageChunk)=>void,signal:AbortSignal) {
@@ -108,26 +57,8 @@ async function generate(turn:CodexTurn,newest:UIMessage,instructions:string,loca
         const def=entries.find(([name])=>name===p.tool)?.[1];
         write({type:'tool-input-available',toolCallId:p.callId,toolName:p.tool,input:p.arguments});
         try {
-          if(!def?.execute)throw new Error('Unknown platform tool');
-          const args=(def.inputSchema as z.ZodType).parse(p.arguments);
-          const existing=await db.codexToolRun.findUnique({where:{turnId_callId:{turnId:turn.id,callId:p.callId}}});
-          let result:unknown;
-          if(existing){if(existing.status!=='completed')throw new Error('Tool was interrupted; check saved data before retrying.');if(existing.name!==p.tool || existing.inputJson!==JSON.stringify(args))throw new Error('Tool call id mismatch');result=JSON.parse(existing.resultJson!);}
-          else {
-            const audit=await db.codexToolRun.create({data:{turnId:turn.id,callId:p.callId,name:p.tool,inputJson:JSON.stringify(args)}});
-            // Streaming page generation performs network work outside a SQLite transaction.
-            if(p.tool==='buildPage') {
-              const output=(def.execute as Function)(args,{toolCallId:p.callId,messages:[],abortSignal:signal});
-              for await(const value of output){result=value;write({type:'tool-output-available',toolCallId:p.callId,output:value,preliminary:!!value?.progress});}
-              await db.codexToolRun.update({where:{id:audit.id},data:{status:'completed',resultJson:JSON.stringify(result ?? null)}});
-            } else {
-              result=await db.$transaction(tx=>inDatabaseTransaction(tx,async()=>{
-                const value=await (def.execute as Function)(args,{toolCallId:p.callId,messages:[],abortSignal:signal});
-                await db.codexToolRun.update({where:{id:audit.id},data:{status:'completed',resultJson:JSON.stringify(value ?? null)}});
-                return value;
-              }),{timeout:30000});
-            }
-          }
+          const result=await executeAgentTool({turnId:turn.id,callId:p.callId,name:p.tool,args:p.arguments,def,signal,
+            progress:(value:any)=>write({type:'tool-output-available',toolCallId:p.callId,output:value,preliminary:!!value?.progress})});
           write({type:'tool-output-available',toolCallId:p.callId,output:result});
           c.respond(msg.id,{success:true,contentItems:[{type:'inputText',text:JSON.stringify(result ?? null)}]});
         }catch(e){const text=errorText(e);await db.codexToolRun.updateMany({where:{turnId:turn.id,callId:p.callId,status:'running'},data:{status:'failed',resultJson:JSON.stringify({ok:false,error:text})}});write({type:'tool-output-error',toolCallId:p.callId,errorText:text});c.respond(msg.id,{success:false,contentItems:[{type:'inputText',text}]});}
@@ -164,9 +95,4 @@ async function generate(turn:CodexTurn,newest:UIMessage,instructions:string,loca
     write({type:'error',errorText:text});write({type:'finish',finishReason:'error'});
     await db.codexTurn.update({where:{id:turn.id},data:{status:'failed',error:text,chunksJson:JSON.stringify(saved)}});
   }finally{client?.close();}
-}
-
-export async function cancelCodexConversation(conversationId:string) {
-  const turns=await db.codexTurn.findMany({where:{conversationId,status:{in:['queued','running']}}});
-  for(const t of turns)state.jobs.get(t.id)?.cancel();
 }

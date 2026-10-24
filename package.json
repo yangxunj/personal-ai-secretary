@@ -9,6 +9,8 @@
   },
   "type": "module",
   "scripts": {
+    "test:pi": "node --test scripts/pi-runtime.test.mjs scripts/pi-platform.test.mjs",
+    "test:pi:integration": "node scripts/pi-integration.mjs",
     "dev": "next dev -p 3096",
     "dev:host": "next dev -p 3096 -H 0.0.0.0",
     "build": "prisma generate && next build",
@@ -23,6 +25,8 @@
   "dependencies": {
     "@ai-sdk/openai-compatible": "^3.0.49",
     "@ai-sdk/react": "^4.0.105",
+    "@earendil-works/pi-ai": "1.4.0",
+    "@earendil-works/pi-coding-agent": "1.4.0",
     "@napi-rs/canvas": "^1.0.9",
     "@prisma/client": "^6.3.0",
     "ai": "^7.0.102",

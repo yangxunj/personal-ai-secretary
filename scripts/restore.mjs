@@ -145,7 +145,7 @@ async function main() {
     console.log('  （无法读取数据库统计，但文件已解出，可自行查看）');
   }
 
-  console.log(`\n确认无误后，把 ${path.basename(dest)}/ 下的 secretary.db、uploads/ 和 *.json 复制回 data/。`);
+  console.log(`\n确认无误后，先关闭应用，再把 ${path.basename(dest)}/ 下的 secretary.db、uploads/、pi-sessions/（如有）和 *.json 一起复制回 data/。`);
 }
 
 main().catch((e) => {

@@ -83,6 +83,10 @@ export async function runChat(req: Request, trusted?: { t: T; locale: Locale; di
       status: 503,
     });
   }
+  if(conv.backend==='pi') {
+    const { piChatResponse }=await import('@/lib/pi/chat');
+    return piChatResponse({conversationId,newest,instructions:systemPrompt(false,await getOwners(),locale),locale,displayText:trusted?.displayText});
+  }
   const provider = createOpenAICompatible({
     name: 'ai',
     baseURL: cfg.baseUrl,
