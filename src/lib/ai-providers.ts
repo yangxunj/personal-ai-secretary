@@ -43,9 +43,9 @@ export const PROVIDERS = [
     /** 这家里看不了图的模型 */
     textOnly: /pro/i,
     /**
-     * DeepSeek 官方没有联网搜索。2026-09-23 拿官方 key 实测四种写法：
-     * 什么都不加 / enable_search / web_search_options / Responses API + web_search，
-     * 输入 token 全是 62、回答全是「没法联网」—— 参数被静默忽略，不报错。
+     * 此 Chat Completions 路径不注入服务端搜索参数。DeepSeek 已提供独立
+     * Search/Fetch API，Pi 通过平台工具调用；不能把旧 Flash 的参数测试
+     * 推广为官方没有搜索服务，也不能假定 Responses 的工具可直接用于本路径。
      */
     search: null,
     pageReasoning: 'max',

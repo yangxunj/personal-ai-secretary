@@ -4,6 +4,7 @@ import type { CodexTurn } from '@prisma/client';
 import { z } from 'zod';
 import { db, inDatabaseTransaction } from '@/lib/db';
 import type { StoredFile } from '@/lib/ingest';
+import { isExternalRead } from '@/lib/agent-tool-policy';
 
 // The existing CodexTurn/CodexToolRun SQL names are retained for compatibility.
 // Both durable runtimes use this acceptance, recovery and business transaction boundary.
@@ -75,6 +76,12 @@ export async function executeAgentTool({turnId,callId,name,args,def,signal,progr
         if(signal.aborted)throw new Error('Cancelled; check saved data before retrying.');result=value;progress?.(value);
       }
       await db.codexToolRun.update({where:{id:audit.id},data:{status:'completed',resultJson:JSON.stringify(result??null)}});return result;
+    }
+    if(isExternalRead(def)) {
+      const value=await def.execute(parsed,{toolCallId:callId,messages:[],abortSignal:signal});
+      signal.throwIfAborted();
+      await db.codexToolRun.update({where:{id:audit.id},data:{status:'completed',resultJson:JSON.stringify(value??null)}});
+      return value;
     }
     return await db.$transaction(tx=>inDatabaseTransaction(tx,async()=>{
       if(signal.aborted)throw new Error('Cancelled');

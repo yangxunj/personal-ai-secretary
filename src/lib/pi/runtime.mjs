@@ -76,12 +76,12 @@ export class CitationStream {
       output+=this.buffer.slice(0,at);this.buffer=this.buffer.slice(at);
       const end=this.buffer.indexOf(']]');if(end===-1){if(finish||this.buffer.length>256){output+='（来源未核实）';this.buffer='';}break;}
       const token=this.buffer.slice(prefix.length,end),source=this.sources.get(token);
-      if(source){let number=this.used.findIndex(s=>s.attachmentId===source.attachmentId&&s.locator===source.locator)+1;
+      if(source){let number=this.used.findIndex(s=>source.kind==='web'?s.kind==='web'&&s.url===source.url&&s.locator===source.locator:s.kind!=='web'&&s.attachmentId===source.attachmentId&&s.locator===source.locator)+1;
         if(!number){this.used.push(source);number=this.used.length;}output+=`[〔${number}〕](${source.url})`;
       }else output+='（来源未核实）';
       this.buffer=this.buffer.slice(end+2);
     }
     this.text+=output;return output;
   }
-  appendix(){return this.used.length?'\n\n'+this.used.map((s,i)=>`〔${i+1}〕[${String(s.filename).replace(/[\[\]\\]/g,'')} · ${s.locator}](${s.url})`).join('\n\n'):'';}
+  appendix(){return this.used.length?'\n\n'+this.used.map((s,i)=>`〔${i+1}〕[${String(s.filename).replace(/[\[\]\\\r\n<>]/g,'')} · ${s.locator}](${s.url})`).join('\n\n'):'';}
 }

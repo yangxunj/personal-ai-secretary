@@ -14,14 +14,24 @@ import { loadConfig } from './responses-pilot.mjs';
 const root=path.resolve(import.meta.dirname,'..'),dir=path.join(root,'data','pi-integration',new Date().toISOString().replace(/[:.]/g,'-'));
 await fs.mkdir(dir,{recursive:true});
 const databaseUrl='file:'+path.join(dir,'test.db').replaceAll('\\','/');
-const live=process.argv.includes('--live')?loadConfig(root,{provider:'deepseek'}):null;
+const liveWeb=process.argv.includes('--live-web');
+const live=process.argv.includes('--live')||liveWeb?loadConfig(root,{provider:'deepseek'}):null;
+const webSearch=process.argv.includes('--web-search');
+if(webSearch&&live)throw new Error('Use separate synthetic web and live provider runs');
 const env={...process.env,DATABASE_URL:databaseUrl,UPLOAD_DIR:path.join(dir,'uploads'),AUTH_ENABLED:'false',ALLOW_INSECURE_LOCAL:'true',SESSION_SECRET:'synthetic-secret-'.repeat(4),APP_PASSWORD_HASH:'',DESKTOP_APP:'0',ENABLE_LOCAL_CODEX:'false',APP_INSTANCE:'test',NEXT_TELEMETRY_DISABLED:'1',AI_API_KEY:'synthetic-key',AI_MODEL:'synthetic-model',SECRETARY_BUILD_DIR:'.next-pi-qa',NODE_ENV:'development'};
 if(live)env.AI_MODEL=live.model;
+if(liveWeb)env.DEEPSEEK_SEARCH_API_KEY=live.apiKey;
 env.SECRETARY_TSCONFIG=path.relative(root,path.join(dir,'tsconfig.json')).replaceAll('\\','/');
 await fs.writeFile(path.join(root,env.SECRETARY_TSCONFIG),JSON.stringify({extends:path.join(root,'tsconfig.json'),compilerOptions:{baseUrl:root,incremental:false},include:[path.join(root,'src/**/*.ts'),path.join(root,'src/**/*.tsx')],exclude:[path.join(root,'node_modules')]}));
 await fs.mkdir(env.UPLOAD_DIR,{recursive:true});
 execFileSync(process.execPath,[path.join(root,'node_modules/prisma/build/index.js'),'db','push','--skip-generate'],{cwd:root,env,stdio:'pipe'});
 const db=new PrismaClient({datasourceUrl:databaseUrl});
+if(webSearch){
+  const fixture=path.join(dir,'web-fixture.cjs');
+  // Test-only network interception. Production client retains its fixed official URL.
+  await fs.writeFile(fixture,`const original=globalThis.fetch;globalThis.fetch=async(input,init)=>{const url=String(input);if(url.startsWith('https://api.deepseek.com/v1/tools/')){if(init.headers.authorization!=='Bearer synthetic-search-key')throw new Error('Unexpected fixture key');const body=JSON.parse(init.body);if(url.endsWith('/search'))return Response.json({results:[{title:'Synthetic web source',url:'https://example.com/public',snippet:'Synthetic public summary',summary:'Public fixture J7X9'}]});if(url.endsWith('/fetch')&&body.url==='https://example.com/public')return Response.json({title:'Synthetic web source',content:'Synthetic original public page J7X9'});throw new Error('Unexpected fixture request');}return original(input,init);};`);
+  env.NODE_OPTIONS=(env.NODE_OPTIONS||'')+' --require "'+fixture.replaceAll('\\','/')+'"';
+}
 let requests=0,blockedResolve;const upstreamPayloads=[];
 let usage={prompt_tokens:0,completion_tokens:0,total_tokens:0};
 const upstream=http.createServer(async(req,res)=>{
@@ -29,6 +39,7 @@ const upstream=http.createServer(async(req,res)=>{
   const payload=JSON.parse(raw);requests++;upstreamPayloads.push(payload);
   assert.equal(req.headers.authorization,'Bearer synthetic-key');
   const user=payload.messages.findLast(m=>m.role==='user');const prompt=typeof user?.content==='string'?user.content:JSON.stringify(user?.content);
+  if(prompt.includes('[qa:search-off]'))assert.ok(!(payload.tools||[]).some(t=>['webSearch','fetchWebPage'].includes(t.function.name)));
   if(prompt.includes('[qa:cancel]')){blockedResolve?.();req.on('close',()=>res.end());return;}
   if(live){
     if(requests>16){res.writeHead(429);res.end('Live test request limit');return;}
@@ -48,7 +59,11 @@ const upstream=http.createServer(async(req,res)=>{
   let chunks;
   if(last.role==='tool'){
     let result;try{result=JSON.parse(last.content);}catch{result={error:last.content};}
-    chunks=[send({role:'assistant',content:result.citation?`Source [[cite:${result.citation.token}]]`:`Saved ${result.id||'result'}`},null),send({},'stop')];
+    const source=result.citation||result.results?.[0]?.citation;
+    chunks=[send({role:'assistant',content:source?`Source [[cite:${source.token}]]`:`Saved ${result.id||'result'}`},null),send({},'stop')];
+  }else if(prompt.includes('[qa:search]')||prompt.includes('[qa:fetch]')){
+    const name=prompt.includes('[qa:search]')?'webSearch':'fetchWebPage',args=name==='webSearch'?{query:'public fixture question'}:{url:'https://example.com/public'};
+    chunks=[send({role:'assistant',tool_calls:[{index:0,id:'web-1',type:'function',function:{name,arguments:JSON.stringify(args)}}]},null),send({},'tool_calls')];
   }else if(prompt.includes('[qa:create]')||prompt.includes('[qa:crash]')){
     chunks=[send({role:'assistant',tool_calls:[{index:0,id:'create-1',type:'function',function:{name:'createTask',arguments:JSON.stringify({title:prompt.includes('[qa:crash]')?'Synthetic crash task':'Synthetic Pi task',detail:'Keep this original requirement'})}}]},null),send({},'tool_calls')];
   }else if(prompt.includes('[qa:read]')||prompt.includes('[qa:denied]')){
@@ -94,7 +109,18 @@ const chat=async(id,msg)=>{
 };
 try{
   start();await ready();
-  if(process.argv.includes('--followup')){
+  if(liveWeb){
+    await db.setting.create({data:{key:'webSearch.enabled',value:'true'}});
+    const id=randomUUID().replaceAll('-','');
+    const result=await chat(id,message('This is a public-information integration test. Use webSearch exactly once for "site:api-docs.deepseek.com Search Fetch API" and then fetchWebPage exactly once to read https://api-docs.deepseek.com/api/search/ . Give a short factual answer with the source citation tokens returned by these tools. Do not use business or file tools.'));
+    assert.equal(result.chunks.at(-1).finishReason,'stop',result.raw);
+    const runs=await db.codexToolRun.findMany({where:{turn:{conversationId:id}},select:{name:true,status:true}});
+    for(const name of ['webSearch','fetchWebPage'])assert.ok(runs.some(r=>r.name===name&&r.status==='completed'),name+' not actually completed');
+    assert.ok(runs.every(r=>['webSearch','fetchWebPage'].includes(r.name)));
+    const stored=await db.message.findFirst({where:{conversationId:id,role:'secretary'}});assert.match(stored.content,/https:\/\/api-docs.deepseek.com/);assert.doesNotMatch(stored.content,/\[\[cite:/);
+    const receipt={status:'passed',checks:['real DeepSeek model tool loop','real Search and Fetch API','actual route persisted web citations'],standalone,electron,live:true,requests,usage,tools:runs};
+    await fs.writeFile(path.join(dir,'receipt.json'),JSON.stringify(receipt,null,2));console.log(JSON.stringify(receipt));
+  }else if(process.argv.includes('--followup')){
     const id=randomUUID().replaceAll('-',''),marker='J7X9-'+randomUUID();
     await chat(id,message('Remember this synthetic marker: '+marker+'. Reply OK only.'));
     await stop();start();await ready();
@@ -134,6 +160,20 @@ try{
   assert.deepEqual((latest.tools||[]).filter(t=>['read','write','edit','bash','powershell'].includes(t.function.name)),[]);
   assert.equal(await db.task.count(),1);
   console.log('PASS new Next process resumes Pi context with no replay or shell tools');
+  if(webSearch){
+    await db.setting.createMany({data:[{key:'webSearch.enabled',value:'true'},{key:'webSearch.apiKey',value:'synthetic-search-key'}]});
+    const searchMessage=message('[qa:search] Search public fixture information');
+    result=await chat(id,searchMessage);assert.equal(result.chunks.at(-1).finishReason,'stop',result.raw);assert.match(result.raw,/https:\/\/example.com\/public/);
+    const count=requests;await chat(id,searchMessage);assert.equal(requests,count);
+    result=await chat(scoped.id,message('[qa:fetch] Read the public fixture page'));assert.equal(result.chunks.at(-1).finishReason,'stop',result.raw);assert.match(result.raw,/https:\/\/example.com\/public/);
+    const webRuns=await db.codexToolRun.findMany({where:{name:{in:['webSearch','fetchWebPage']}}});assert.equal(webRuns.length,2);assert.ok(webRuns.every(r=>r.status==='completed'));
+    assert.doesNotMatch((await db.message.findFirst({where:{conversationId:scoped.id,role:'secretary'},orderBy:{createdAt:'desc'}})).content,/\[\[cite:/);
+    const html=await (await fetch(origin+'/settings')).text();assert.match(html,/name="webSearchEnabled"/);assert.doesNotMatch(html,/synthetic-search-key/);
+    await db.setting.update({where:{key:'webSearch.enabled'},data:{value:'false'}});
+    result=await chat(id,message('[qa:search-off] Check the current tools'));assert.equal(result.chunks.at(-1).finishReason,'stop',result.raw);
+    assert.equal(await db.codexToolRun.count({where:{name:{in:['webSearch','fetchWebPage']}}}),2);
+    console.log('PASS real routes: existing Pi chat gains/loses web tools, task chat fetches public page, sources persist, retries deduplicate and settings expose no search key');
+  }
   if(!live){
     const crashId=randomUUID().replaceAll('-',''),crashMessage=message('[qa:crash] Create a synthetic task then wait');
     const blocked=new Promise(r=>blockedResolve=r);const crashed=chat(crashId,crashMessage).catch(()=>null);
@@ -146,7 +186,7 @@ try{
     console.log('PASS process crash after a committed tool never automatically repeats that write');
   }
   const settings=await (await fetch(origin+'/settings')).text();assert.match(settings,/value="pi"/);
-  const receipt={status:'passed',standalone,electron,live:!!live,requests,usage,taskCount:await db.task.count(),attachmentCount:await db.attachment.count(),directory:dir};
+  const receipt={status:'passed',standalone,electron,live:!!live,webSearch,requests,usage,taskCount:await db.task.count(),attachmentCount:await db.attachment.count(),directory:dir};
   await fs.writeFile(path.join(dir,'receipt.json'),JSON.stringify(receipt,null,2));console.log(JSON.stringify(receipt));
   }
 }finally{await stop();upstream.closeAllConnections();await new Promise(r=>upstream.close(r));await db.$disconnect();await log.close();}

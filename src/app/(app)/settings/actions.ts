@@ -221,3 +221,18 @@ export async function testCodexAction() {
   if(problem)redirect('/settings?aiE='+encodeURIComponent(t('Codex 测试失败：')+problem));
   redirect('/settings?aiOk='+encodeURIComponent(t('Codex 已完成真实回复，登录和模型调用可用。')));
 }
+
+export async function saveWebSearchAction(form:FormData) {
+  if(!(await sessionIsCurrent()))redirect('/login');
+  const t=await getT();
+  const key=String(form.get('webSearchApiKey')||'').replace(/\s+/g,'');
+  if(key&&(key.length<8||key.length>512))redirect('/settings?aiE='+encodeURIComponent(t('API Key 看起来不完整')));
+  const value=form.get('webSearchEnabled')==='on'?'true':'false';
+  await db.$transaction(async tx=>{
+    await tx.setting.upsert({where:{key:'webSearch.enabled'},create:{key:'webSearch.enabled',value},update:{value}});
+    if(key)await tx.setting.upsert({where:{key:'webSearch.apiKey'},create:{key:'webSearch.apiKey',value:key},update:{value:key}});
+    else if(form.get('clearSearchKey')==='on')await tx.setting.deleteMany({where:{key:'webSearch.apiKey'}});
+  });
+  revalidatePath('/settings');
+  redirect('/settings?aiOk='+encodeURIComponent(t('网络搜索设置已保存。')));
+}

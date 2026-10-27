@@ -70,3 +70,17 @@ test('citations withstand every delta split, reject forged/old tokens and bound 
   assert.equal(fresh.push('[[cite:'+ 'x'.repeat(300)),'（来源未核实）');
   assert.equal(fresh.buffer.length,0);
 });
+
+test('web and attachment citations coexist without source merging or unsafe link labels',()=>{
+  const text='Web [[cite:web1]], second [[cite:web2]], file [[cite:file]], same [[cite:web1]]';
+  for(let split=0;split<=text.length;split++){
+    const stream=new CitationStream();
+    stream.register('web1',{kind:'web',filename:'[Title]\n<text>',url:'https://example.com/first',locator:'Web page'});
+    stream.register('web2',{kind:'web',filename:'Other',url:'https://example.com/second',locator:'Web page'});
+    stream.register('file',{attachmentId:'f1',filename:'Original',url:'/api/files/f1',locator:'page 1',version:'v1'});
+    const output=stream.push(text.slice(0,split))+stream.push(text.slice(split))+stream.push('',true);
+    assert.match(output,/Web \[〔1〕\]\(https:\/\/example.com\/first\), second \[〔2〕\]/);
+    assert.match(output,/file \[〔3〕\]/);assert.equal(stream.used.length,3);
+    assert.doesNotMatch(stream.appendix(),/\[Title\]|<text>/);
+  }
+});

@@ -6,6 +6,7 @@ import { loadTtsConfig } from '@/lib/tts-config';
 import { loadRealtimeConfig, REALTIME_MODELS } from '@/lib/realtime/config';
 import ProviderFields from './ProviderFields';
 import LocalCodexSettings from './LocalCodexSettings';
+import { getWebSearchConfig } from '@/lib/web-search/config';
 import { db } from '@/lib/db';
 import { getChatBackend, getCodexConfig, localCodexEnabled } from '@/lib/codex/config';
 import {
@@ -44,6 +45,7 @@ export default async function SettingsPage({
   const { e, ok, aiE, aiOk, mE, mOk, asrE, asrOk, ttsE, ttsOk, rtE, rtOk } = await searchParams;
   const authOn = process.env.AUTH_ENABLED === 'true';
   const ai = await getAiConfig();
+  const webSearch = await getWebSearchConfig();
   const asr = await loadAsrConfig();
   const tts = await loadTtsConfig();
   const realtime = await loadRealtimeConfig();
@@ -82,7 +84,7 @@ export default async function SettingsPage({
           </form>
         </section>
 
-        <LocalCodexSettings backend={await getChatBackend()} enabled={localCodexEnabled()} config={await getCodexConfig()} piContextWindow={Number((await db.setting.findUnique({where:{key:'pi.contextWindow'}}))?.value||128000)} />
+        <LocalCodexSettings backend={await getChatBackend()} enabled={localCodexEnabled()} config={await getCodexConfig()} piContextWindow={Number((await db.setting.findUnique({where:{key:'pi.contextWindow'}}))?.value||128000)} searchEnabled={webSearch.enabled} searchConfigured={!!webSearch.apiKey} />
 
         {/* ---------- 模型 ---------- */}
         <section className="surface border rounded-2xl p-4" style={{ borderColor: 'var(--border)' }}>

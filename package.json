@@ -9,7 +9,7 @@
   },
   "type": "module",
   "scripts": {
-    "test:pi": "node --test scripts/pi-runtime.test.mjs scripts/pi-platform.test.mjs",
+    "test:pi": "node --test scripts/pi-runtime.test.mjs scripts/pi-platform.test.mjs scripts/web-search.test.mjs",
     "test:pi:integration": "node scripts/pi-integration.mjs",
     "dev": "next dev -p 3096",
     "dev:host": "next dev -p 3096 -H 0.0.0.0",

@@ -1,5 +1,14 @@
 import type { Dict } from '../core';
 export const codex: Dict = {
+  'Pi 公开网络搜索（试用）': 'Pi public web search (preview)',
+  '仅影响 Pi 的后续回复，已有会话也生效。通过 DeepSeek 搜索和读取公开网页，会产生独立调用费用；每轮最多 6 次。': 'Applies to subsequent Pi replies, including existing chats. DeepSeek search and public page fetch have separate call charges; up to 6 calls per turn.',
+  '搜索词和网页地址会发送给 DeepSeek。请勿要求搜索私人邮件、附件原文或其他敏感内容。': 'Search queries and page URLs are sent to DeepSeek. Do not request searches of private emails, attachment text or other sensitive content.',
+  'DeepSeek 搜索专用 API Key（留空保留）': 'Dedicated DeepSeek search API key (leave blank to keep)',
+  '搜索密钥可用。': 'A search key is available.',
+  '尚无搜索密钥。使用 DeepSeek 官方聊天接口时可复用聊天密钥；其他服务商需填写专用密钥。': 'No search key available. Official DeepSeek chat can reuse its key; other providers require a dedicated key.',
+  '清除已保存的搜索专用密钥（仍可使用环境变量或官方聊天密钥）': 'Clear the saved search key (environment or official chat key may still apply)',
+  '保存网络搜索设置': 'Save web search settings',
+  '网络搜索设置已保存。': 'Web search settings saved.',
   '内置 Pi（试用）': 'Built-in Pi (preview)',
   '使用上方 API 配置，由 Pi 管理会话、工具循环与压缩。支持按附件读取及生成文件；更换模型后请新建对话。': 'Uses the API configuration above. Pi manages sessions, tool loops and compaction, with attachment reading and output files. Start a new chat after changing models.',
   'Pi 上下文窗口（token，不超过模型实际支持值）': 'Pi context window (tokens, no higher than the model supports)',
