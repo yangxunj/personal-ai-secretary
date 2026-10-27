@@ -2,6 +2,8 @@ import type { Dict } from '../core';
 
 /** 中文原文 → 英文。key 必须跟 t('…') 里的字符串一字不差。对话页、对话列表、/api/chat */
 export const chat: Dict = {
+  '正在读取更早的对话…': 'Loading earlier messages…',
+  '读取失败，请重试；当前草稿和对话已保留。': 'Could not load messages. Please retry; your current draft and chat are preserved.',
   '实时语音': 'Realtime voice',
   '实时语音配置无效，请检查地址、模型和音色': 'Invalid realtime voice configuration. Check the endpoint, model and voice.',
   '实时交谈、随时插话，后台 Agent 处理完成后自动报告结果。使用独立的阿里云实时模型。': 'Talk and interrupt naturally while the agent works in the background and reports results. Uses a separate Alibaba Cloud realtime model.',

@@ -10,6 +10,7 @@ import { markRead } from '../../actions';
 import { getLocale, getT } from '@/lib/i18n/server';
 import { getChatBackend } from '@/lib/codex/config';
 import { recoverCodexTurns } from '@/lib/codex/chat';
+import { beforeMessage, displayOrder, olderDisplayCount } from '@/lib/chat-display-history';
 
 export const dynamic = 'force-dynamic';
 
@@ -82,19 +83,19 @@ export default async function ChatPage({
 
   // 定位模式：只取目标那一段，别把中间几百条都拉出来
   if (conv && m) {
-    const target = await db.message.findFirst({ where: { id: m, conversationId }, select: { createdAt: true } });
+    const target = await db.message.findFirst({ where: { id: m, conversationId }, select: { id: true, createdAt: true } });
     if (target) {
       focusId = m;
       const [before, after] = await Promise.all([
         db.message.findMany({
-          where: { ...where, createdAt: { lt: target.createdAt } },
-          orderBy: { createdAt: 'desc' },
+          where: { ...where, ...beforeMessage(target) },
+          orderBy: displayOrder,
           take: AROUND,
           include: INCLUDE,
         }),
         db.message.findMany({
-          where: { ...where, createdAt: { gte: target.createdAt } },
-          orderBy: { createdAt: 'asc' },
+          where: { ...where, OR: [{ createdAt: { gt: target.createdAt } }, { createdAt: target.createdAt, id: { gte: target.id } }] },
+          orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
           take: AROUND + 1,
           include: INCLUDE,
         }),
@@ -104,11 +105,11 @@ export default async function ChatPage({
   }
 
   // 普通模式：倒着取最近 N 条，再翻回正序显示
-  const limit = Math.min(Math.max(Number(take) || PAGE, 20), 2000);
+  const limit = Math.floor(Math.min(Math.max(Number(take) || PAGE, 20), 2000));
   if (conv && rows.length === 0) {
     const recent = await db.message.findMany({
       where,
-      orderBy: { createdAt: 'desc' },
+      orderBy: displayOrder,
       take: limit,
       include: INCLUDE,
     });
@@ -117,9 +118,7 @@ export default async function ChatPage({
 
   const first = rows.at(0);
   const latest = rows.at(-1);
-  const olderCount = first
-    ? await db.message.count({ where: { ...where, createdAt: { lt: first.createdAt } } })
-    : 0;
+  const olderCount = await olderDisplayCount(conversationId, first);
 
   // 只画最近一次压缩的线：更早那几次的分界已经被后来的摘要盖过去了
   const lastCompaction = conv
@@ -199,7 +198,6 @@ export default async function ChatPage({
             compaction={
               lastCompaction && { ...lastCompaction, createdAt: lastCompaction.createdAt.toISOString() }
             }
-            olderHref={`/chat/${conversationId}?take=${focusId ? history.length + AROUND * 2 : limit + PAGE * 2}#m-${first?.id ?? ''}`}
           />
         </div>
       </div>

@@ -6,7 +6,8 @@ import ts from 'typescript';
 const state = globalThis.__historyTest = { authorized: true, queries: [] };
 const data = source => 'data:text/javascript;base64,' + Buffer.from(source).toString('base64');
 let source = readFileSync(new URL('../src/app/api/chat/history/route.ts', import.meta.url), 'utf8');
-source = source.replace("'@/lib/auth'", JSON.stringify(data('export const sessionIsCurrent=async()=>globalThis.__historyTest.authorized;')))
+source = source.replace("'@/lib/chat-display-history'", JSON.stringify(data(`export const displayOrder=[{createdAt:'desc'},{id:'desc'}];export const displayPage=()=>{throw new Error('Use real SQL pagination tests')};export const parseDisplayCursor=()=>{throw new Error('Use real SQL pagination tests')};`)))
+  .replace("'@/lib/auth'", JSON.stringify(data('export const sessionIsCurrent=async()=>globalThis.__historyTest.authorized;')))
   .replace("'@/lib/db'", JSON.stringify(data(`export const db={message:{findMany:async query=>{
     globalThis.__historyTest.queries.push(query);
     return [{id:'new',role:'secretary',content:'DEMO result',createdAt:new Date('2026-01-02'),attachments:[],task:null},

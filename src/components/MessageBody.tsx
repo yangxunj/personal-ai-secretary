@@ -1,5 +1,6 @@
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { memo } from 'react';
 
 /**
  * 对话气泡里的正文。
@@ -34,7 +35,7 @@ function keepLineBreaks(src: string) {
     .join('');
 }
 
-export default function MessageBody({ children }: { children: string }) {
+export default memo(function MessageBody({ children }: { children: string }) {
   return (
     <ReactMarkdown
       remarkPlugins={[remarkGfm]}
@@ -88,4 +89,4 @@ export default function MessageBody({ children }: { children: string }) {
       {keepLineBreaks(children)}
     </ReactMarkdown>
   );
-}
+});

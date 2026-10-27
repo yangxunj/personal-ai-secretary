@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useChat } from '@ai-sdk/react';
 import { DefaultChatTransport } from 'ai';
-import { useEffect, useRef, useState } from 'react';
+import { memo, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import MessageBody from '@/components/MessageBody';
 import { isModelImage, unreadableReason } from '@/lib/file-support';
@@ -16,6 +16,7 @@ import VoiceInput from '@/components/chat/VoiceInput';
 import SpeechButton, { setSpeechRecording, stopSpeechPlayback } from '@/components/chat/SpeechButton';
 import VoiceConversation from '@/components/chat/VoiceConversation';
 import RealtimeVoice from '@/components/chat/RealtimeVoice';
+import { displayCursor, mergeDisplayMessages } from '@/components/chat/history-state';
 
 /** 工具名 → 人话。工具卡片上显示它，用户不该看见 createTask 这种字眼 */
 const toolLabels = (t: T): Record<string, string> => ({
@@ -178,7 +179,6 @@ export function Chat({
   history: initialHistory,
   focusId,
   olderCount = 0,
-  olderHref,
   compaction,
   draft,
 }: {
@@ -198,14 +198,23 @@ export function Chat({
   draft?: string;
   /** 最近一次压缩。有的话在它保留的第一条前面画一道线，点开能看摘要 */
   compaction?: Compaction | null;
-  /** 库里已有的记录，正序。这就是完整记录 —— 不再另有一页。 */
+  /** 首次加载的消息窗口，正序；更早记录按游标追加。 */
   history: SeedMessage[];
   /** 从搜索结果定位过来时高亮并滚到这一条 */
   focusId?: string;
   olderCount?: number;
-  olderHref?: string;
 }) {
   const [history, setHistory] = useState(initialHistory);
+  const historyRef = useRef(history);
+  historyRef.current = history;
+  const historyWindow = useRef(focusId);
+  const windowChanged = historyWindow.current !== focusId;
+  const [remainingOlder, setRemainingOlder] = useState(olderCount);
+  const [loadingOlder, setLoadingOlder] = useState(false);
+  const [olderError, setOlderError] = useState(false);
+  const olderRequest = useRef<AbortController | null>(null);
+  const scrollAnchor = useRef<{ id: string; top: number } | null>(null);
+  useEffect(() => () => olderRequest.current?.abort(), []);
   const [historyRevision, setHistoryRevision] = useState(0);
   const [legacyFileTools,setLegacyFileTools]=useState(false);
   const [legacyBusinessTools,setLegacyBusinessTools]=useState(false);
@@ -216,7 +225,22 @@ export function Chat({
     void fetch('/api/agent/state?conversationId='+encodeURIComponent(conversationId),{signal:controller.signal}).then(async r=>{if(r.ok){const state=await r.json();setLegacyFileTools(state.fileToolsAvailable===false);setLegacyBusinessTools(state.fileToolsAvailable!==false&&state.businessToolsAvailable===false);setLegacyVisualTools(state.businessToolsAvailable===true&&state.visualToolsAvailable===false);}}).catch(()=>{});
     return()=>controller.abort();
   },[backend,conversationId,historyRevision]);
-  useEffect(() => { setHistory(initialHistory); }, [initialHistory]);
+  useEffect(() => {
+    if (windowChanged) {
+      // A search link selects another window in the same conversation. Keep the
+      // composer/voice mounted, but don't join two disjoint history windows.
+      historyWindow.current = focusId;
+      landed.current = false;
+      olderRequest.current?.abort();
+      scrollAnchor.current = null;
+      setRemainingOlder(olderCount);
+      setHistory(initialHistory);
+      return;
+    }
+    const first = historyRef.current[0];
+    if (!first || first.id === initialHistory[0]?.id) setRemainingOlder(olderCount);
+    setHistory(previous => mergeDisplayMessages(previous, initialHistory));
+  }, [initialHistory, olderCount, focusId, windowChanged]);
   const voiceTurn = useRef<{ finish: (text?: string, error?: Error) => void } | null>(null);
   const { messages, sendMessage, setMessages, status, error, stop } = useChat({
     transport: new DefaultChatTransport({
@@ -235,7 +259,7 @@ export function Chat({
         return;
       }
       emitConversations();
-      if (isError || !needsTitle.current) return;
+      if (isError || isAbort || !needsTitle.current) return;
       needsTitle.current = false;
       // 第一轮聊完起个标题。用这一轮的原文，不从库里读（见 lib/conversations.ts）
       const user = messages.findLast((x) => x.role === 'user');
@@ -263,8 +287,7 @@ export function Chat({
         if (!response.ok || !response.headers.get('content-type')?.startsWith('application/json')) throw new Error('History unavailable');
         const rows: SeedMessage[] = await response.json();
         if (controller.signal.aborted) return;
-        setHistory(previous => [...new Map([...previous, ...rows].map(message => [message.id, message])).values()]
-          .sort((a, b) => a.createdAt.localeCompare(b.createdAt)));
+        setHistory(previous => mergeDisplayMessages(previous, rows));
         // 已落库的文字轮次由快照接管，避免与 useChat 的本地气泡重复。
         setMessages([]);
       } catch {
@@ -304,6 +327,7 @@ export function Chat({
   const bottom = useRef<HTMLDivElement>(null);
   const scroller = useRef<HTMLDivElement>(null);
   const landed = useRef(false);
+  const following = useRef(true);
   const [background, setBackground] = useState(pending);
   const [backgroundError, setBackgroundError] = useState(lastError);
   const busy = background || status === 'submitted' || status === 'streaming';
@@ -351,31 +375,76 @@ export function Chat({
   // 让浏览器停在原来那条上；其余情况直接到最新。
   // ⚠ 首屏要 instant —— smooth 会让人眼睁睁看着几百条飞过去。
   useEffect(() => {
-    if (landed.current) return;
-    landed.current = true;
+    if (windowChanged || landed.current) return;
     if (focusId) {
       const el = document.getElementById(`m-${focusId}`);
       if (el) {
+        landed.current = true;
         el.scrollIntoView({ block: 'center', behavior: 'instant' as ScrollBehavior });
         return;
       }
+      return;
     }
+    landed.current = true;
     if (window.location.hash) return;
     // 空白的新对话别往下滚：上面那张「跟我说话就行」的卡片会被顶出屏幕
     if (history.length === 0) return;
     if(embedded && scroller.current)scroller.current.scrollTop=scroller.current.scrollHeight;
     else bottom.current?.scrollIntoView({ behavior: 'instant' as ScrollBehavior });
-  }, [focusId]);
+  }, [focusId, history, embedded, windowChanged]);
 
-  // 本次对话新来的内容才跟着滚
   useEffect(() => {
-    if (!landed.current || messages.length === 0) return;
-    if(embedded && scroller.current)scroller.current.scrollTop=scroller.current.scrollHeight;
-    else bottom.current?.scrollIntoView({ behavior: 'smooth' });
+    const element = embedded ? scroller.current : document.scrollingElement;
+    const target = embedded ? scroller.current : window;
+    const onScroll = () => { if (element) following.current = element.scrollHeight - element.scrollTop - element.clientHeight < 160; };
+    target?.addEventListener('scroll', onScroll, { passive: true });
+    return () => target?.removeEventListener('scroll', onScroll);
+  }, [embedded]);
+  useLayoutEffect(() => {
+    const anchor = scrollAnchor.current;
+    if (!anchor) return;
+    scrollAnchor.current = null;
+    const element = document.getElementById(`m-${anchor.id}`);
+    if (!element) return;
+    const shift = element.getBoundingClientRect().top - anchor.top;
+    if (embedded && scroller.current) scroller.current.scrollTop += shift;
+    else window.scrollBy({ top: shift, behavior: 'instant' as ScrollBehavior });
+  }, [history, embedded, remainingOlder]);
+
+  async function loadOlder() {
+    const first = historyRef.current[0];
+    if (!first || olderRequest.current) return;
+    const controller = new AbortController();
+    olderRequest.current = controller;
+    setLoadingOlder(true); setOlderError(false);
+    try {
+      const params = new URLSearchParams({ conversationId, page: 'older', before: displayCursor(conversationId, first) });
+      const response = await fetch('/api/chat/history?' + params, { signal: AbortSignal.any([controller.signal, AbortSignal.timeout(20000)]), cache: 'no-store' });
+      if (!response.ok) throw new Error('History unavailable');
+      const page: { messages: SeedMessage[]; older: number } = await response.json();
+      if (controller.signal.aborted) return;
+      const element = document.getElementById(`m-${first.id}`);
+      if (element) scrollAnchor.current = { id: first.id, top: element.getBoundingClientRect().top };
+      following.current = false;
+      setHistory(previous => mergeDisplayMessages(previous, page.messages));
+      setRemainingOlder(page.older);
+    } catch { if (!controller.signal.aborted) setOlderError(true); }
+    finally { if (olderRequest.current === controller) { olderRequest.current = null; setLoadingOlder(false); } }
+  }
+
+  // Read older messages without being pulled back down by every streamed token.
+  useEffect(() => {
+    if (!landed.current || messages.length === 0 || !following.current) return;
+    const frame = requestAnimationFrame(() => {
+      if (!following.current) return;
+      if(embedded && scroller.current)scroller.current.scrollTop=scroller.current.scrollHeight;
+      else bottom.current?.scrollIntoView({ behavior: 'instant' as ScrollBehavior });
+    });
+    return () => cancelAnimationFrame(frame);
   }, [messages, status, embedded]);
   useEffect(() => {
-    if(embedded && scroller.current)scroller.current.scrollTop=scroller.current.scrollHeight;
-  }, [embedded, history.length]);
+    if(following.current && embedded && scroller.current)scroller.current.scrollTop=scroller.current.scrollHeight;
+  }, [embedded, history.at(-1)?.id]);
 
   function addFiles(list: FileList | File[] | null) {
     if (!list || autoVoice) return;
@@ -394,6 +463,7 @@ export function Chat({
     const text = input.trim();
     if ((!text && !files.length) || busy || voiceBusy || autoVoice || !active) return;
     stopSpeechPlayback();
+    following.current = true;
 
     const attached = files.length
       ? await Promise.all(
@@ -471,17 +541,17 @@ export function Chat({
       {legacyBusinessTools && <p className="text-[12px] px-4 py-2 muted">{t('此对话保留旧版资料上下文与文件工具。新建 Codex 或 Pi 对话可使用按需业务原文和增强历史查询。')} <Link href="/chat" className="text-brand-600 underline">{t('打开新对话')}</Link></p>}
       {legacyVisualTools && <p className="text-[12px] px-4 py-2 muted">{t('此对话保留原有文件与业务工具。新建 Codex 或 Pi 对话可使用文档结构和图像读取。')} <Link href="/chat" className="text-brand-600 underline">{t('打开新对话')}</Link></p>}
       <div ref={scroller} className={embedded ? "flex-1 min-h-0 overflow-y-auto overscroll-contain space-y-4 px-4 pb-4" : "flex-1 space-y-4 pb-4"}>
-        {olderCount > 0 && olderHref && (
+        {remainingOlder > 0 && history.length > 0 && (
           <div className="text-center">
-            <Link
-              href={olderHref}
+            <button type="button" onClick={loadOlder} disabled={loadingOlder}
               className="muted text-xs px-4 py-2 rounded-full border inline-block"
               style={{ borderColor: 'var(--border)' }}
             >
-              {t('还有 {n} 条更早的 · 查看更早', { n: olderCount })}
-            </Link>
+              {loadingOlder ? t('正在读取更早的对话…') : t('还有 {n} 条更早的 · 查看更早', { n: remainingOlder })}
+            </button>
           </div>
         )}
+        {olderError && <p role="alert" className="text-center text-xs text-red-500">{t('读取失败，请重试；当前草稿和对话已保留。')}</p>}
 
         {/* 库里的记录。读得到「上次说到哪」，这个秘书才是连续的 */}
         {history.map((m, i) => {
@@ -714,7 +784,7 @@ function DayDivider({ label }: { label: string }) {
  * 跟本次对话的气泡长得一样，但多挂三样东西 —— 这三样原来只在「记录」页有，
  * 所以在对话里发的附件，必须切到另一页才看得见。合并就是为了这个。
  */
-function HistoryItem({ msg, focused, active, speechDisabled }: { msg: SeedMessage; focused: boolean; active: boolean; speechDisabled: boolean }) {
+const HistoryItem = memo(function HistoryItem({ msg, focused, active, speechDisabled }: { msg: SeedMessage; focused: boolean; active: boolean; speechDisabled: boolean }) {
   const mine = msg.role === 'user';
   const t = useT();
   const locale = useLocale();
@@ -762,7 +832,7 @@ function HistoryItem({ msg, focused, active, speechDisabled }: { msg: SeedMessag
       <span className="muted text-[11px] mt-1 px-1">{formatTime(msg.createdAt, locale)}</span>
     </div>
   );
-}
+});
 
 function Bubble({ role, children }: { role: 'user' | 'assistant'; children: React.ReactNode }) {
   const mine = role === 'user';

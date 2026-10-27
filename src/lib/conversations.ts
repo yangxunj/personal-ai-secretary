@@ -94,6 +94,17 @@ export async function deleteConversation(id: string) {
  * 已经有标题的（用户改过名、或者已经起过）不动。模型调不通就退回第一句话。
  */
 export async function autoTitle(id: string, user: string, reply: string): Promise<string | null> {
+  // Single process desktop/server: simultaneous tabs share one bounded title job.
+  const jobs = (globalThis as typeof globalThis & { secretaryTitleJobs?: Map<string, Promise<string | null>> });
+  const pending = jobs.secretaryTitleJobs ??= new Map();
+  const current = pending.get(id);
+  if (current) return current;
+  const job = generateTitle(id, user, reply);
+  pending.set(id, job);
+  try { return await job; } finally { if (pending.get(id) === job) pending.delete(id); }
+}
+
+async function generateTitle(id: string, user: string, reply: string): Promise<string | null> {
   const conv = await db.conversation.findUnique({ where: { id }, select: { title: true, backend: true } });
   if (!conv) return null;
   if (conv.title) return conv.title;
@@ -104,26 +115,34 @@ export async function autoTitle(id: string, user: string, reply: string): Promis
   const locale = await getLocale();
   const t = await getT();
   if (conv.backend !== 'codex' && cfg.apiKey && cfg.baseUrl && cfg.model) {
+    const controller = new AbortController();
+    let timer: ReturnType<typeof setTimeout> | undefined;
     try {
       const provider = createOpenAICompatible({ name: 'ai', baseURL: cfg.baseUrl, apiKey: cfg.apiKey });
-      const { text } = await generateText({
+      const result = generateText({
         model: provider.chatModel(cfg.model),
         system: titlePrompt(locale),
         prompt: titleInput(locale, user, reply),
         // 推理模型要先想一会儿，给小了正文是空的
         maxOutputTokens: 1024,
+        maxRetries: 0,
+        abortSignal: controller.signal,
       });
+      const { text } = await Promise.race([result, new Promise<never>((_, reject) => {
+        timer = setTimeout(() => { controller.abort(); reject(new Error('Title timeout')); }, 8000);
+      })]);
       title = cleanTitle(text);
-    } catch (e) {
-      console.error('[chat] auto-title failed, falling back to the first message', e);
-    }
+    } catch {
+      console.warn('[chat] auto-title unavailable; using the first message');
+    } finally { clearTimeout(timer); controller.abort(); }
   }
   if (!title) title = clip(user) || t('新对话');
   title = clip(title, 30);
 
   // 用户在这期间手动改了名的话，别覆盖
-  await db.conversation.updateMany({ where: { id, title: null }, data: { title } });
-  return (await db.conversation.findUnique({ where: { id }, select: { title: true } }))?.title ?? title;
+  // Only the title changes: preserve the latest chat activity timestamp atomically.
+  await db.$executeRaw`UPDATE "Conversation" SET "title" = ${title} WHERE "id" = ${id} AND "title" IS NULL`;
+  return (await db.conversation.findUnique({ where: { id }, select: { title: true } }))?.title ?? null;
 }
 
 /** 新对话的 id：页面上先生成好，第一句话发出去时服务端照这个 id 建 */

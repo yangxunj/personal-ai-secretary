@@ -15,9 +15,9 @@ export default function TaskChatDialog({ taskId, title, initiallyOpen = false }:
   const [mounted, setMounted] = useState(false), [open, setOpen] = useState(initiallyOpen);
   const [data, setData] = useState<Awaited<ReturnType<typeof loadTaskChat>> | null>(null);
   const [error, setError] = useState(''), [loading, setLoading] = useState(false);
-  const limit = useRef(60), requested = useRef(false);
+  const requested = useRef(false);
   const refresh = useCallback(async () => {
-    const next = await loadTaskChat(taskId, limit.current);
+    const next = await loadTaskChat(taskId);
     setData(next); router.refresh();
   }, [taskId, router]);
 
@@ -25,7 +25,7 @@ export default function TaskChatDialog({ taskId, title, initiallyOpen = false }:
   useEffect(() => {
     if (!open || requested.current) return;
     requested.current = true; setLoading(true);
-    loadTaskChat(taskId, limit.current).then(setData).catch(e => {
+    loadTaskChat(taskId).then(setData).catch(e => {
       setError(e instanceof Error ? e.message : String(e)); requested.current = false;
     }).finally(() => setLoading(false));
   }, [open, taskId]);
@@ -64,13 +64,9 @@ export default function TaskChatDialog({ taskId, title, initiallyOpen = false }:
           {loading && <p className="p-4 muted text-sm">{t('正在读取任务对话…')}</p>}
           {error && <p className="p-4 text-red-500 text-sm">{error}</p>}
           {data && <>
-            {data.older > 0 && <button className="shrink-0 p-2 text-xs muted underline" onClick={async () => {
-              limit.current += 120;
-              try { await refresh(); } catch (e) { setError(String(e)); }
-            }}>{t('查看更早的任务对话（{n} 条）', { n: data.older })}</button>}
             <div className="flex-1 min-h-0">
               <Chat key={data.id} conversationId={data.id} taskId={taskId} embedded active={open} history={data.history}
-                backend={data.backend} pending={data.pending} lastError={data.lastError} onReply={refresh} />
+                olderCount={data.older} backend={data.backend} pending={data.pending} lastError={data.lastError} onReply={refresh} />
             </div>
           </>}
         </div>
