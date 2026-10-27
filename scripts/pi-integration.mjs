@@ -21,7 +21,6 @@ const live=process.argv.includes('--live')||liveWeb?loadConfig(root,{provider:'d
 const webSearch=process.argv.includes('--web-search');
 const records=process.argv.includes('--records');
 const media=process.argv.includes('--media');
-if(media&&live)throw new Error('DeepSeek Flash is text-only; use synthetic Pi transport plus real Codex visual acceptance');
 if(webSearch&&live)throw new Error('Use separate synthetic web and live provider runs');
 const env={...process.env,DATABASE_URL:databaseUrl,UPLOAD_DIR:path.join(dir,'uploads'),AUTH_ENABLED:'false',ALLOW_INSECURE_LOCAL:'true',SESSION_SECRET:'synthetic-secret-'.repeat(4),APP_PASSWORD_HASH:'',DESKTOP_APP:'0',ENABLE_LOCAL_CODEX:'false',APP_INSTANCE:'test',NEXT_TELEMETRY_DISABLED:'1',AI_API_KEY:'synthetic-key',AI_MODEL:'synthetic-model',SECRETARY_BUILD_DIR:'.next-pi-qa',NODE_ENV:'development'};
 if(live)env.AI_MODEL=live.model;
@@ -137,8 +136,8 @@ const chat=async(id,msg)=>{
 try{
   start();await ready();
   if(media){
-    const rounds=await runMediaScenarios({db,origin,backend:'pi',uploads:env.UPLOAD_DIR,synthetic:true,chat:(id,text)=>chat(id,message(text))});
-    const receipt={status:'passed',media:true,standalone,electron,live:false,requests,rounds};await fs.writeFile(path.join(dir,'receipt.json'),JSON.stringify(receipt,null,2));console.log(JSON.stringify(receipt));
+    const rounds=await runMediaScenarios({db,origin,backend:'pi',uploads:env.UPLOAD_DIR,synthetic:!live,taskModes:live?[true]:[false,true],chat:(id,text)=>chat(id,message(text))});
+    const receipt={status:'passed',media:true,standalone,electron,live:!!live,model:live?.model||'synthetic-model',requests,usage,rounds};await fs.writeFile(path.join(dir,'receipt.json'),JSON.stringify(receipt,null,2));console.log(JSON.stringify(receipt));
   }else if(records){
     const rounds=await runRecordScenarios({db,origin,backend:'pi',taskModes:live?[true]:[false,true],chat:(id,text)=>chat(id,message(text))});
     const legacyApi=await db.conversation.create({data:{backend:'api'}});

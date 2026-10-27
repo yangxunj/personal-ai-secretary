@@ -4,8 +4,8 @@ import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { mediaFixtures } from './media-fixtures.mjs';
 
-export async function runMediaScenarios({db,chat,origin,backend,uploads,synthetic=false,threads=new Set(),rounds=[]}){
-  for(const taskMode of [false,true]){
+export async function runMediaScenarios({db,chat,origin,backend,uploads,synthetic=false,threads=new Set(),rounds=[],taskModes=[false,true]}){
+  for(const taskMode of taskModes){
     const f=await mediaFixtures(),task=await db.task.create({data:{title:'Synthetic rich attachment task',detail:'Only inspect the provided synthetic attachments.'}}),conv=await db.conversation.create({data:{backend,taskId:taskMode?task.id:null}});
     const msg=await db.message.create({data:{conversationId:conv.id,role:'user',content:'Archived synthetic attachments. Their content is not in the model context.'}}),files={};
     for(const [kind,filename,mime]of [['image','evidence.png','image/png'],['pdf','evidence.pdf','application/pdf'],['docx','evidence.docx','application/vnd.openxmlformats-officedocument.wordprocessingml.document']]){
