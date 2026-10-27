@@ -166,6 +166,12 @@ Pi 每轮更新现有 session 的平台工具，不迁移或重建会话。任�
 
 复验新增：`node scripts/pi-integration.mjs --build --electron --records`（合成模型，通用/任务及恢复后工具链）；已有隔离构建时使用 `--standalone`。`--standalone --electron --records --live` 使用专用 DeepSeek key 验证任务聊天两轮，仍限制最多 16 次模型请求，只有合成业务内容外传。
 
+## M3：文档结构与图像读取（2026-10-27）
+
+新增三个共用工具，沿用 Pi session 和现有附件权限：检查 Word 部件/图片及 PDF 页数，按部件续读带结构与修订标记的文字，按附件 ID 回读图像、PDF 指定页/裁剪区和 Word 嵌图。图像作为 Pi 原生 `image` 块进入 SDK；UI 和文字工具消息只保留尺寸元数据。纯文字模型明确返回不支持看图，不调用额外 OCR 服务；检测不到本机渲染依赖时保留文字/结构工具。
+
+版本、缓存、来源复核、支持边界及复验命令见 [文档图像读取](文档图像读取.md)；实际证据统一维护在 [实施计划](对话能力改造实施计划.md)。Pi 传输链使用合成视觉服务验证，真实图像识别由 Codex 的图片随机码验收另行证明，两种结果不混用。
+
 ## 参考
 
 - [Pi SDK](https://github.com/earendil-works/pi/blob/main/packages/coding-agent/docs/sdk.md)：内嵌、会话、工具与资源控制。

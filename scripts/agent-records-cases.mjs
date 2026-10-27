@@ -31,7 +31,7 @@ Read the original with readBusinessSource (kind and ID above) at offset 0, then 
       if(backend==='codex'){
         const stored=await db.conversation.findUniqueOrThrow({where:{id:conv.id}});threads.add(stored.codexThreadId);
         if(resumed)assert.equal(stored.codexThreadId,threadId);threadId=stored.codexThreadId;
-        assert.equal(JSON.parse((await db.setting.findUniqueOrThrow({where:{key:'codex.tools.'+conv.id}})).value).version,2);
+        assert.ok(JSON.parse((await db.setting.findUniqueOrThrow({where:{key:'codex.tools.'+conv.id}})).value).version>=2);
       }
       rounds.push({taskMode,resumed,versionedOriginal:true,versionedHistory:true,citations:true});console.log(JSON.stringify(rounds.at(-1)));
     }

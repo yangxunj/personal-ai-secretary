@@ -27,6 +27,7 @@ const AI_FACING = [
   'src/lib/agent-tools.ts',
   'src/lib/agent-files.ts',
   'src/lib/agent-records.ts',
+  'src/lib/agent-media.ts',
   'src/lib/agent-citations.mjs',
   'src/lib/data-tools.ts',
   'src/lib/page-tools.ts',

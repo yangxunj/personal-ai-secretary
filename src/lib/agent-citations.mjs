@@ -19,5 +19,5 @@ export class CitationStream {
     }
     this.text+=output;return output;
   }
-  appendix(){return this.used.length?'\n\n'+this.used.map((s,i)=>`〔${i+1}〕[${String(s.filename).replace(/[\[\]\\\r\n<>]/g,'')} · ${s.locator}](${s.url})`).join('\n\n'):'';}
+  appendix(){const label=value=>String(value).replace(/[\[\]\\\r\n<>]/g,'');return this.used.length?'\n\n'+this.used.map((s,i)=>`〔${i+1}〕[${label(s.filename)} · ${label(s.locator)}](${s.url})`).join('\n\n'):'';}
 }

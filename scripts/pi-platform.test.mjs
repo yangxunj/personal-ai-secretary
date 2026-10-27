@@ -8,6 +8,7 @@ import { registerHooks } from 'node:module';
 import { execFileSync } from 'node:child_process';
 import ts from 'typescript';
 import { z } from 'zod';
+import { mediaFixtures } from './media-fixtures.mjs';
 
 const root=path.resolve(import.meta.dirname,'..'),directory=path.join(root,'data/pi-platform-tests',Date.now().toString());
 await fs.mkdir(directory,{recursive:true});
@@ -46,6 +47,7 @@ const {verifyPlatformSource}=await import('../src/lib/agent-source-verifier.ts')
 const {lightTaskChatContext,taskChatInstructions}=await import('../src/lib/task-chat-context.ts');
 const {buildChatTools}=await import('../src/lib/task-chat-tools.ts');
 const {textPage}=await import('../src/lib/agent-text.ts');
+const {buildAgentMediaTools,piToolContent,codexToolContent,visibleMediaResult}=await import('../src/lib/agent-media.ts');
 const call=async(def,input)=>def.execute(def.inputSchema.parse(input),{toolCallId:'test',messages:[]});
 test.after(async()=>{await db.$disconnect();hooks.deregister();});
 
@@ -153,6 +155,8 @@ test('real PDF tool reads the requested page and generated files preserve origin
   const conv=await db.conversation.create({data:{backend:'pi'}}),msg=await db.message.create({data:{conversationId:conv.id,role:'secretary',content:'test'}});
   const stored=await storeUpload(Buffer.from(pdf),'synthetic.pdf','application/pdf'),attachment=await db.attachment.create({data:{...stored,messageId:msg.id}});
   const tools=buildPiFileTools(conv.id,null,msg.id),read=await call(tools.readAttachment,{attachmentId:attachment.id});assert.match(read.text,/Synthetic PDF marker/);assert.match(read.citation.url,/#page=1$/);
+  const layout=await call(buildAgentMediaTools(conv.id,null).readDocumentPart,{attachmentId:attachment.id,partId:'page:1'}),position=layout.text.split('\n').map(JSON.parse).find(i=>i.text.includes('Synthetic PDF marker'));
+  assert.equal(position.x,30);assert.equal(position.y,100);assert.ok(position.width>0);assert.match(layout.citation.url,/#page=1$/);
   await assert.rejects(call(tools.readAttachment,{attachmentId:attachment.id,page:2,expectedVersion:read.version}),/out of range/);
   const output=await call(tools.createOutputFile,{filename:'result.md',content:'New output'});assert.ok(output.id);assert.equal((await db.attachment.findUnique({where:{id:output.id}})).messageId,msg.id);
   await verifyPiSource(read.citation,conv.id,null);
@@ -185,9 +189,11 @@ test('Codex tool profile binds the exact thread and never upgrades legacy tools 
   assert.equal(await hasCodexFileTools(conv.id,null),true);assert.equal(await hasCodexFileTools(conv.id,'old-thread'),false);
   await db.setting.create({data:{key:codexToolProfileKey(conv.id),value:JSON.stringify({version:1,threadId:'new-thread'})}});
   assert.equal(await hasCodexFileTools(conv.id,'old-thread'),false);assert.equal(await hasCodexFileTools(conv.id,'new-thread'),true);
-  assert.equal(await getCodexToolVersion(conv.id,null),2);assert.equal(await getCodexToolVersion(conv.id,'new-thread'),1);
+  assert.equal(await getCodexToolVersion(conv.id,null),3);assert.equal(await getCodexToolVersion(conv.id,'new-thread'),1);
   await db.setting.update({where:{key:codexToolProfileKey(conv.id)},data:{value:JSON.stringify({version:2,threadId:'v2-thread'})}});
   assert.equal(await getCodexToolVersion(conv.id,'new-thread'),0);assert.equal(await getCodexToolVersion(conv.id,'v2-thread'),2);
+  await db.setting.update({where:{key:codexToolProfileKey(conv.id)},data:{value:JSON.stringify({version:3,threadId:'rich-thread'})}});
+  assert.equal(await getCodexToolVersion(conv.id,'rich-thread'),3);assert.equal(await getCodexToolVersion(conv.id,'v2-thread'),0);
   await db.setting.update({where:{key:codexToolProfileKey(conv.id)},data:{value:'invalid json'}});assert.equal(await hasCodexFileTools(conv.id,'new-thread'),false);
 });
 
@@ -292,6 +298,81 @@ test('record text continuation protects emoji boundaries and refuses out-of-rang
   assert.throws(()=>textPage(body,6000,'v1','v1'),/nextOffset/);
   assert.throws(()=>textPage(body,body.length+1,'v1','v1'),/range/);
   assert.equal(textPage(body,body.length,'v1','v1').nextOffset,null);
+});
+
+test('rich Word reads preserve parts, tables, revisions, comments, headers and notes with scoped versioned citations',async()=>{
+  const f=await mediaFixtures(),conv=await db.conversation.create({data:{backend:'pi'}}),msg=await db.message.create({data:{conversationId:conv.id,role:'user',content:'Synthetic rich document'}});
+  const stored=await storeUpload(f.docx,'rich.docx','application/vnd.openxmlformats-officedocument.wordprocessingml.document'),a=await db.attachment.create({data:{...stored,messageId:msg.id}}),tools=buildAgentMediaTools(conv.id,null);
+  const index=await call(tools.inspectAttachment,{attachmentId:a.id});assert.equal(index.entries.length,7);assert.equal(index.nextOffset,null);
+  let page=await call(tools.readDocumentPart,{attachmentId:a.id,partId:'word/document.xml',expectedVersion:index.version}),text=page.text;
+  await assert.rejects(call(tools.readDocumentPart,{attachmentId:a.id,partId:'word/document.xml',offset:page.nextOffset}),/expectedVersion/);
+  while(page.nextOffset!==null){page=await call(tools.readDocumentPart,{attachmentId:a.id,partId:'word/document.xml',offset:page.nextOffset,expectedVersion:index.version});text+=page.text;}
+  for(const token of ['[paragraph 1]','[table 1]','[cell]','[del id=1','Deleted text','[ins id=2','Inserted text','commentReference id=4','footnoteReference id=7','headerReference','external or unavailable image'])assert.ok(text.includes(token),token);
+  for(const [part,marker]of [['comments','COMMENT-MARK'],['header1','HEADER-MARK'],['footer1','FOOTER-MARK'],['footnotes','FOOTNOTE-MARK'],['endnotes','ENDNOTE-MARK']])assert.ok((await call(tools.readDocumentPart,{attachmentId:a.id,partId:'word/'+part+'.xml',expectedVersion:index.version})).text.includes(marker));
+  const image=await call(tools.readAttachmentVisual,{attachmentId:a.id,imageId:'word/media/image1.png',expectedVersion:index.version});assert.ok(image.image.data);assert.equal(image.image.width,700);
+  await verifyPlatformSource(page.citation,conv.id,null,'current');await verifyPlatformSource(image.citation,conv.id,null,'current');
+  await assert.rejects(call(tools.readAttachmentVisual,{attachmentId:a.id,imageId:'word/media/unreferenced.png'}),/scope/);
+  await assert.rejects(call(tools.readDocumentPart,{attachmentId:a.id,partId:'../outside.xml'}),/scope/);
+  await assert.rejects(call(buildAgentMediaTools('other-conv','other-task').inspectAttachment,{attachmentId:a.id}),/scope/);
+  await fs.writeFile(path.join(process.env.UPLOAD_DIR,stored.storedPath),await (await import('./media-fixtures.mjs')).richWord('CHANGED'));
+  await assert.rejects(call(tools.readDocumentPart,{attachmentId:a.id,partId:'word/document.xml',expectedVersion:index.version}),/version changed/);
+  await assert.rejects(verifyPlatformSource(image.citation,conv.id,null,'current'),/changed/);
+});
+
+test('scanned PDF pages beyond upload preview render and crop without a text layer; originals remain intact',async()=>{
+  const f=await mediaFixtures(),conv=await db.conversation.create({data:{backend:'pi'}}),stored=await storeUpload(f.pdf,'scan.pdf','application/pdf'),a=await db.attachment.create({data:stored}),tools=buildAgentMediaTools(conv.id,null);
+  const index=await call(tools.inspectAttachment,{attachmentId:a.id});assert.equal(index.totalPages,8);
+  const layout=await call(tools.readDocumentPart,{attachmentId:a.id,partId:'page:8',expectedVersion:index.version});assert.equal(layout.text,'');assert.match(layout.note,/requires visual/);
+  const full=await call(tools.readAttachmentVisual,{attachmentId:a.id,page:8,expectedVersion:index.version});assert.equal(full.totalPages,8);assert.match(full.citation.url,/#page=8$/);assert.equal(full.image.width,1400);
+  const crop=await call(tools.readAttachmentVisual,{attachmentId:a.id,page:8,crop:{x:0.3,y:0.25,width:0.65,height:0.3},expectedVersion:index.version});assert.ok(crop.image.width<=2200);assert.ok(crop.image.height<full.image.height);assert.notEqual(crop.image.data,full.image.data);
+  const rotated=await db.attachment.create({data:await storeUpload((await import('./media-fixtures.mjs')).scanPdf('ROTATED',90),'rotated.pdf','application/pdf')});
+  const rotatedView=await call(tools.readAttachmentVisual,{attachmentId:rotated.id,page:8});assert.equal(rotatedView.image.width,720);assert.equal(rotatedView.image.height,1400);
+  await fs.writeFile(path.join(directory,'scan-page-8.png'),Buffer.from(full.image.data,'base64'));await fs.writeFile(path.join(directory,'scan-crop.png'),Buffer.from(crop.image.data,'base64'));
+  await assert.rejects(call(tools.readAttachmentVisual,{attachmentId:a.id,page:9}),/range/);
+  await assert.rejects(call(tools.readAttachmentVisual,{attachmentId:a.id,crop:{x:0.9,y:0,width:0.2,height:1}}));
+  assert.deepEqual(await fs.readFile(path.join(process.env.UPLOAD_DIR,stored.storedPath)),f.pdf);await verifyPlatformSource(crop.citation,conv.id,null,'current');
+  console.log(JSON.stringify({visualEvidence:directory,scanMarker:f.markers.scan}));
+});
+
+test('native multimodal outputs contain image blocks while UI/text expose bounded metadata and text-only models decline',async()=>{
+  const f=await mediaFixtures(),conv=await db.conversation.create({data:{backend:'pi'}}),a=await db.attachment.create({data:await storeUpload(f.image,'image.png','image/png')}),tools=buildAgentMediaTools(conv.id,null);
+  const result=await call(tools.readAttachmentVisual,{attachmentId:a.id}),pi=piToolContent(result),codex=codexToolContent(result);
+  assert.equal(pi[1].type,'image');assert.equal(codex[1].type,'inputImage');assert.match(codex[1].imageUrl,/^data:image\/png;base64,/);
+  assert.ok(!JSON.stringify(visibleMediaResult(result)).includes(result.image.data));assert.ok(!pi[0].text.includes(result.image.data));assert.ok(result.image.width<=2200);
+  const citations=new CitationStream();citations.register('unsafe',{...result.citation,locator:'image ](https://injected.invalid)\n<bad>'});citations.push('[[cite:unsafe]]');assert.ok(!citations.appendix().includes('](https://injected.invalid)'));
+  for(let i=1;i<6;i++)await call(tools.readAttachmentVisual,{attachmentId:a.id});await assert.rejects(call(tools.readAttachmentVisual,{attachmentId:a.id}),/budget/);
+  const unsupported=await call(buildAgentMediaTools(conv.id,null,{seesImages:false}).readAttachmentVisual,{attachmentId:a.id});assert.equal(unsupported.ok,false);assert.equal(unsupported.code,'model_has_no_vision');assert.equal(piToolContent(unsupported).length,1);
+  const sharp=(await import('sharp')).default,huge=await sharp({create:{width:5000,height:5000,channels:3,background:'white'}}).png().toBuffer(),big=await db.attachment.create({data:await storeUpload(huge,'large.png','image/png')});
+  await assert.rejects(call(buildAgentMediaTools(conv.id,null).readAttachmentVisual,{attachmentId:big.id}),/pixel limit/);
+  const oriented=await sharp(f.image).jpeg().withMetadata({orientation:6}).toBuffer(),orientedFile=await db.attachment.create({data:await storeUpload(oriented,'oriented.jpg','image/jpeg')});
+  const view=await call(buildAgentMediaTools(conv.id,null).readAttachmentVisual,{attachmentId:orientedFile.id});assert.equal(view.image.width,360);assert.equal(view.image.height,700);
+});
+
+test('Word parser rejects excessive decompression and XML entities rather than silently omitting sources',async()=>{
+  const JSZip=(await import('jszip')).default,{wordStructure}=await import('../src/lib/docx-structure.ts');
+  const zip=new JSZip();zip.file('word/document.xml','<!DOCTYPE x [<!ENTITY secret "hidden">]><x/>');await assert.rejects(wordStructure(await zip.generateAsync({type:'nodebuffer'})),/Unsupported/);
+  zip.file('word/document.xml','A'.repeat(5*1024*1024));await assert.rejects(wordStructure(await zip.generateAsync({type:'nodebuffer',compression:'DEFLATE'})),/decompressed size/);
+  zip.file('word/'+ 'x'.repeat(210)+'.xml','x');await assert.rejects(wordStructure(await zip.generateAsync({type:'nodebuffer',compression:'DEFLATE'})),/entry name/);
+});
+
+test('missing native renderers report capabilities and precise text fallback without producing fake images',async()=>{
+  const f=await mediaFixtures(),conv=await db.conversation.create({data:{backend:'pi'}}),pdf=await db.attachment.create({data:await storeUpload(f.pdf,'fallback.pdf','application/pdf')}),image=await db.attachment.create({data:await storeUpload(f.image,'fallback.png','image/png')});
+  for(const missing of ['@napi-rs/canvas','sharp']){
+    const fault=registerHooks({resolve(s,c,next){if(s===missing)return{url:'data:text/javascript,throw new Error("synthetic missing '+missing+'");',shortCircuit:true};return next(s,c);}});
+    try{
+      const tools=buildAgentMediaTools(conv.id,null),index=await call(tools.inspectAttachment,{attachmentId:pdf.id});assert.equal(index.capabilities.pdfRendererAvailable,false);
+      const result=await call(tools.readAttachmentVisual,{attachmentId:missing==='sharp'?image.id:pdf.id});assert.equal(result.ok,false);assert.equal(result.code,'renderer_unavailable');assert.equal(result.image,undefined);
+      assert.equal((await call(tools.readDocumentPart,{attachmentId:pdf.id,partId:'page:1'})).ok,true);
+    }finally{fault.deregister();}
+  }
+});
+
+test('legacy Word VML image references and formatting revisions are surfaced without reading arbitrary package media',async()=>{
+  const JSZip=(await import('jszip')).default,{wordStructure}=await import('../src/lib/docx-structure.ts'),f=await mediaFixtures(),zip=await JSZip.loadAsync(f.docx);
+  let text=await zip.file('word/document.xml').async('string');
+  text=text.replace('<w:body>','<w:body><w:p><w:r><w:rPr><w:rPrChange w:id="99" w:author="Editor"><w:rPr><w:b/></w:rPr></w:rPrChange></w:rPr><w:pict xmlns:v="urn:schemas-microsoft-com:vml"><v:shape><v:imagedata r:id="img1"/></v:shape></w:pict></w:r></w:p>');
+  zip.file('word/document.xml',text);const result=await wordStructure(await zip.generateAsync({type:'nodebuffer'})),main=result.parts.find(p=>p.id==='word/document.xml').text;
+  assert.ok(main.includes('format/table revision rPrChange id=99'));assert.equal(result.images.length,1);assert.ok(!result.images.some(i=>i.id.includes('unreferenced')));
 });
 
 test('backup and restore carry the Pi mapping and session together with the isolated database',async()=>{

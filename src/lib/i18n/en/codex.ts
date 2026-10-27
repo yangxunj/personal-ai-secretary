@@ -1,5 +1,9 @@
 import type { Dict } from '../core';
 export const codex: Dict = {
+  '查看文件结构': 'Inspecting file structure',
+  '读取文档结构原文': 'Reading document structure',
+  '查看文件图像': 'Viewing file image',
+  '此对话保留原有文件与业务工具。新建 Codex 或 Pi 对话可使用文档结构和图像读取。': 'This chat retains its existing file and business tools. Start a new Codex or Pi chat for document structure and image reading.',
   '读取业务原文': 'Reading original business text',
   '读取历史原文': 'Reading original conversation text',
   '查找任务进展': 'Finding task comments and progress',

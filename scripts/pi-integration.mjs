@@ -11,6 +11,7 @@ import { randomUUID } from 'node:crypto';
 import { PrismaClient } from '@prisma/client';
 import { loadConfig } from './responses-pilot.mjs';
 import { runRecordScenarios } from './agent-records-cases.mjs';
+import { runMediaScenarios } from './agent-media-cases.mjs';
 
 const root=path.resolve(import.meta.dirname,'..'),dir=path.join(root,'data','pi-integration',new Date().toISOString().replace(/[:.]/g,'-'));
 await fs.mkdir(dir,{recursive:true});
@@ -19,6 +20,8 @@ const liveWeb=process.argv.includes('--live-web');
 const live=process.argv.includes('--live')||liveWeb?loadConfig(root,{provider:'deepseek'}):null;
 const webSearch=process.argv.includes('--web-search');
 const records=process.argv.includes('--records');
+const media=process.argv.includes('--media');
+if(media&&live)throw new Error('DeepSeek Flash is text-only; use synthetic Pi transport plus real Codex visual acceptance');
 if(webSearch&&live)throw new Error('Use separate synthetic web and live provider runs');
 const env={...process.env,DATABASE_URL:databaseUrl,UPLOAD_DIR:path.join(dir,'uploads'),AUTH_ENABLED:'false',ALLOW_INSECURE_LOCAL:'true',SESSION_SECRET:'synthetic-secret-'.repeat(4),APP_PASSWORD_HASH:'',DESKTOP_APP:'0',ENABLE_LOCAL_CODEX:'false',APP_INSTANCE:'test',NEXT_TELEMETRY_DISABLED:'1',AI_API_KEY:'synthetic-key',AI_MODEL:'synthetic-model',SECRETARY_BUILD_DIR:'.next-pi-qa',NODE_ENV:'development'};
 if(live)env.AI_MODEL=live.model;
@@ -41,6 +44,7 @@ const upstream=http.createServer(async(req,res)=>{
   const payload=JSON.parse(raw);requests++;upstreamPayloads.push(payload);
   assert.equal(req.headers.authorization,'Bearer synthetic-key');
   const user=payload.messages.findLast(m=>m.role==='user');const prompt=typeof user?.content==='string'?user.content:JSON.stringify(user?.content);
+  const mediaUser=media?payload.messages.findLast(m=>m.role==='user'&&JSON.stringify(m.content).includes('[qa:media]')):null;
   if(prompt.includes('[qa:search-off]'))assert.ok(!(payload.tools||[]).some(t=>['webSearch','fetchWebPage'].includes(t.function.name)));
   if(prompt.includes('[qa:cancel]')){blockedResolve?.();req.on('close',()=>res.end());return;}
   if(live){
@@ -59,7 +63,20 @@ const upstream=http.createServer(async(req,res)=>{
   if(prompt.includes('[qa:crash]')&&last.role==='tool'){blockedResolve?.();return;}
   const send=(delta,finish_reason)=>({id:'synthetic',object:'chat.completion.chunk',model:'synthetic-model',choices:[{index:0,delta,finish_reason}]});
   let chunks;
-  if(prompt.includes('[qa:records]')){
+  if(mediaUser){
+    const text=typeof mediaUser.content==='string'?mediaUser.content:JSON.stringify(mediaUser.content),kind=text.match(/KIND=(\w+)/)[1],id=text.match(/FILE_ID=(\w+)/)[1];
+    const current=payload.messages.slice(payload.messages.lastIndexOf(mediaUser)+1).filter(m=>m.role==='tool').map(m=>JSON.parse(m.content));
+    const parts=['word/document.xml','word/comments.xml','word/header1.xml','word/footnotes.xml'];
+    let name,args;
+    if(kind==='docx'&&current.length<5){name=current.length===0?'inspectAttachment':'readDocumentPart';args={attachmentId:id,...(current.length?{partId:parts[current.length-1],expectedVersion:current[0].version}:{})};}
+    else if(!current.some(r=>r.image)){name='readAttachmentVisual';args={attachmentId:id,...(kind==='pdf'?{page:8,crop:{x:0.3,y:0.25,width:0.65,height:0.3}}:kind==='docx'?{imageId:'word/media/image1.png',expectedVersion:current[0].version}:{})};}
+    if(name)chunks=[send({role:'assistant',tool_calls:[{index:0,id:'media-'+current.length,type:'function',function:{name,arguments:JSON.stringify(args)}}]},null),send({},'tool_calls')];
+    else{
+      assert.ok(payload.messages.some(m=>Array.isArray(m.content)&&m.content.some(c=>c.type==='image_url'&&c.image_url.url.startsWith('data:image/png;base64,'))),'Pi did not send an actual image block');
+      const result=current.find(r=>r.image);assert.ok(result.ok);assert.equal(result.image.data,undefined);
+      chunks=[send({role:'assistant',content:'Synthetic native-image transport verified [[cite:'+result.citation.token+']]'},null),send({},'stop')];
+    }
+  }else if(prompt.includes('[qa:records]')){
     const kind=prompt.match(/SOURCE_KIND=(\w+)/)[1],id=prompt.match(/SOURCE_ID=(\w+)/)[1],historyId=prompt.match(/HISTORY_ID=(\w+)/)[1];
     const current=payload.messages.slice(payload.messages.lastIndexOf(user)+1).filter(m=>m.role==='tool').map(m=>JSON.parse(m.content));
     if(current.length<4){
@@ -119,7 +136,10 @@ const chat=async(id,msg)=>{
 };
 try{
   start();await ready();
-  if(records){
+  if(media){
+    const rounds=await runMediaScenarios({db,origin,backend:'pi',uploads:env.UPLOAD_DIR,synthetic:true,chat:(id,text)=>chat(id,message(text))});
+    const receipt={status:'passed',media:true,standalone,electron,live:false,requests,rounds};await fs.writeFile(path.join(dir,'receipt.json'),JSON.stringify(receipt,null,2));console.log(JSON.stringify(receipt));
+  }else if(records){
     const rounds=await runRecordScenarios({db,origin,backend:'pi',taskModes:live?[true]:[false,true],chat:(id,text)=>chat(id,message(text))});
     const legacyApi=await db.conversation.create({data:{backend:'api'}});
     assert.equal((await (await fetch(origin+'/api/agent/state?conversationId='+legacyApi.id)).json()).businessToolsAvailable,false);

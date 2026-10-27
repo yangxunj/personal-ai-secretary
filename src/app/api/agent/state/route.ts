@@ -9,8 +9,8 @@ export async function GET(req:Request) {
   const conversationId=new URL(req.url).searchParams.get('conversationId') || '';
   const turn=await db.codexTurn.findFirst({where:{conversationId},orderBy:{createdAt:'desc'},select:{status:true,error:true,id:true}});
   const conversation=await db.conversation.findUnique({where:{id:conversationId},select:{backend:true,codexThreadId:true}});
-  const version=conversation?.backend==='codex'?await getCodexToolVersion(conversationId,conversation.codexThreadId):2;
-  return Response.json({...turn||{status:'idle'},fileToolsAvailable:version>=1,businessToolsAvailable:version>=2&&conversation?.backend!=='api'},{headers:{'Cache-Control':'no-store'}});
+  const version=conversation?.backend==='codex'?await getCodexToolVersion(conversationId,conversation.codexThreadId):3;
+  return Response.json({...turn||{status:'idle'},fileToolsAvailable:version>=1,businessToolsAvailable:version>=2&&conversation?.backend!=='api',visualToolsAvailable:version>=3&&conversation?.backend!=='api'},{headers:{'Cache-Control':'no-store'}});
 }
 export async function POST(req:Request) {
   if(!(await sessionIsCurrent()))return new Response('Unauthorized',{status:401});

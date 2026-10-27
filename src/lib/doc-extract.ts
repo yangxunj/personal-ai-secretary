@@ -62,6 +62,7 @@ async function fromPdf(bytes: Uint8Array, renderScans: boolean,mode:TextMode): P
   const { getDocumentProxy, extractText, renderPageAsImage } = await import('unpdf');
   // PDF.js 会把传进去的 buffer 转移走（detach），后面还要用原始字节存盘，所以给它一份拷贝
   const pdf = await getDocumentProxy(new Uint8Array(bytes));
+  try {
   const { totalPages, text } = await extractText(pdf, { mergePages: true });
   const plain = text.replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n');
   const scanned = plain.replace(/\s/g, '').length < totalPages * SCAN_CHARS_PER_PAGE;
@@ -86,9 +87,10 @@ async function fromPdf(bytes: Uint8Array, renderScans: boolean,mode:TextMode): P
   const n = Math.min(totalPages, MAX_SCAN_PAGES);
   const pages: Uint8Array[] = [];
   for (let i = 1; i <= n; i++) {
+    const viewport=(await pdf.getPage(i)).getViewport({scale:1});
     const png = await renderPageAsImage(pdf, i, {
       canvasImport: () => import('@napi-rs/canvas'),
-      scale: RENDER_SCALE,
+      scale: Math.min(RENDER_SCALE,2200/Math.max(viewport.width,viewport.height)),
     });
     pages.push(new Uint8Array(png));
   }
@@ -96,9 +98,10 @@ async function fromPdf(bytes: Uint8Array, renderScans: boolean,mode:TextMode): P
     text: plain.trim(),
     pages,
     note: `共 ${totalPages} 页，是扫描件，已把${n < totalPages ? `前 ${n}` : `全部 ${n}`} 页转成图片${
-      n < totalPages ? `（后面 ${totalPages - n} 页没发，需要的话让用户截图）` : ''
+      n < totalPages ? `（后面 ${totalPages - n} 页未展开；支持附件工具的对话可按页读取）` : ''
     }`,
   };
+  } finally { await pdf.loadingTask.destroy(); }
 }
 
 async function fromDocx(bytes: Uint8Array,mode:TextMode): Promise<Extracted> {

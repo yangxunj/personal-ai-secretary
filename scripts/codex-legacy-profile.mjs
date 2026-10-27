@@ -7,7 +7,7 @@ import { z } from 'zod';
 
 // Create a genuine profile-1 registration from the unchanged legacy tool definitions.
 // The test must not simply label a tool-less thread as a file-capable old thread.
-export async function legacyDynamicTools(root,databaseUrl,conversationId,taskId){
+export async function legacyDynamicTools(root,databaseUrl,conversationId,taskId,version=1){
   process.env.DATABASE_URL=databaseUrl;
   const hooks=registerHooks({resolve(s,c,next){
     if(s==='next/cache')return{url:'data:text/javascript,export const revalidatePath=()=>{};',shortCircuit:true};
@@ -16,7 +16,8 @@ export async function legacyDynamicTools(root,databaseUrl,conversationId,taskId)
   },load(url,c,next){if(url.startsWith('file:')&&url.endsWith('.ts')&&!url.includes('/node_modules/'))return{format:'module',source:ts.transpileModule(readFileSync(fileURLToPath(url),'utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ESNext}}).outputText,shortCircuit:true};return next(url,c);}});
   try{
     const {buildChatTools}=await import('../src/lib/task-chat-tools.ts'),{buildAgentFileTools}=await import('../src/lib/agent-files.ts');
-    const tools={...buildChatTools({incoming:[],conversationId,taskId}),...buildAgentFileTools(conversationId,taskId,'test-assistant')};
+    const records=version>=2?(await import('../src/lib/agent-records.ts')).buildAgentRecordTools(conversationId,taskId,'test-assistant'):{};
+    const tools={...buildChatTools({incoming:[],conversationId,taskId,progressiveRead:version>=2}),...buildAgentFileTools(conversationId,taskId,'test-assistant'),...records};
     return Object.entries(tools).map(([name,t])=>({name,description:t.description,inputSchema:z.toJSONSchema(t.inputSchema,{io:'input'})}));
   }finally{hooks.deregister();}
 }

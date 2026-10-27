@@ -27,6 +27,9 @@ const toolLabels = (t: T): Record<string, string> => ({
   readHistoryMessage: t('读取历史原文'),
   listTaskMessages: t('查找任务进展'),
   listBusinessSources: t('查找业务资料'),
+  inspectAttachment: t('查看文件结构'),
+  readDocumentPart: t('读取文档结构原文'),
+  readAttachmentVisual: t('查看文件图像'),
   codexWebSearch: t('查找公开网页'),
   webSearch: t('查找公开网页'),
   fetchWebPage: t('读取公开网页'),
@@ -206,10 +209,11 @@ export function Chat({
   const [historyRevision, setHistoryRevision] = useState(0);
   const [legacyFileTools,setLegacyFileTools]=useState(false);
   const [legacyBusinessTools,setLegacyBusinessTools]=useState(false);
+  const [legacyVisualTools,setLegacyVisualTools]=useState(false);
   useEffect(()=>{
-    if(backend!=='codex'){setLegacyFileTools(false);setLegacyBusinessTools(false);return;}
+    if(backend!=='codex'){setLegacyFileTools(false);setLegacyBusinessTools(false);setLegacyVisualTools(false);return;}
     const controller=new AbortController();
-    void fetch('/api/agent/state?conversationId='+encodeURIComponent(conversationId),{signal:controller.signal}).then(async r=>{if(r.ok){const state=await r.json();setLegacyFileTools(state.fileToolsAvailable===false);setLegacyBusinessTools(state.fileToolsAvailable!==false&&state.businessToolsAvailable===false);}}).catch(()=>{});
+    void fetch('/api/agent/state?conversationId='+encodeURIComponent(conversationId),{signal:controller.signal}).then(async r=>{if(r.ok){const state=await r.json();setLegacyFileTools(state.fileToolsAvailable===false);setLegacyBusinessTools(state.fileToolsAvailable!==false&&state.businessToolsAvailable===false);setLegacyVisualTools(state.businessToolsAvailable===true&&state.visualToolsAvailable===false);}}).catch(()=>{});
     return()=>controller.abort();
   },[backend,conversationId,historyRevision]);
   useEffect(() => { setHistory(initialHistory); }, [initialHistory]);
@@ -465,6 +469,7 @@ export function Chat({
       {backgroundError && <p className="text-red-500 text-[12px] px-4 py-2">{backgroundError}</p>}
       {legacyFileTools && <p className="text-[12px] px-4 py-2 muted">{t('此旧版对话保留原工具与记忆。如需附件原文续读或生成下载文件，请新建 Codex 或 Pi 对话。')} <Link href="/chat" className="text-brand-600 underline">{t('打开新对话')}</Link></p>}
       {legacyBusinessTools && <p className="text-[12px] px-4 py-2 muted">{t('此对话保留旧版资料上下文与文件工具。新建 Codex 或 Pi 对话可使用按需业务原文和增强历史查询。')} <Link href="/chat" className="text-brand-600 underline">{t('打开新对话')}</Link></p>}
+      {legacyVisualTools && <p className="text-[12px] px-4 py-2 muted">{t('此对话保留原有文件与业务工具。新建 Codex 或 Pi 对话可使用文档结构和图像读取。')} <Link href="/chat" className="text-brand-600 underline">{t('打开新对话')}</Link></p>}
       <div ref={scroller} className={embedded ? "flex-1 min-h-0 overflow-y-auto overscroll-contain space-y-4 px-4 pb-4" : "flex-1 space-y-4 pb-4"}>
         {olderCount > 0 && olderHref && (
           <div className="text-center">
