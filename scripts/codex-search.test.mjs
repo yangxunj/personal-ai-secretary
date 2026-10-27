@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { codexArguments, codexSearchConfig, collectWebSources, WebCitationStream, finalizeWebCitations, codexWebGuide } from '../src/lib/codex/web-search.mjs';
+import { CitationStream } from '../src/lib/agent-citations.mjs';
 
 const item={id:'w1',type:'mcpToolCall',server:'codex_apps',tool:'search_service.web_run',status:'completed',result:{content:[{type:'text',text:'Official [page] (https://example.com/a_(b))\n【turn1view0】 [wordlim: 200]\nPublic text.'}]}};
 test('startup and thread policy restrict apps to one search tool and default off',()=>{
@@ -37,4 +38,14 @@ test('stream citation conversion handles every delta boundary, oversized tokens 
     assert.equal(out,finalizeWebCitations(input,sources));assert.doesNotMatch(out,/|/);assert.match(out,/\[\[cite:platform\]\]/);
   }
   const stream=new WebCitationStream(sources);assert.match(stream.push('cite'+'x'.repeat(2000)),/未核实/);assert.equal(stream.buffer.length,0);assert.equal(stream.push('hidden payloadvisible'),'visible');
+});
+
+test('platform attachment and native Codex citations survive the combined streaming pipeline',()=>{
+  const input='Original [[cite:file]] and web citeturn1view0.';
+  for(let split=0;split<=input.length;split++){
+    const sources=new Map();collectWebSources(sources,item);const web=new WebCitationStream(sources),files=new CitationStream();
+    files.register('file',{attachmentId:'a1',version:'v1',filename:'Original',locator:'text',url:'/api/files/a1'});
+    const text=files.push(web.push(input.slice(0,split)))+files.push(web.push(input.slice(split)))+files.push(web.push('',true),true);
+    assert.equal(text,'Original [〔1〕](/api/files/a1) and web [Official page](https://example.com/a_%28b%29).');assert.equal(files.used.length,1);
+  }
 });

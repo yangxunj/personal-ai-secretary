@@ -25,6 +25,8 @@ const filter = process.argv[2];
 const AI_FACING = [
   'src/lib/i18n/',
   'src/lib/agent-tools.ts',
+  'src/lib/agent-files.ts',
+  'src/lib/agent-citations.mjs',
   'src/lib/data-tools.ts',
   'src/lib/page-tools.ts',
   'src/lib/chat-context.ts',

@@ -69,7 +69,6 @@ export async function runChat(req: Request, trusted?: { t: T; locale: Locale; di
     return new Response(t('后台正在处理此对话，请稍后再发送'), {status:409});
   }
   if (body.taskId !== undefined && conv.taskId !== body.taskId) return new Response('Task conversation mismatch', {status:409});
-  const taskInstructions = await taskChatInstructions(conv.taskId);
   if(conv.backend === 'codex') {
     if(!localCodexEnabled()) return new Response('Local Codex is disabled on this deployment.', {status:503});
     return codexChatResponse({conversationId,newest,instructions:systemPrompt(false,await getOwners(),locale),locale});
@@ -87,6 +86,7 @@ export async function runChat(req: Request, trusted?: { t: T; locale: Locale; di
     const { piChatResponse }=await import('@/lib/pi/chat');
     return piChatResponse({conversationId,newest,instructions:systemPrompt(false,await getOwners(),locale),locale,displayText:trusted?.displayText});
   }
+  const taskInstructions = await taskChatInstructions(conv.taskId);
   const provider = createOpenAICompatible({
     name: 'ai',
     baseURL: cfg.baseUrl,

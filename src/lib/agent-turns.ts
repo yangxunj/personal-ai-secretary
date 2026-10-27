@@ -13,7 +13,17 @@ const g=globalThis as unknown as {secretaryAgentRuns?:{key:string;tail:Promise<v
 const state:NonNullable<typeof g.secretaryAgentRuns>=g.secretaryAgentRuns ??= {key:randomUUID(),tail:Promise.resolve(),jobs:new Map()};
 export const agentError=(e:unknown)=>e instanceof Error?e.message:String(e);
 export async function recoverAgentTurns() {
-  state.initialized ??= db.codexTurn.updateMany({where:{status:{in:['queued','running']},processKey:{not:state.key}},data:{status:'failed',error:'Agent backend restarted. Some changes may have been saved; check results before submitting again.'}}).then(()=>{});
+  state.initialized ??= (async()=>{
+    const turns=await db.codexTurn.findMany({where:{status:{in:['queued','running']},processKey:{not:state.key}},select:{id:true}}),ids=turns.map(t=>t.id);
+    if(!ids.length)return;
+    const error='Agent backend restarted. Some changes may have been saved; check results before submitting again.';
+    await db.$transaction([
+      db.codexTurn.updateMany({where:{id:{in:ids},status:{in:['queued','running']},processKey:{not:state.key}},data:{status:'failed',error}}),
+      db.codexToolRun.updateMany({where:{turnId:{in:ids},status:'running'},data:{status:'failed',resultJson:JSON.stringify({ok:false,error})}}),
+      // New durable runtimes use the turn ID for their assistant placeholder.
+      db.message.updateMany({where:{id:{in:ids},role:'secretary',content:''},data:{content:'[Interrupted] '+error}}),
+    ]);
+  })();
   await state.initialized;
 }
 export async function archiveAgentFiles(incoming:StoredFile[],messageId:string,taskId:string|null) {

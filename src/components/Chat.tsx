@@ -19,6 +19,10 @@ import RealtimeVoice from '@/components/chat/RealtimeVoice';
 
 /** 工具名 → 人话。工具卡片上显示它，用户不该看见 createTask 这种字眼 */
 const toolLabels = (t: T): Record<string, string> => ({
+  listAttachments: t('查找已保存附件'),
+  readAttachment: t('读取附件原文'),
+  createOutputFile: t('生成下载文件'),
+  readConversationHistory: t('读取较早对话'),
   codexWebSearch: t('查找公开网页'),
   webSearch: t('查找公开网页'),
   fetchWebPage: t('读取公开网页'),
@@ -196,6 +200,13 @@ export function Chat({
 }) {
   const [history, setHistory] = useState(initialHistory);
   const [historyRevision, setHistoryRevision] = useState(0);
+  const [legacyFileTools,setLegacyFileTools]=useState(false);
+  useEffect(()=>{
+    if(backend!=='codex'){setLegacyFileTools(false);return;}
+    const controller=new AbortController();
+    void fetch('/api/agent/state?conversationId='+encodeURIComponent(conversationId),{signal:controller.signal}).then(async r=>{if(r.ok){const state=await r.json();setLegacyFileTools(state.fileToolsAvailable===false);}}).catch(()=>{});
+    return()=>controller.abort();
+  },[backend,conversationId,historyRevision]);
   useEffect(() => { setHistory(initialHistory); }, [initialHistory]);
   const voiceTurn = useRef<{ finish: (text?: string, error?: Error) => void } | null>(null);
   const { messages, sendMessage, setMessages, status, error, stop } = useChat({
@@ -447,6 +458,7 @@ export function Chat({
       <p className={`muted text-[11px] mb-2 ${embedded ? "px-4 pt-2" : ""}`}>{backend === 'codex' ? t('本机 Codex · 使用当前电脑的登录') : backend==='pi'?t('内置 Pi（试用）'):t('API 模型')}</p>
       {background && <p className="muted text-[12px] px-4 py-2">{t('后台正在处理，完成后会自动更新。')}</p>}
       {backgroundError && <p className="text-red-500 text-[12px] px-4 py-2">{backgroundError}</p>}
+      {legacyFileTools && <p className="text-[12px] px-4 py-2 muted">{t('此旧版对话保留原工具与记忆。如需附件原文续读或生成下载文件，请新建 Codex 或 Pi 对话。')} <Link href="/chat" className="text-brand-600 underline">{t('打开新对话')}</Link></p>}
       <div ref={scroller} className={embedded ? "flex-1 min-h-0 overflow-y-auto overscroll-contain space-y-4 px-4 pb-4" : "flex-1 space-y-4 pb-4"}>
         {olderCount > 0 && olderHref && (
           <div className="text-center">

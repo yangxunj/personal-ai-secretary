@@ -10,6 +10,7 @@ import { randomUUID } from 'node:crypto';
 import { PrismaClient } from '@prisma/client';
 import { CodexConnection, resolveExecutable, denyRequest, runTurn } from '../src/lib/codex/protocol.mjs';
 import { codexSearchConfig, isWebSearchItem } from '../src/lib/codex/web-search.mjs';
+import { runFileScenarios } from './codex-files-cases.mjs';
 
 if(!process.argv.includes('--live'))throw new Error('Pass --live to use local Codex allowance for public-information tests');
 const root=path.resolve(import.meta.dirname,'..'),dir=path.join(root,'data/codex-search-integration',new Date().toISOString().replace(/[:.]/g,'-'));
@@ -26,8 +27,8 @@ const socket=http.createServer();await new Promise(r=>socket.listen(0,'127.0.0.1
 const log=await fs.open(path.join(dir,'next.log'),'a'),standalone=process.argv.includes('--standalone')||process.argv.includes('--build'),electron=process.argv.includes('--electron');
 let child,control;const threads=new Set(),rounds=[];
 const stop=async()=>{if(!child||child.exitCode!==null)return;const done=new Promise(r=>child.once('exit',r));if(process.platform==='win32')execFileSync('taskkill',['/pid',String(child.pid),'/t','/f'],{stdio:'pipe',windowsHide:true});else child.kill('SIGTERM');await done;};
-const chat=async(conversationId,text)=>{
-  const res=await fetch(origin+'/api/chat',{method:'POST',headers:{'Content-Type':'application/json',Origin:origin},body:JSON.stringify({conversationId,message:{id:randomUUID().replaceAll('-',''),role:'user',parts:[{type:'text',text}]}}),signal:AbortSignal.timeout(240000)});
+const chat=async(conversationId,text,parts=[])=>{
+  const res=await fetch(origin+'/api/chat',{method:'POST',headers:{'Content-Type':'application/json',Origin:origin},body:JSON.stringify({conversationId,message:{id:randomUUID().replaceAll('-',''),role:'user',parts:[{type:'text',text},...parts]}}),signal:AbortSignal.timeout(240000)});
   const raw=await res.text();assert.equal(res.status,200,raw);const chunks=raw.split('\n').filter(x=>x.startsWith('data: {')).map(x=>JSON.parse(x.slice(6)));assert.equal(chunks.at(-1)?.finishReason,'stop',raw);return chunks;
 };
 try {
@@ -58,7 +59,9 @@ try {
   // The application must resume only after that private fixture process releases it.
   const primer=control.proc;control.close();if(primer.exitCode===null)await new Promise(r=>primer.once('exit',r));
   control=new CodexConnection({executable,cwd:workspace});await control.connect();control.on('request',msg=>denyRequest(control,msg));
-  for(const s of scenarios){
+  const fileMode=process.argv.includes('--files');
+  if(fileMode)await runFileScenarios({db,chat,scenarios,threads,rounds,origin});
+  else for(const s of scenarios){
     const chunks=await chat(s.id,'Use public web search exactly once to search for "site:openai.com OpenAI" and open https://openai.com/ exactly once. Give a brief answer and source links. Do not change platform data or use business tools.'+(s.existing?' Also recall the exact synthetic marker from earlier in this thread. Never include that marker in any search query or URL.':''));
     const conv=await db.conversation.findUniqueOrThrow({where:{id:s.id}});threads.add(conv.codexThreadId);if(s.existing)assert.equal(conv.codexThreadId,s.oldThread);
     const reply=await db.message.findFirst({where:{conversationId:s.id,role:'secretary'},orderBy:{createdAt:'desc'}});assert.match(reply.content,/\[[^\]]+\]\(https:\/\/(www\.)?openai.com/);assert.doesNotMatch(reply.content,/|网页来源未核实/);
@@ -77,8 +80,8 @@ try {
   assert.equal((await db.conversation.findUniqueOrThrow({where:{id:old.id}})).codexThreadId,old.oldThread);
   const off=await db.codexTurn.findFirst({where:{conversationId:old.id},orderBy:{createdAt:'desc'}});assert.equal(await db.codexToolRun.count({where:{turnId:off.id,name:'codexWebSearch'}}),0);
   const html=await (await fetch(origin+'/settings')).text();assert.match(html,/name="codexWebSearch"/);
-  assert.equal(await db.task.count(),2);assert.equal(await db.codexToolRun.count({where:{name:{not:'codexWebSearch'}}}),0);
-  const receipt={status:'passed',standalone,electron,rounds,checks:['new and old general/task threads search and open real public pages','old thread markers retained and not sent to search','web citations rendered and saved','native activity audit','disable applies to old thread','no business writes'],threadCount:threads.size};
+  assert.equal(await db.task.count(),2);if(!fileMode)assert.equal(await db.codexToolRun.count({where:{name:{not:'codexWebSearch'}}}),0);
+  const receipt={status:'passed',standalone,electron,fileMode,rounds,checks:fileMode?['versioned file tail beyond upload preview','source citations and registered output files','new tools persist on resume','legacy threads retain memory and old tools']:['new and old general/task threads search and open real public pages','old thread markers retained and not sent to search','web citations rendered and saved','native activity audit','disable applies to old thread','no business writes'],threadCount:threads.size};
   await fs.writeFile(path.join(dir,'receipt.json'),JSON.stringify(receipt,null,2));console.log(JSON.stringify({status:'passed',directory:dir}));
 } catch(e){console.error(e.message);process.exitCode=1;await fs.writeFile(path.join(dir,'failure.json'),JSON.stringify({error:e.message,rounds},null,2));}
 finally {

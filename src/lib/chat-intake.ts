@@ -88,7 +88,7 @@ export async function intake(
           });
         } else if (decoded && docKind(type, name)) {
           // PDF / Word / Excel：服务器先拆成文字（扫描件拆成页面图片）再给模型。
-          // 模型自己没有读文件的工具，不在这里拆它就只能看到一个文件名。
+          // 这是上传预览；具备附件工具的运行时还可按归档 ID 读取完整可提取文字。
           try {
             const doc = await extractDoc(docKind(type, name)!, decoded.bytes, seesImages);
             parts.push({

@@ -77,6 +77,7 @@ export async function deleteConversation(id: string) {
   if (await db.voiceJob.findFirst({where:{conversationId:id,status:{in:['queued','running']}}})) throw new Error('Wait for this conversation to finish before deleting it.');
   if (await db.codexTurn.findFirst({where:{conversationId:id,status:{in:['queued','running']}}})) throw new Error('Wait for this conversation to finish before deleting it.');
   await db.$transaction([
+    db.setting.deleteMany({where:{key:'codex.tools.'+id}}),
     db.message.updateMany({ where: { conversationId: id, taskId: { not: null } }, data: { conversationId: null } }),
     db.message.deleteMany({ where: { conversationId: id } }),
     db.chatSummary.deleteMany({ where: { conversationId: id } }),

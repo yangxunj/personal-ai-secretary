@@ -1,5 +1,11 @@
 import type { Dict } from '../core';
 export const codex: Dict = {
+  '查找已保存附件': 'Finding saved attachments',
+  '读取附件原文': 'Reading original attachment text',
+  '生成下载文件': 'Creating a downloadable file',
+  '读取较早对话': 'Reading earlier conversation messages',
+  '此旧版对话保留原工具与记忆。如需附件原文续读或生成下载文件，请新建 Codex 或 Pi 对话。': 'This legacy chat retains its original tools and memory. For original attachment continuation or downloadable outputs, start a new Codex or Pi chat.',
+  '打开新对话': 'Open a new chat',
   '查找公开网页': 'Searching public web pages',
   '读取公开网页': 'Reading a public web page',
   'Codex 公开网络搜索（试用）': 'Codex public web search (preview)',

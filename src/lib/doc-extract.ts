@@ -2,8 +2,9 @@
  * 把 PDF / Word / Excel 转成模型看得懂的东西。
  *
  * 模型只收两样：文字和图片。PDF、Word 是文件格式，得有人先拆开 ——
- * pi / Claude Code 是 AI 自己调命令行去拆（它们有 bash），我们的 AI 没有
- * 读文件、跑命令的工具，所以由服务器在收到文件时替它拆好，塞进这一轮的消息里。
+ * 平台在上传时生成限长预览；Codex/Pi 的受限附件工具可按 ID 分页读原件，
+ * 不依赖任意磁盘或 shell。Word/Excel 的 complete 模式用于工具续读，避免
+ * 将预览的 40K 截断误当成原件结束。图像与复杂文档结构另走相应处理链路。
  *
  *   电子版 PDF  → 抽文字（unpdf，PDF.js 的封装）
  *   扫描版 PDF  → 里面没有文字层，每页渲染成图片给模型看（@napi-rs/canvas）
@@ -39,7 +40,7 @@ export function docKind(mimeType: string, filename: string): DocKind | null {
 }
 
 export type Extracted = {
-  /** 给模型的文字（已截断），没抽到就是空串 */
+  /** 预览默认截断；complete 模式返回完整文字或明确拒绝超限，没抽到就是空串 */
   text: string;
   /** 扫描件渲染出的页面，PNG */
   pages: Uint8Array[];
@@ -47,12 +48,17 @@ export type Extracted = {
   note: string;
 };
 
-function clip(text: string): { text: string; clipped: boolean } {
+type TextMode='preview'|'complete';
+function clip(text: string,mode:TextMode='preview'): { text: string; clipped: boolean } {
   const t = text.trim();
+  if(mode==='complete'){
+    if(t.length>2_000_000)throw new Error('Extracted text exceeds the complete-read limit (2000000 characters). Split the document.');
+    return {text:t,clipped:false};
+  }
   return t.length > MAX_TEXT_CHARS ? { text: t.slice(0, MAX_TEXT_CHARS), clipped: true } : { text: t, clipped: false };
 }
 
-async function fromPdf(bytes: Uint8Array, renderScans: boolean): Promise<Extracted> {
+async function fromPdf(bytes: Uint8Array, renderScans: boolean,mode:TextMode): Promise<Extracted> {
   const { getDocumentProxy, extractText, renderPageAsImage } = await import('unpdf');
   // PDF.js 会把传进去的 buffer 转移走（detach），后面还要用原始字节存盘，所以给它一份拷贝
   const pdf = await getDocumentProxy(new Uint8Array(bytes));
@@ -61,7 +67,7 @@ async function fromPdf(bytes: Uint8Array, renderScans: boolean): Promise<Extract
   const scanned = plain.replace(/\s/g, '').length < totalPages * SCAN_CHARS_PER_PAGE;
 
   if (!scanned) {
-    const c = clip(plain);
+    const c = clip(plain,mode);
     return {
       text: c.text,
       pages: [],
@@ -95,14 +101,14 @@ async function fromPdf(bytes: Uint8Array, renderScans: boolean): Promise<Extract
   };
 }
 
-async function fromDocx(bytes: Uint8Array): Promise<Extracted> {
+async function fromDocx(bytes: Uint8Array,mode:TextMode): Promise<Extracted> {
   const mammoth = (await import('mammoth')).default;
   const { value } = await mammoth.extractRawText({ buffer: Buffer.from(bytes) });
-  const c = clip(value.replace(/\n{3,}/g, '\n\n'));
+  const c = clip(value.replace(/\n{3,}/g, '\n\n'),mode);
   return { text: c.text, pages: [], note: `Word 文档，已抽出文字${c.clipped ? '（太长，只截了开头一段）' : ''}` };
 }
 
-async function fromXlsx(bytes: Uint8Array): Promise<Extracted> {
+async function fromXlsx(bytes: Uint8Array,mode:TextMode): Promise<Extracted> {
   const XLSX = await import('xlsx');
   const wb = XLSX.read(bytes, { type: 'array', cellDates: true });
   const sheets = wb.SheetNames.map((name) => {
@@ -114,7 +120,7 @@ async function fromXlsx(bytes: Uint8Array): Promise<Extracted> {
       .join('\n');
     return `## 工作表：${name}\n${csv}`;
   });
-  const c = clip(sheets.join('\n\n'));
+  const c = clip(sheets.join('\n\n'),mode);
   return {
     text: c.text,
     pages: [],
@@ -122,8 +128,8 @@ async function fromXlsx(bytes: Uint8Array): Promise<Extracted> {
   };
 }
 
-export async function extractDoc(kind: DocKind, bytes: Uint8Array, renderScans: boolean): Promise<Extracted> {
-  if (kind === 'pdf') return fromPdf(bytes, renderScans);
-  if (kind === 'docx') return fromDocx(bytes);
-  return fromXlsx(bytes);
+export async function extractDoc(kind: DocKind, bytes: Uint8Array, renderScans: boolean,mode:TextMode='preview'): Promise<Extracted> {
+  if (kind === 'pdf') return fromPdf(bytes, renderScans,mode);
+  if (kind === 'docx') return fromDocx(bytes,mode);
+  return fromXlsx(bytes,mode);
 }

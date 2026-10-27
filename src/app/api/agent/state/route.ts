@@ -1,13 +1,16 @@
 import { db } from '@/lib/db';
 import { sessionIsCurrent } from '@/lib/auth';
 import { recoverAgentTurns, cancelAgentConversation } from '@/lib/agent-turns';
+import { hasCodexFileTools } from '@/lib/codex/tool-profile';
 export const runtime='nodejs';export const dynamic='force-dynamic';
 export async function GET(req:Request) {
   if(!(await sessionIsCurrent()))return new Response('Unauthorized',{status:401});
   await recoverAgentTurns();
   const conversationId=new URL(req.url).searchParams.get('conversationId') || '';
   const turn=await db.codexTurn.findFirst({where:{conversationId},orderBy:{createdAt:'desc'},select:{status:true,error:true,id:true}});
-  return Response.json(turn || {status:'idle'},{headers:{'Cache-Control':'no-store'}});
+  const conversation=await db.conversation.findUnique({where:{id:conversationId},select:{backend:true,codexThreadId:true}});
+  const fileToolsAvailable=conversation?.backend==='codex'?await hasCodexFileTools(conversationId,conversation.codexThreadId):true;
+  return Response.json({...turn||{status:'idle'},fileToolsAvailable},{headers:{'Cache-Control':'no-store'}});
 }
 export async function POST(req:Request) {
   if(!(await sessionIsCurrent()))return new Response('Unauthorized',{status:401});

@@ -34,6 +34,9 @@ const {storeUpload}=await import('../src/lib/ingest.ts');
 const {externalRead}=await import('../src/lib/agent-tool-policy.ts');
 const {buildWebTools}=await import('../src/lib/web-search/tools.ts');
 const {openPiSession,CitationStream}=await import('../src/lib/pi/runtime.mjs');
+const {buildAgentFileTools}=await import('../src/lib/agent-files.ts');
+const {extractDoc}=await import('../src/lib/doc-extract.ts');
+const {hasCodexFileTools,codexToolProfileKey}=await import('../src/lib/codex/tool-profile.ts');
 const call=async(def,input)=>def.execute(def.inputSchema.parse(input),{toolCallId:'test',messages:[]});
 test.after(async()=>{await db.$disconnect();hooks.deregister();});
 
@@ -51,7 +54,11 @@ test('real platform executor atomically saves and deduplicates a business write;
 test('real durable acceptance recovers interrupted receipts and rejects concurrent or changed requests',async()=>{
   const conv=await db.conversation.create({data:{backend:'pi'}});
   const old=await db.codexTurn.create({data:{conversationId:conv.id,requestKey:'interrupted',inputHash:'x',processKey:'previous',status:'running'}});
+  await db.message.create({data:{id:old.id,conversationId:conv.id,role:'secretary',content:''}});
+  await db.codexToolRun.create({data:{turnId:old.id,callId:'interrupted-read',name:'readAttachment',inputJson:'{}'}});
   await recoverAgentTurns();assert.equal((await db.codexTurn.findUnique({where:{id:old.id}})).status,'failed');
+  assert.match((await db.message.findUnique({where:{id:old.id}})).content,/Interrupted/);
+  assert.equal((await db.codexToolRun.findUnique({where:{turnId_callId:{turnId:old.id,callId:'interrupted-read'}}})).status,'failed');
   let release;const blocked=new Promise(r=>release=r);
   const newest={id:'syntheticmessage1',role:'user',parts:[{type:'text',text:'one'}]};
   const generate=async(turn,emit)=>{await blocked;emit({type:'start',messageId:turn.id});emit({type:'finish',finishReason:'stop'});await db.codexTurn.update({where:{id:turn.id},data:{status:'completed'}});};
@@ -115,11 +122,13 @@ test('real attachment reading enforces task scope, pagination, file versions and
   const attachment=await db.attachment.create({data:{...stored,messageId:msg.id}});
   const tools=buildPiFileTools(conv.id,null,msg.id),other=buildPiFileTools('a'.repeat(24),'other-task',msg.id);
   const first=await call(tools.readAttachment,{attachmentId:attachment.id});assert.equal(first.nextOffset,12000);
-  const tail=await call(tools.readAttachment,{attachmentId:attachment.id,offset:12000});assert.equal(tail.text,'MARKER');assert.equal(tail.nextOffset,null);
+  await assert.rejects(call(tools.readAttachment,{attachmentId:attachment.id,offset:12000}),/expectedVersion/);
+  const tail=await call(tools.readAttachment,{attachmentId:attachment.id,offset:12000,expectedVersion:first.version});assert.equal(tail.text,'MARKER');assert.equal(tail.nextOffset,null);
   assert.equal((await call(tools.listAttachments,{})).nextOffset,null);
   await assert.rejects(call(other.readAttachment,{attachmentId:attachment.id}),/scope/);
   await verifyPiSource(first.citation,conv.id,null);
   const file=path.join(process.env.UPLOAD_DIR,stored.storedPath);await fs.writeFile(file,'changed');
+  await assert.rejects(call(tools.readAttachment,{attachmentId:attachment.id,offset:12000,expectedVersion:first.version}),/version changed/);
   await assert.rejects(verifyPiSource(first.citation,conv.id,null),/changed/);
   const linked=path.join(process.env.UPLOAD_DIR,'linked.txt');await fs.link(file,linked);
   await assert.rejects(call(tools.readAttachment,{attachmentId:attachment.id}),/type or size/);await fs.unlink(linked);
@@ -135,10 +144,41 @@ test('real PDF tool reads the requested page and generated files preserve origin
   const conv=await db.conversation.create({data:{backend:'pi'}}),msg=await db.message.create({data:{conversationId:conv.id,role:'secretary',content:'test'}});
   const stored=await storeUpload(Buffer.from(pdf),'synthetic.pdf','application/pdf'),attachment=await db.attachment.create({data:{...stored,messageId:msg.id}});
   const tools=buildPiFileTools(conv.id,null,msg.id),read=await call(tools.readAttachment,{attachmentId:attachment.id});assert.match(read.text,/Synthetic PDF marker/);assert.match(read.citation.url,/#page=1$/);
-  await assert.rejects(call(tools.readAttachment,{attachmentId:attachment.id,page:2}),/out of range/);
+  await assert.rejects(call(tools.readAttachment,{attachmentId:attachment.id,page:2,expectedVersion:read.version}),/out of range/);
   const output=await call(tools.createOutputFile,{filename:'result.md',content:'New output'});assert.ok(output.id);assert.equal((await db.attachment.findUnique({where:{id:output.id}})).messageId,msg.id);
   await verifyPiSource(read.citation,conv.id,null);
 });
+test('shared tools fully continue large DOCX/XLSX originals while upload previews remain bounded',async()=>{
+  assert.equal(buildPiFileTools,buildAgentFileTools);
+  const XLSX=await import('xlsx'),marker='TAIL-'+Date.now(),body='Synthetic text '.repeat(4200)+marker;
+  const zip=XLSX.CFB.utils.cfb_new();
+  for(const [name,xml] of Object.entries({
+    '[Content_Types].xml':'<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>',
+    '_rels/.rels':'<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>',
+    'word/document.xml':'<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:r><w:t>'+body+'</w:t></w:r></w:p></w:body></w:document>',
+  }))XLSX.CFB.utils.cfb_add(zip,name,Buffer.from(xml));
+  const docx=XLSX.CFB.write(zip,{fileType:'zip',type:'buffer'}),wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([...Array.from({length:30},()=>['Synthetic cell '.repeat(150)]),[marker]]),'Evidence');
+  const xlsx=XLSX.write(wb,{type:'buffer',bookType:'xlsx'});
+  const conv=await db.conversation.create({data:{backend:'pi'}}),msg=await db.message.create({data:{role:'user',content:'fixture',conversationId:conv.id}}),tools=buildAgentFileTools(conv.id,null,msg.id);
+  for(const [kind,bytes]of [['docx',docx],['xlsx',xlsx]]){
+    const preview=await extractDoc(kind,bytes,false);assert.ok(preview.text.length<=40960);assert.ok(!preview.text.includes(marker));
+    const file=await storeUpload(bytes,'large.'+kind,'application/octet-stream'),attachment=await db.attachment.create({data:{...file,messageId:msg.id}});
+    let page=await call(tools.readAttachment,{attachmentId:attachment.id}),text=page.text,version=page.version;
+    assert.ok(page.totalCharacters>40960);
+    while(page.nextOffset!==null){page=await call(tools.readAttachment,{attachmentId:attachment.id,offset:page.nextOffset,expectedVersion:version});assert.equal(page.version,version);text+=page.text;}
+    assert.ok(text.includes(marker));assert.equal(text.length,page.totalCharacters);await verifyPiSource(page.citation,conv.id,null);
+  }
+});
+
+test('Codex tool profile binds the exact thread and never upgrades legacy tools silently',async()=>{
+  const conv=await db.conversation.create({data:{backend:'codex',codexThreadId:'old-thread'}});
+  assert.equal(await hasCodexFileTools(conv.id,null),true);assert.equal(await hasCodexFileTools(conv.id,'old-thread'),false);
+  await db.setting.create({data:{key:codexToolProfileKey(conv.id),value:JSON.stringify({version:1,threadId:'new-thread'})}});
+  assert.equal(await hasCodexFileTools(conv.id,'old-thread'),false);assert.equal(await hasCodexFileTools(conv.id,'new-thread'),true);
+  await db.setting.update({where:{key:codexToolProfileKey(conv.id)},data:{value:'invalid json'}});assert.equal(await hasCodexFileTools(conv.id,'new-thread'),false);
+});
+
 test('backup and restore carry the Pi mapping and session together with the isolated database',async()=>{
   const sessions=path.join(directory,'pi-sessions','synthetic-conversation');await fs.mkdir(sessions,{recursive:true});
   const mapping='{"sessionFile":"synthetic.jsonl"}',context='{"type":"synthetic-session","marker":"J7X9"}\n';
