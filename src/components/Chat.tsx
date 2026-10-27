@@ -19,6 +19,9 @@ import RealtimeVoice from '@/components/chat/RealtimeVoice';
 
 /** 工具名 → 人话。工具卡片上显示它，用户不该看见 createTask 这种字眼 */
 const toolLabels = (t: T): Record<string, string> => ({
+  codexWebSearch: t('查找公开网页'),
+  webSearch: t('查找公开网页'),
+  fetchWebPage: t('读取公开网页'),
   createTask: t('记下待办'),
   listTasks: t('翻了翻待办'),
   updateTask: t('更新待办'),

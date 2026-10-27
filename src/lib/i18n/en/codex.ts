@@ -1,5 +1,11 @@
 import type { Dict } from '../core';
 export const codex: Dict = {
+  '查找公开网页': 'Searching public web pages',
+  '读取公开网页': 'Reading a public web page',
+  'Codex 公开网络搜索（试用）': 'Codex public web search (preview)',
+  '使用本机 Codex 的登录和额度，无需 DeepSeek 密钥。开启或关闭后，已有 Codex 对话的下一轮也生效，不会重建会话。': 'Uses local Codex sign-in and allowance; no DeepSeek key needed. Changes apply to the next turn of existing Codex chats without recreating them.',
+  '仅允许公开搜索和网页读取，搜索词和网页地址会发送至搜索服务。页面生成和连接测试不启用搜索。': 'Only public search and page reading are enabled. Queries and page URLs are sent to the search service. Page generation and connection tests keep search disabled.',
+  '保存 Codex 搜索设置': 'Save Codex search settings',
   'Pi 公开网络搜索（试用）': 'Pi public web search (preview)',
   '仅影响 Pi 的后续回复，已有会话也生效。通过 DeepSeek 搜索和读取公开网页，会产生独立调用费用；每轮最多 6 次。': 'Applies to subsequent Pi replies, including existing chats. DeepSeek search and public page fetch have separate call charges; up to 6 calls per turn.',
   '搜索词和网页地址会发送给 DeepSeek。请勿要求搜索私人邮件、附件原文或其他敏感内容。': 'Search queries and page URLs are sent to DeepSeek. Do not request searches of private emails, attachment text or other sensitive content.',

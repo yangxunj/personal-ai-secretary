@@ -4,6 +4,7 @@ import { createInterface } from 'node:readline';
 import { existsSync, readdirSync, statSync } from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
+import { codexArguments } from './web-search.mjs';
 
 // Resolve an installed CLI or desktop executable; never run a string through a shell.
 export function resolveExecutable(explicit = '') {
@@ -25,12 +26,11 @@ export function resolveExecutable(explicit = '') {
 }
 
 export class CodexConnection extends EventEmitter {
-  constructor({ executable, cwd, launcher } = {}) {
-    super(); this.executable = executable; this.cwd = cwd; this.launcher = launcher; this.pending = new Map(); this.seq = 0; this.closed = false;
+  constructor({ executable, cwd, launcher, webSearch='disabled' } = {}) {
+    super(); this.args=codexArguments(webSearch);this.executable = executable; this.cwd = cwd; this.launcher = launcher; this.pending = new Map(); this.seq = 0; this.closed = false;
   }
   async connect() {
-    const args = ['app-server', '--disable', 'shell_tool', '--disable', 'apps', '--disable', 'plugins', '--disable', 'browser_use', '--disable', 'computer_use', '--disable', 'sleep_tool', '--enable', 'skip_host_skill_discovery', '-c', 'web_search="disabled"'];
-    this.proc = this.launcher ? this.launcher() : spawn(resolveExecutable(this.executable), args, { cwd: this.cwd, stdio: ['pipe','pipe','pipe'], windowsHide: true });
+    this.proc = this.launcher ? this.launcher(this.args) : spawn(resolveExecutable(this.executable), this.args, { cwd: this.cwd, stdio: ['pipe','pipe','pipe'], windowsHide: true });
     this.proc.on('error', e => this.fail(e));
     this.proc.on('exit', () => this.fail(new Error('Codex process exited. Check installation, version and login; this turn will not be replayed.')));
     this.proc.stdin.on('error', e => this.fail(e));

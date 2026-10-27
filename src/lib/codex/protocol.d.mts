@@ -1,7 +1,7 @@
 import { EventEmitter } from 'node:events';
 export function resolveExecutable(explicit?: string): string;
 export class CodexConnection extends EventEmitter {
-  constructor(options?: {executable?: string;cwd?: string;launcher?: () => unknown});
+  constructor(options?: {executable?: string;cwd?: string;launcher?: (args:string[]) => unknown;webSearch?:'disabled'|'live'});
   connect(): Promise<void>;
   request(method: string, params?: Record<string, unknown>): Promise<any>;
   send(message: unknown): void;

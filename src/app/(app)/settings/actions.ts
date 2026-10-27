@@ -236,3 +236,12 @@ export async function saveWebSearchAction(form:FormData) {
   revalidatePath('/settings');
   redirect('/settings?aiOk='+encodeURIComponent(t('网络搜索设置已保存。')));
 }
+
+export async function saveCodexSearchAction(form:FormData) {
+  if(!(await sessionIsCurrent()))redirect('/login');
+  if(!localCodexEnabled())throw new Error('Local Codex is disabled');
+  const value=form.get('codexWebSearch')==='on'?'true':'false';
+  await db.setting.upsert({where:{key:'codex.webSearch'},create:{key:'codex.webSearch',value},update:{value}});
+  revalidatePath('/settings');
+  const t=await getT();redirect('/settings?aiOk='+encodeURIComponent(t('网络搜索设置已保存。')));
+}
