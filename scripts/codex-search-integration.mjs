@@ -11,6 +11,8 @@ import { PrismaClient } from '@prisma/client';
 import { CodexConnection, resolveExecutable, denyRequest, runTurn } from '../src/lib/codex/protocol.mjs';
 import { codexSearchConfig, isWebSearchItem } from '../src/lib/codex/web-search.mjs';
 import { runFileScenarios } from './codex-files-cases.mjs';
+import { runRecordScenarios } from './agent-records-cases.mjs';
+import { legacyDynamicTools } from './codex-legacy-profile.mjs';
 
 if(!process.argv.includes('--live'))throw new Error('Pass --live to use local Codex allowance for public-information tests');
 const root=path.resolve(import.meta.dirname,'..'),dir=path.join(root,'data/codex-search-integration',new Date().toISOString().replace(/[:.]/g,'-'));
@@ -22,6 +24,7 @@ env.SECRETARY_TSCONFIG=path.relative(root,path.join(dir,'tsconfig.json')).replac
 await fs.writeFile(path.join(root,env.SECRETARY_TSCONFIG),JSON.stringify({extends:path.join(root,'tsconfig.json'),compilerOptions:{baseUrl:root,incremental:false},include:[path.join(root,'src/**/*.ts'),path.join(root,'src/**/*.tsx')],exclude:[path.join(root,'node_modules')]}));
 execFileSync(process.execPath,[path.join(root,'node_modules/prisma/build/index.js'),'db','push','--skip-generate'],{cwd:root,env,stdio:'pipe'});
 const db=new PrismaClient({datasourceUrl:databaseUrl});
+const recordMode=process.argv.includes('--records');
 await db.setting.createMany({data:[{key:'ai.backend',value:'codex'},{key:'codex.path',value:executable},{key:'codex.effort',value:'low'},{key:'codex.webSearch',value:'true'}]});
 const socket=http.createServer();await new Promise(r=>socket.listen(0,'127.0.0.1',r));const port=socket.address().port;await new Promise(r=>socket.close(r));const origin='http://127.0.0.1:'+port;
 const log=await fs.open(path.join(dir,'next.log'),'a'),standalone=process.argv.includes('--standalone')||process.argv.includes('--build'),electron=process.argv.includes('--electron');
@@ -55,12 +58,35 @@ try {
     }
     scenarios.push({id:conv.id,taskMode,existing,marker,oldThread});
   }
+  let legacy=null;
+  if(recordMode){
+    const marker='LEGACY-CONTEXT-'+randomUUID(),task=await db.task.create({data:{title:'Profile 1 context fixture',detail:'Legacy requirement. '.repeat(100)+marker}});
+    const conv=await db.conversation.create({data:{backend:'codex',taskId:task.id}});
+    const dynamicTools=await legacyDynamicTools(root,databaseUrl,conv.id,task.id);
+    const r=await control.request('thread/start',{cwd:workspace,config:codexSearchConfig(),sandbox:'read-only',approvalPolicy:'on-request',baseInstructions:'Secretary legacy fixture. Reply OK. Use only supplied platform tools when requested.',dynamicTools});
+    threads.add(r.thread.id);await runTurn(control,{threadId:r.thread.id,effort:'low',input:[{type:'text',text:'Reply OK only.'}],timeoutMs:120000});
+    await db.conversation.update({where:{id:conv.id},data:{codexThreadId:r.thread.id}});
+    await db.setting.create({data:{key:'codex.tools.'+conv.id,value:JSON.stringify({version:1,threadId:r.thread.id})}});
+    legacy={conv,threadId:r.thread.id,marker};
+  }
   // A persistent primer owns its thread writer until its app-server exits.
   // The application must resume only after that private fixture process releases it.
   const primer=control.proc;control.close();if(primer.exitCode===null)await new Promise(r=>primer.once('exit',r));
   control=new CodexConnection({executable,cwd:workspace});await control.connect();control.on('request',msg=>denyRequest(control,msg));
   const fileMode=process.argv.includes('--files');
-  if(fileMode)await runFileScenarios({db,chat,scenarios,threads,rounds,origin});
+  if(recordMode){
+    await db.setting.update({where:{key:'codex.webSearch'},data:{value:'false'}});
+    await runRecordScenarios({db,chat,threads,rounds,origin,backend:'codex'});
+    const fileMarker='LEGACY-FILE-'+randomUUID();
+    await chat(legacy.conv.id,'Read the uploaded file using readAttachment. Also use readConversationHistory offset=0. Report the exact LEGACY-CONTEXT- marker from the fresh task requirements and the LEGACY-FILE- marker from the file; cite the file using its new token. Do not use web search or change any business records.',[{type:'file',url:'data:text/plain;base64,'+Buffer.from(fileMarker).toString('base64'),mediaType:'text/plain',filename:'legacy-file.txt'}]);
+    const state=await (await fetch(origin+'/api/agent/state?conversationId='+legacy.conv.id)).json(),reply=await db.message.findFirstOrThrow({where:{conversationId:legacy.conv.id,role:'secretary'},orderBy:{createdAt:'desc'}});
+    assert.equal(state.fileToolsAvailable,true);assert.equal(state.businessToolsAvailable,false);
+    assert.ok(reply.content.includes(legacy.marker));assert.ok(reply.content.includes(fileMarker));assert.match(reply.content,/api\/files\//);assert.doesNotMatch(reply.content,/\[\[cite:|来源未核实/);
+    assert.equal((await db.conversation.findUniqueOrThrow({where:{id:legacy.conv.id}})).codexThreadId,legacy.threadId);
+    for(const name of ['readAttachment','readConversationHistory'])assert.ok(await db.codexToolRun.count({where:{turn:{conversationId:legacy.conv.id},name,status:'completed'}}));
+    assert.equal(await db.codexToolRun.count({where:{turn:{conversationId:legacy.conv.id},name:{in:['readBusinessSource','readHistoryMessage']}}}),0);
+    rounds.push({legacyProfile:1,threadRetained:true,fullTaskContext:true,fileTools:true,enhancedTools:false});
+  }else if(fileMode)await runFileScenarios({db,chat,scenarios,threads,rounds,origin});
   else for(const s of scenarios){
     const chunks=await chat(s.id,'Use public web search exactly once to search for "site:openai.com OpenAI" and open https://openai.com/ exactly once. Give a brief answer and source links. Do not change platform data or use business tools.'+(s.existing?' Also recall the exact synthetic marker from earlier in this thread. Never include that marker in any search query or URL.':''));
     const conv=await db.conversation.findUniqueOrThrow({where:{id:s.id}});threads.add(conv.codexThreadId);if(s.existing)assert.equal(conv.codexThreadId,s.oldThread);
@@ -80,8 +106,8 @@ try {
   assert.equal((await db.conversation.findUniqueOrThrow({where:{id:old.id}})).codexThreadId,old.oldThread);
   const off=await db.codexTurn.findFirst({where:{conversationId:old.id},orderBy:{createdAt:'desc'}});assert.equal(await db.codexToolRun.count({where:{turnId:off.id,name:'codexWebSearch'}}),0);
   const html=await (await fetch(origin+'/settings')).text();assert.match(html,/name="codexWebSearch"/);
-  assert.equal(await db.task.count(),2);if(!fileMode)assert.equal(await db.codexToolRun.count({where:{name:{not:'codexWebSearch'}}}),0);
-  const receipt={status:'passed',standalone,electron,fileMode,rounds,checks:fileMode?['versioned file tail beyond upload preview','source citations and registered output files','new tools persist on resume','legacy threads retain memory and old tools']:['new and old general/task threads search and open real public pages','old thread markers retained and not sent to search','web citations rendered and saved','native activity audit','disable applies to old thread','no business writes'],threadCount:threads.size};
+  assert.equal(await db.task.count(),recordMode?5:2);if(!fileMode&&!recordMode)assert.equal(await db.codexToolRun.count({where:{name:{not:'codexWebSearch'}}}),0);
+  const receipt={status:'passed',standalone,electron,fileMode,recordMode,rounds,checks:recordMode?['general/task originals and history versioned tail reads','native citations persisted','profile 2 resumes with tools','legacy thread memory retained']:fileMode?['versioned file tail beyond upload preview','source citations and registered output files','new tools persist on resume','legacy threads retain memory and old tools']:['new and old general/task threads search and open real public pages','old thread markers retained and not sent to search','web citations rendered and saved','native activity audit','disable applies to old thread','no business writes'],threadCount:threads.size};
   await fs.writeFile(path.join(dir,'receipt.json'),JSON.stringify(receipt,null,2));console.log(JSON.stringify({status:'passed',directory:dir}));
 } catch(e){console.error(e.message);process.exitCode=1;await fs.writeFile(path.join(dir,'failure.json'),JSON.stringify({error:e.message,rounds},null,2));}
 finally {

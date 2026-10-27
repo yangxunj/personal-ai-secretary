@@ -3,14 +3,19 @@ import { z } from 'zod';
 import { revalidatePath } from 'next/cache';
 import { db, withDatabaseTransaction } from '@/lib/db';
 import { buildAgentTools, type ToolContext } from '@/lib/agent-tools';
-import { taskChatContext } from '@/lib/task-chat-context';
+import { taskChatContext, lightTaskChatContext } from '@/lib/task-chat-context';
+import { recordDescriptor } from '@/lib/agent-text';
 import { taskPatch } from '@/lib/task-chat-scope.mjs';
 import { makeT } from '@/lib/i18n/core';
 
 /** The scope is supplied from the persisted Conversation, never from the model. */
-export function buildChatTools(ctx: ToolContext & { taskId?: string | null }) {
+export function buildChatTools(ctx: ToolContext & { taskId?: string | null;progressiveRead?:boolean }) {
   const base = buildAgentTools(ctx), taskId = ctx.taskId;
-  if (!taskId) return base;
+  if (!taskId) {
+    if(!ctx.progressiveRead)return base;
+    return {...base,listTasks:tool({description:'Find tasks with short requirement/result previews. Use readBusinessSource with the returned IDs for complete text, continuation and citations.',inputSchema:base.listTasks.inputSchema,
+      execute:async(args,options)=>{const result:any=await base.listTasks.execute!(args,options);return {...result,tasks:result.tasks.map((task:any)=>({...task,detail:(task.detail||'').slice(0,400),result:(task.result||'').slice(0,300),sources:{detail:recordDescriptor('taskDetail',task.id,task.title,task.detail||''),result:recordDescriptor('taskResult',task.id,task.title,task.result||'')}}))};}})};
+  }
   const t = ctx.t || makeT(null);
   return {
     createTask: tool({
@@ -27,7 +32,7 @@ export function buildChatTools(ctx: ToolContext & { taskId?: string | null }) {
     listTasks: tool({
       description: '读取当前任务最新要求、状态、进展、文稿、专题、前置/后续任务及附件元数据。不会列出其他无关任务。',
       inputSchema: base.listTasks.inputSchema,
-      execute: async () => ({ count: 1, tasks: [await taskChatContext(taskId)] }),
+      execute: async () => ({ count: 1, tasks: [ctx.progressiveRead?await lightTaskChatContext(taskId):await taskChatContext(taskId)] }),
     }),
     updateTask: tool({
       description: '只能修改当前任务。不得覆盖最初要求 detail；新要求或结论用 saveNote。成功修改会另外保留一条任务进展。',

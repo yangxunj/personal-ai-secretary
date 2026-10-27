@@ -156,6 +156,16 @@ npm run test:pi:integration -- --build --electron  # 独立 standalone + Electro
 
 集成测试使用 `.next-pi-qa/`，不覆盖正常 `.next/`。显式 `--live` 才通过本机专用 DeepSeek 密钥调用官方服务，限制最多 16 次请求；`--live --followup` 只做两轮独立进程记忆复验。不要把原始数据库、会话或日志提交到 Git。
 
+## M2B：按需业务原文与增强历史查询（2026-10-27）
+
+Pi 每轮更新现有 session 的平台工具，不迁移或重建会话。任务资料改为轻量预览：需求 400 字符、结果 300 字符、关联文稿/专题元数据和版本、最近 5 条留言（各 300 字符）、最近 10 个附件元数据及完整数量。前置/后续任务仍保留元数据，不宣称整个快照有固定字节上限。
+
+完整内容通过共用 `agent-records.ts` 工具读取，单次最多 6,000 字符，续读携带原版本。历史列表支持关键词、ISO 时间范围及固定上界游标；单条历史可完整续读。业务留言与聊天记录分别查询，不将聊天摘要当成原文或新写入授权。引用由平台登记并在回复保存前复核原文版本与当前权限。
+
+旧 API 的上下文与历史逻辑保留；Codex 按工具档案 0/1/2 处理兼容性，详见 [本机 Codex 对话](Codex本机对话.md)。M2B 的验收记录与限制统一维护在 [实施计划](对话能力改造实施计划.md)，不将本阶段文本能力计作 M3 图文解析或 M4 语义检索完成。
+
+复验新增：`node scripts/pi-integration.mjs --build --electron --records`（合成模型，通用/任务及恢复后工具链）；已有隔离构建时使用 `--standalone`。`--standalone --electron --records --live` 使用专用 DeepSeek key 验证任务聊天两轮，仍限制最多 16 次模型请求，只有合成业务内容外传。
+
 ## 参考
 
 - [Pi SDK](https://github.com/earendil-works/pi/blob/main/packages/coding-agent/docs/sdk.md)：内嵌、会话、工具与资源控制。

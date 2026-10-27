@@ -10,6 +10,7 @@ import { spawn, execFileSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { PrismaClient } from '@prisma/client';
 import { loadConfig } from './responses-pilot.mjs';
+import { runRecordScenarios } from './agent-records-cases.mjs';
 
 const root=path.resolve(import.meta.dirname,'..'),dir=path.join(root,'data','pi-integration',new Date().toISOString().replace(/[:.]/g,'-'));
 await fs.mkdir(dir,{recursive:true});
@@ -17,6 +18,7 @@ const databaseUrl='file:'+path.join(dir,'test.db').replaceAll('\\','/');
 const liveWeb=process.argv.includes('--live-web');
 const live=process.argv.includes('--live')||liveWeb?loadConfig(root,{provider:'deepseek'}):null;
 const webSearch=process.argv.includes('--web-search');
+const records=process.argv.includes('--records');
 if(webSearch&&live)throw new Error('Use separate synthetic web and live provider runs');
 const env={...process.env,DATABASE_URL:databaseUrl,UPLOAD_DIR:path.join(dir,'uploads'),AUTH_ENABLED:'false',ALLOW_INSECURE_LOCAL:'true',SESSION_SECRET:'synthetic-secret-'.repeat(4),APP_PASSWORD_HASH:'',DESKTOP_APP:'0',ENABLE_LOCAL_CODEX:'false',APP_INSTANCE:'test',NEXT_TELEMETRY_DISABLED:'1',AI_API_KEY:'synthetic-key',AI_MODEL:'synthetic-model',SECRETARY_BUILD_DIR:'.next-pi-qa',NODE_ENV:'development'};
 if(live)env.AI_MODEL=live.model;
@@ -57,7 +59,15 @@ const upstream=http.createServer(async(req,res)=>{
   if(prompt.includes('[qa:crash]')&&last.role==='tool'){blockedResolve?.();return;}
   const send=(delta,finish_reason)=>({id:'synthetic',object:'chat.completion.chunk',model:'synthetic-model',choices:[{index:0,delta,finish_reason}]});
   let chunks;
-  if(last.role==='tool'){
+  if(prompt.includes('[qa:records]')){
+    const kind=prompt.match(/SOURCE_KIND=(\w+)/)[1],id=prompt.match(/SOURCE_ID=(\w+)/)[1],historyId=prompt.match(/HISTORY_ID=(\w+)/)[1];
+    const current=payload.messages.slice(payload.messages.lastIndexOf(user)+1).filter(m=>m.role==='tool').map(m=>JSON.parse(m.content));
+    if(current.length<4){
+      const step=current.length,name=step<2?'readBusinessSource':'readHistoryMessage',args={...(step<2?{kind,id}:{id:historyId}),offset:0};
+      if(step%2){const first=current[step-1];args.offset=Math.max(0,first.totalCharacters-6000);args.expectedVersion=first.version;}
+      chunks=[send({role:'assistant',tool_calls:[{index:0,id:'record-'+step,type:'function',function:{name,arguments:JSON.stringify(args)}}]},null),send({},'tool_calls')];
+    }else chunks=[send({role:'assistant',content:current.filter((_x,i)=>i%2).map(r=>r.text.slice(-80)+' [[cite:'+r.citation.token+']]').join('\n')},null),send({},'stop')];
+  }else if(last.role==='tool'){
     let result;try{result=JSON.parse(last.content);}catch{result={error:last.content};}
     const source=result.citation||result.results?.[0]?.citation;
     chunks=[send({role:'assistant',content:source?`Source [[cite:${source.token}]]`:`Saved ${result.id||'result'}`},null),send({},'stop')];
@@ -109,7 +119,17 @@ const chat=async(id,msg)=>{
 };
 try{
   start();await ready();
-  if(liveWeb){
+  if(records){
+    const rounds=await runRecordScenarios({db,origin,backend:'pi',taskModes:live?[true]:[false,true],chat:(id,text)=>chat(id,message(text))});
+    const legacyApi=await db.conversation.create({data:{backend:'api'}});
+    assert.equal((await (await fetch(origin+'/api/agent/state?conversationId='+legacyApi.id)).json()).businessToolsAvailable,false);
+    if(!live)for(const payload of upstreamPayloads){
+      const instructions=JSON.stringify(payload.messages.filter(m=>['system','developer'].includes(m.role)));
+      assert.ok(!instructions.includes('DOC-END-')&&!instructions.includes('RESULT-END-'),'Full originals leaked into injected instructions');
+    }
+    const receipt={status:'passed',records:true,standalone,electron,live:!!live,requests,usage,rounds};
+    await fs.writeFile(path.join(dir,'receipt.json'),JSON.stringify(receipt,null,2));console.log(JSON.stringify(receipt));
+  }else if(liveWeb){
     await db.setting.create({data:{key:'webSearch.enabled',value:'true'}});
     const id=randomUUID().replaceAll('-','');
     const result=await chat(id,message('This is a public-information integration test. Use webSearch exactly once for "site:api-docs.deepseek.com Search Fetch API" and then fetchWebPage exactly once to read https://api-docs.deepseek.com/api/search/ . Give a short factual answer with the source citation tokens returned by these tools. Do not use business or file tools.'));

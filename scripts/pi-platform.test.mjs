@@ -17,6 +17,10 @@ execFileSync(process.execPath,[path.join(root,'node_modules/prisma/build/index.j
 const hooks=registerHooks({
   resolve(specifier,context,next){
     if(specifier==='next/cache')return{url:'data:text/javascript,export const revalidatePath=()=>{};',shortCircuit:true};
+    if(specifier.startsWith('.')&&context.parentURL?.startsWith('file:')){
+      const base=fileURLToPath(new URL(specifier,context.parentURL)),file=['.ts','/index.ts'].map(e=>base+e).find(existsSync);
+      if(file)return{url:pathToFileURL(file).href,shortCircuit:true};
+    }
     if(specifier.startsWith('@/')){
       const base=path.join(root,'src',specifier.slice(2)),file=['','.ts','.tsx','/index.ts'].map(e=>base+e).find(existsSync);
       if(!file)throw new Error('Unknown app module '+specifier);return{url:pathToFileURL(file).href,shortCircuit:true};
@@ -36,7 +40,12 @@ const {buildWebTools}=await import('../src/lib/web-search/tools.ts');
 const {openPiSession,CitationStream}=await import('../src/lib/pi/runtime.mjs');
 const {buildAgentFileTools}=await import('../src/lib/agent-files.ts');
 const {extractDoc}=await import('../src/lib/doc-extract.ts');
-const {hasCodexFileTools,codexToolProfileKey}=await import('../src/lib/codex/tool-profile.ts');
+const {hasCodexFileTools,getCodexToolVersion,codexToolProfileKey}=await import('../src/lib/codex/tool-profile.ts');
+const {buildAgentRecordTools}=await import('../src/lib/agent-records.ts');
+const {verifyPlatformSource}=await import('../src/lib/agent-source-verifier.ts');
+const {lightTaskChatContext,taskChatInstructions}=await import('../src/lib/task-chat-context.ts');
+const {buildChatTools}=await import('../src/lib/task-chat-tools.ts');
+const {textPage}=await import('../src/lib/agent-text.ts');
 const call=async(def,input)=>def.execute(def.inputSchema.parse(input),{toolCallId:'test',messages:[]});
 test.after(async()=>{await db.$disconnect();hooks.deregister();});
 
@@ -176,7 +185,113 @@ test('Codex tool profile binds the exact thread and never upgrades legacy tools 
   assert.equal(await hasCodexFileTools(conv.id,null),true);assert.equal(await hasCodexFileTools(conv.id,'old-thread'),false);
   await db.setting.create({data:{key:codexToolProfileKey(conv.id),value:JSON.stringify({version:1,threadId:'new-thread'})}});
   assert.equal(await hasCodexFileTools(conv.id,'old-thread'),false);assert.equal(await hasCodexFileTools(conv.id,'new-thread'),true);
+  assert.equal(await getCodexToolVersion(conv.id,null),2);assert.equal(await getCodexToolVersion(conv.id,'new-thread'),1);
+  await db.setting.update({where:{key:codexToolProfileKey(conv.id)},data:{value:JSON.stringify({version:2,threadId:'v2-thread'})}});
+  assert.equal(await getCodexToolVersion(conv.id,'new-thread'),0);assert.equal(await getCodexToolVersion(conv.id,'v2-thread'),2);
   await db.setting.update({where:{key:codexToolProfileKey(conv.id)},data:{value:'invalid json'}});assert.equal(await hasCodexFileTools(conv.id,'new-thread'),false);
+});
+
+test('business originals continue beyond preview limits with role-specific citations and final version checks',async()=>{
+  const marker='ORIGINAL-END-'+Date.now(),body='Original evidence. '.repeat(2400)+marker;
+  const doc=await db.document.create({data:{title:'Source document',body}}),topic=await db.topic.create({data:{title:'Source topic',body}});
+  const task=await db.task.create({data:{title:'Large source fixture',detail:body,result:body,docId:doc.id,topicId:topic.id}});
+  const conv=await db.conversation.create({data:{backend:'pi',taskId:task.id}});
+  const note=await db.message.create({data:{role:'user',content:body,taskId:task.id}}),progress=await db.message.create({data:{role:'secretary',content:body,taskId:task.id}});
+  const tools=buildAgentRecordTools(conv.id,task.id,'assistant-current'),citations=new CitationStream();
+  for(const [kind,id,role]of [['taskDetail',task.id,'originalRequirement'],['taskResult',task.id,'savedResult'],['document',doc.id,'documentText'],['topic',topic.id,'topicText'],['taskMessage',note.id,'userComment'],['taskMessage',progress.id,'savedProgress']]){
+    let page=await call(tools.readBusinessSource,{kind,id}),text=page.text;
+    assert.equal(page.sourceRole,role);assert.equal(page.totalCharacters,body.length);
+    await assert.rejects(call(tools.readBusinessSource,{kind,id,offset:page.nextOffset}),/expectedVersion/);
+    while(page.nextOffset!==null){page=await call(tools.readBusinessSource,{kind,id,offset:page.nextOffset,expectedVersion:page.version});text+=page.text;}
+    assert.equal(text,body);assert.ok(text.includes(marker));await verifyPlatformSource(page.citation,conv.id,task.id,'assistant-current');
+    citations.register(page.citation.token,page.citation);citations.push('[[cite:'+page.citation.token+']]');
+  }
+  assert.equal(citations.used.length,6,'Different business source roles must not merge');
+  const first=await call(tools.readBusinessSource,{kind:'document',id:doc.id});
+  await db.document.update({where:{id:doc.id},data:{body:'Changed original'}});
+  await assert.rejects(call(tools.readBusinessSource,{kind:'document',id:doc.id,offset:first.nextOffset,expectedVersion:first.version}),/version changed/);
+  await assert.rejects(verifyPlatformSource(first.citation,conv.id,task.id,'assistant-current'),/changed/);
+  const current=await call(tools.readBusinessSource,{kind:'document',id:doc.id});await db.task.update({where:{id:task.id},data:{docId:null}});
+  await assert.rejects(verifyPlatformSource(current.citation,conv.id,task.id,'assistant-current'),/scope/);
+  const saved=await call(tools.readBusinessSource,{kind:'taskMessage',id:note.id});await db.message.delete({where:{id:note.id}});
+  await assert.rejects(verifyPlatformSource(saved.citation,conv.id,task.id,'assistant-current'),/removed/);
+});
+
+test('light task context reduces injected text while all originals remain reachable and legacy paths stay intact',async()=>{
+  const body='Long requirements. '.repeat(2400)+'TAIL-UNINJECTED';
+  const doc=await db.document.create({data:{title:'Light context document',body}}),topic=await db.topic.create({data:{title:'Light context topic',body}});
+  const task=await db.task.create({data:{title:'Light context fixture',detail:body,result:body,docId:doc.id,topicId:topic.id}});
+  for(let i=0;i<8;i++)await db.message.create({data:{role:i%2?'user':'secretary',taskId:task.id,content:body}});
+  const legacy=await taskChatInstructions(task.id,true),light=await taskChatInstructions(task.id,true,true),snapshot=await lightTaskChatContext(task.id);
+  assert.ok(light.length<legacy.length/5);assert.ok(!light.includes('TAIL-UNINJECTED'));assert.equal(snapshot.messages.length,5);assert.equal(snapshot._count.messages,8);
+  assert.equal(snapshot.doc.source.totalCharacters,body.length);assert.equal(snapshot.doc.body,undefined);assert.equal(snapshot.sources.detail.totalCharacters,body.length);
+  const ctx={incoming:[],conversationId:'light-fixture'};
+  const general=await call(buildChatTools({...ctx,progressiveRead:true}).listTasks,{keyword:task.title});
+  assert.equal(general.tasks[0].detail.length,400);assert.equal(general.tasks[0].sources.detail.version,snapshot.sources.detail.version);
+  assert.equal((await call(buildChatTools(ctx).listTasks,{keyword:task.title})).tasks[0].detail,body);
+  assert.equal((await call(buildChatTools({...ctx,taskId:task.id}).listTasks,{})).tasks[0].detail,body.slice(0,20000));
+  const scoped=buildChatTools({...ctx,taskId:task.id,progressiveRead:true});
+  await assert.rejects(call(scoped.updateTask,{id:'other-task',result:'bad'}),/scope|current|当前|只能/i);
+  await assert.rejects(call(scoped.updateTask,{id:task.id,detail:'overwrite'}));
+  assert.equal((await db.task.findUnique({where:{id:task.id}})).detail,body);
+  console.log(JSON.stringify({check:'light-context',legacyCharacters:legacy.length,lightCharacters:light.length,reduction:1-light.length/legacy.length}));
+});
+
+test('record tools enforce task links, task comments and conversation history scope',async()=>{
+  const other=await db.task.create({data:{title:'Other record task',detail:'Private original'}}),doc=await db.document.create({data:{title:'Other document',body:'Original'}}),topic=await db.topic.create({data:{title:'Other topic',body:'Original'}});
+  const task=await db.task.create({data:{title:'Restricted record task'}}),conv=await db.conversation.create({data:{backend:'pi',taskId:task.id}}),otherConv=await db.conversation.create({data:{backend:'pi'}});
+  const wrong=await db.message.create({data:{role:'user',content:'Other history',conversationId:otherConv.id}}),chat=await db.message.create({data:{role:'user',content:'Task chat is not business progress',taskId:task.id,conversationId:conv.id}});
+  const scoped=buildAgentRecordTools(conv.id,task.id,'current'),general=buildAgentRecordTools(conv.id,null,'current');
+  for(const [kind,id]of [['taskDetail',other.id],['document',doc.id],['topic',topic.id],['taskMessage',chat.id]])await assert.rejects(call(scoped.readBusinessSource,{kind,id}),/scope/);
+  await assert.rejects(call(scoped.readHistoryMessage,{id:wrong.id}),/conversation/);
+  await assert.rejects(call(scoped.listTaskMessages,{taskId:other.id}),/scope/);
+  await assert.rejects(call(general.listTaskMessages,{}),/taskId/);
+  assert.equal((await call(scoped.listBusinessSources,{kind:'document'})).total,0);
+  assert.equal((await call(general.listBusinessSources,{kind:'document',query:doc.title})).sources[0].id,doc.id);
+  assert.equal((await call(general.readBusinessSource,{kind:'taskDetail',id:other.id})).text,'Private original');
+  assert.equal((await call(scoped.readConversationHistory,{})).messages[0].id,chat.id);
+  assert.equal((await call(scoped.listTaskMessages,{})).messages.length,0);
+});
+
+test('history keyword/date previews and single-message originals preserve versions and exclude current assistant',async()=>{
+  const conv=await db.conversation.create({data:{backend:'pi'}}),date=new Date('2026-01-02T12:00:00Z');
+  const old=await db.message.create({data:{role:'user',conversationId:conv.id,content:'needle '+ 'H'.repeat(19000)+'HISTORY-END',createdAt:date}});
+  const current=await db.message.create({data:{role:'secretary',conversationId:conv.id,content:'needle current',createdAt:date}});
+  await db.message.create({data:{role:'user',conversationId:conv.id,content:'needle outside range',createdAt:new Date('2026-01-04T00:00:00Z')}});
+  const tools=buildAgentRecordTools(conv.id,null,current.id),list=await call(tools.readConversationHistory,{query:'needle',since:'2026-01-02T00:00:00Z',until:'2026-01-03T00:00:00Z'});
+  assert.equal(list.messages.length,1);assert.equal(list.messages[0].content.length,800);assert.equal(list.messages[0].sourceRole,'conversationHistory');
+  let page=await call(tools.readHistoryMessage,{id:old.id}),text=page.text;assert.equal(page.version,list.messages[0].version);
+  while(page.nextOffset!==null){page=await call(tools.readHistoryMessage,{id:old.id,offset:page.nextOffset,expectedVersion:page.version});text+=page.text;}
+  assert.ok(text.endsWith('HISTORY-END'));await verifyPlatformSource(page.citation,conv.id,null,current.id);
+  await assert.rejects(call(tools.readHistoryMessage,{id:current.id}),/conversation/);
+  await db.message.update({where:{id:old.id},data:{content:'Edited history'}});
+  await assert.rejects(verifyPlatformSource(page.citation,conv.id,null,current.id),/changed/);
+  await assert.rejects(call(tools.readConversationHistory,{since:'2026-02-01T00:00:00Z',until:'2026-01-01T00:00:00Z'}),/date range/);
+});
+
+test('history keyset cursor survives anchor deletion, bounds later inserts and rejects scope/filter/date tampering',async()=>{
+  const conv=await db.conversation.create({data:{backend:'pi'}}),date=new Date('2026-01-01T00:00:00Z'),prefix='cursor'+Date.now();
+  const ids=Array.from({length:33},(_,i)=>prefix+String(i).padStart(3,'0'));
+  await db.message.createMany({data:ids.map(id=>({id,role:'user',content:'match '+'X'.repeat(900),conversationId:conv.id,createdAt:date}))});
+  const tools=buildAgentRecordTools(conv.id,null,'current'),first=await call(tools.readConversationHistory,{query:'match'});
+  assert.equal(first.messages.length,15);assert.deepEqual(first.messages.map(m=>m.id),ids.slice(0,15));
+  assert.ok(first.messages.every(m=>m.content.length===800));assert.equal(first.nextOffset,15);
+  await db.message.delete({where:{id:ids[14]}});
+  await db.message.create({data:{role:'user',content:'match new',conversationId:conv.id,createdAt:new Date('2026-01-02T00:00:00Z')}});
+  const second=await call(tools.readConversationHistory,{cursor:first.nextCursor}),last=await call(tools.readConversationHistory,{cursor:second.nextCursor});
+  assert.deepEqual([...first.messages,...second.messages,...last.messages].map(m=>m.id),ids);assert.equal(last.nextCursor,null);assert.equal(last.nextOffset,null);
+  await assert.rejects(call(tools.readConversationHistory,{cursor:first.nextCursor,query:'different'}),/filters/);
+  await assert.rejects(call(buildAgentRecordTools('other-conversation',null,'current').readConversationHistory,{cursor:first.nextCursor}),/scope/);
+  const forged=JSON.parse(Buffer.from(first.nextCursor,'base64url').toString());forged.since='invalid-date';
+  await assert.rejects(call(tools.readConversationHistory,{cursor:Buffer.from(JSON.stringify(forged)).toString('base64url')}),/Invalid message cursor/);
+});
+
+test('record text continuation protects emoji boundaries and refuses out-of-range offsets',()=>{
+  const body='a'.repeat(5999)+'😀END',first=textPage(body,0,undefined,'v1');assert.equal(first.nextOffset,5999);
+  assert.equal(first.text+textPage(body,first.nextOffset,'v1','v1').text,body);
+  assert.throws(()=>textPage(body,6000,'v1','v1'),/nextOffset/);
+  assert.throws(()=>textPage(body,body.length+1,'v1','v1'),/range/);
+  assert.equal(textPage(body,body.length,'v1','v1').nextOffset,null);
 });
 
 test('backup and restore carry the Pi mapping and session together with the isolated database',async()=>{

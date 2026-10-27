@@ -1,5 +1,10 @@
 import type { Dict } from '../core';
 export const codex: Dict = {
+  '读取业务原文': 'Reading original business text',
+  '读取历史原文': 'Reading original conversation text',
+  '查找任务进展': 'Finding task comments and progress',
+  '查找业务资料': 'Finding business sources',
+  '此对话保留旧版资料上下文与文件工具。新建 Codex 或 Pi 对话可使用按需业务原文和增强历史查询。': 'This chat retains its previous context and file tools. Start a new Codex or Pi chat for on-demand business sources and enhanced history search.',
   '查找已保存附件': 'Finding saved attachments',
   '读取附件原文': 'Reading original attachment text',
   '生成下载文件': 'Creating a downloadable file',
