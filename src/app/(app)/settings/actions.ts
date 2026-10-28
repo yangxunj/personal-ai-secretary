@@ -171,7 +171,7 @@ export async function setLocaleAction(formData: FormData) {
   const v = formData.get('locale');
   if (isLocale(v)) await setLocale(v);
   revalidatePath('/', 'layout');
-  redirect('/settings');
+  redirect('/settings?tab=general');
 }
 
 

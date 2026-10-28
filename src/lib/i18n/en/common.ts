@@ -2,6 +2,10 @@ import type { Dict } from '../core';
 
 /** 中文原文 → 英文。key 必须跟 t('…') 里的字符串一字不差。多处共用的放这里 */
 export const common: Dict = {
+  'AI 设置': 'AI settings',
+  '通用 · General': 'General · 通用',
+  '连接与安全': 'Connections & security',
+  '设置分类': 'Settings categories',
   家庭管家: 'Household Steward',
   私人生活秘书平台: 'Your personal life secretary',
   // 导航

@@ -6,6 +6,7 @@ import { loadTtsConfig } from '@/lib/tts-config';
 import { loadRealtimeConfig, REALTIME_MODELS } from '@/lib/realtime/config';
 import ProviderFields from './ProviderFields';
 import LocalCodexSettings from './LocalCodexSettings';
+import SettingsTabs from './SettingsTabs';
 import { getWebSearchConfig } from '@/lib/web-search/config';
 import { db } from '@/lib/db';
 import { getChatBackend, getCodexConfig, localCodexEnabled } from '@/lib/codex/config';
@@ -30,20 +31,16 @@ import { VOICE_UI_ENABLED } from '@/lib/product-features';
 export const dynamic = 'force-dynamic';
 
 /**
- * 设置页 —— 模型配置 + 家里的人 + 改密码 + 退出。
- *
- * 两块内容的存在理由是同一个：**交付给别人用的东西，不能让使用者为了改一个
- * 值去 SSH 上服务器或者改 .env。** 密码是第一个（原来要跑脚本），模型 key
- * 是第二个（桌面端安装包里带的是开发者的 key，他得能换成自己的）。
- *
- * 登录相关的两块在没启用登录时不显示 —— 桌面端只听 127.0.0.1，没有登录。
+ * 按 AI、通用、连接与安全分组。服务端仍负责配置读取与表单提交，
+ * 客户端只切换面板并保留未保存输入；未启用登录时不显示账号表单。
  */
 export default async function SettingsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ e?: string; ok?: string; aiE?: string; aiOk?: string; mE?: string; mOk?: string; asrE?: string; asrOk?: string; ttsE?: string; ttsOk?: string; rtE?: string; rtOk?: string }>;
+  searchParams: Promise<{ tab?: string; e?: string; ok?: string; aiE?: string; aiOk?: string; mE?: string; mOk?: string; asrE?: string; asrOk?: string; ttsE?: string; ttsOk?: string; rtE?: string; rtOk?: string }>;
 }) {
-  const { e, ok, aiE, aiOk, mE, mOk, asrE, asrOk, ttsE, ttsOk, rtE, rtOk } = await searchParams;
+  const params = await searchParams;
+  const { tab, e, ok, aiE, aiOk, mE, mOk, asrE, asrOk, ttsE, ttsOk, rtE, rtOk } = params;
   const authOn = process.env.AUTH_ENABLED === 'true';
   const ai = await getAiConfig();
   const webSearch = await getWebSearchConfig();
@@ -53,38 +50,16 @@ export default async function SettingsPage({
   const owners = await getOwners();
   const locale = await getLocale();
   const t = await getT();
+  const initialTab = e || ok ? 'connections' : mE || mOk ? 'general'
+    : tab === 'general' || tab === 'connections' ? tab : 'ai';
 
   return (
     <>
       <PageHeader title={t('设置')} back="/" settings={false} />
 
       <div className="px-4 py-4 space-y-4">
-        {process.env.DESKTOP_APP === '1' && <section className="surface border rounded-2xl p-4" style={{ borderColor: 'var(--border)' }}>
-          <Link href="/mail" className="text-brand-500">{t('Gmail 邮件连接与提醒')}</Link>
-        </section>}
-        {/* ---------- 界面语言 ----------
-            标题固定写两种语言、不过 t()：切错了语言的人，得在一堆看不懂的字里
-            认得出这一块。 */}
-        <section id="language" className="surface border rounded-2xl p-4" style={{ borderColor: 'var(--border)' }}>
-          <h2 className="text-[15px] font-semibold mb-3">界面语言 · Language</h2>
-          <form action={setLocaleAction} className="grid grid-cols-2 gap-2">
-            {LOCALES.map((l) => (
-              <button
-                key={l}
-                name="locale"
-                value={l}
-                aria-pressed={l === locale}
-                className={`rounded-xl border py-2 text-[14px] transition ${
-                  l === locale ? 'border-brand-500 text-brand-500 bg-brand-500/10 font-medium' : 'active:opacity-60'
-                }`}
-                style={l === locale ? undefined : { borderColor: 'var(--border)' }}
-              >
-                {LOCALE_NAMES[l]}
-              </button>
-            ))}
-          </form>
-        </section>
-
+        <SettingsTabs initialTab={initialTab} navigationKey={JSON.stringify(params)}
+          ai={<>
         <LocalCodexSettings backend={await getChatBackend()} enabled={localCodexEnabled()} config={await getCodexConfig()} piContextWindow={Number((await db.setting.findUnique({where:{key:'pi.contextWindow'}}))?.value||128000)} searchEnabled={webSearch.enabled} searchConfigured={!!webSearch.apiKey} />
 
         {/* ---------- 模型 ---------- */}
@@ -223,6 +198,31 @@ export default async function SettingsPage({
 
         </>}
 
+          </>}
+          general={<>
+        {/* ---------- 界面语言 ----------
+            标题固定写两种语言、不过 t()：切错了语言的人，得在一堆看不懂的字里
+            认得出这一块。 */}
+        <section id="language" className="surface border rounded-2xl p-4" style={{ borderColor: 'var(--border)' }}>
+          <h2 className="text-[15px] font-semibold mb-3">界面语言 · Language</h2>
+          <form action={setLocaleAction} className="grid grid-cols-2 gap-2">
+            {LOCALES.map((l) => (
+              <button
+                key={l}
+                name="locale"
+                value={l}
+                aria-pressed={l === locale}
+                className={`rounded-xl border py-2 text-[14px] transition ${
+                  l === locale ? 'border-brand-500 text-brand-500 bg-brand-500/10 font-medium' : 'active:opacity-60'
+                }`}
+                style={l === locale ? undefined : { borderColor: 'var(--border)' }}
+              >
+                {LOCALE_NAMES[l]}
+              </button>
+            ))}
+          </form>
+        </section>
+
         {/* ---------- 家里的人 ---------- */}
         <section id="members" className="surface border rounded-2xl p-4 scroll-mt-4" style={{ borderColor: 'var(--border)' }}>
           <h2 className="text-[15px] font-semibold mb-1">{t('家里的人')}</h2>
@@ -254,6 +254,11 @@ export default async function SettingsPage({
           </p>
         </section>
 
+          </>}
+          connections={<>
+        {process.env.DESKTOP_APP === '1' && <section className="surface border rounded-2xl p-4" style={{ borderColor: 'var(--border)' }}>
+          <Link href="/mail" className="text-brand-500">{t('Gmail 邮件连接与提醒')}</Link>
+        </section>}
         {/* ---------- 手机访问（只有桌面端有） ---------- */}
         {process.env.DESKTOP_APP === '1' && (
           <section className="surface border rounded-2xl p-4" style={{ borderColor: 'var(--border)' }}>
@@ -327,6 +332,8 @@ export default async function SettingsPage({
             {t('这是本机版，没有登录：在这台电脑上直接用，手机要先扫码配对。数据都在这台电脑上，菜单「设置 → 打开数据文件夹」能看到。')}
           </p>
         )}
+          </>}
+        />
       </div>
     </>
   );
