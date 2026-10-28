@@ -1,5 +1,5 @@
 import { sessionIsCurrent } from '@/lib/auth';
-import { titleStatus, queueCodexTitle, startTitleWorker } from '@/lib/conversation-titles';
+import { titleStatus, queueConversationTitle, startTitleWorker } from '@/lib/conversation-titles';
 import { getLocale } from '@/lib/i18n/server';
 
 export const runtime='nodejs';
@@ -23,7 +23,7 @@ export async function POST(req:Request) {
   if(!valid(id))return new Response('Invalid conversation',{status:400});
   const state=await titleStatus(id);
   if(!state)return new Response('Not found',{status:404});
-  if(!state.canRegenerate)return new Response('Codex title generation unavailable',{status:409});
-  try {return Response.json(await queueCodexTitle(id,await getLocale(),true),{status:202,headers:{'Cache-Control':'no-store'}});}
+  if(!state.canRegenerate)return new Response('Title generation unavailable',{status:409});
+  try {return Response.json(await queueConversationTitle(id,await getLocale(),true),{status:202,headers:{'Cache-Control':'no-store'}});}
   catch {return new Response('Title request unavailable. Finish the conversation and retry.',{status:409});}
 }

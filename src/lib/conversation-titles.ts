@@ -4,6 +4,7 @@ import path from 'node:path';
 import { db } from '@/lib/db';
 import { getCodexConfig, localCodexEnabled } from '@/lib/codex/config';
 import { generateCodexTitle } from '@/lib/codex/title.mjs';
+import { generatePiTitle } from '@/lib/pi/title';
 import { UPLOAD_DIR } from '@/lib/storage';
 import type { Prisma } from '@prisma/client';
 
@@ -14,34 +15,36 @@ const state=globalState.secretaryTitleWorker??={owner:randomUUID()};
 const parse=(raw:string):Job=>{const job=JSON.parse(raw);if(job.version!==1||!['waiting','queued','running','auto','failed','manual'].includes(job.status)||typeof job.revision!=='string'||!Number.isInteger(job.attempts)||job.attempts<0||job.attempts>2)throw new Error('Invalid title state');return job;};
 const newJob=(title:string|null,locale:string):Job=>({version:1,revision:randomUUID(),status:'waiting',attempts:0,locale:locale==='en'?'en':'zh',expectedTitle:title,retryAt:0});
 const alive=(pid?:number)=>{if(!pid)return false;try{process.kill(pid,0);return true;}catch{return false;}};
+const supported=(backend:string)=>backend==='codex'||backend==='pi';
+const enabled=(backend:string)=>backend==='pi'||backend==='codex'&&localCodexEnabled();
 
 export async function titleStatus(id:string) {
   const [conversation,row]=await Promise.all([db.conversation.findUnique({where:{id},select:{title:true,backend:true,taskId:true}}),db.setting.findUnique({where:{key:titleJobKey(id)}})]);
   if(!conversation)return null;
   let status:Job['status']='waiting';
   if(row)try{status=parse(row.value).status;}catch{status='failed';}
-  return {title:conversation.title,status,canRegenerate:conversation.backend==='codex'&&!conversation.taskId&&localCodexEnabled()};
+  return {title:conversation.title,status,canRegenerate:!conversation.taskId&&enabled(conversation.backend)};
 }
 
 /** Call inside the same transaction as a manual rename, including same-value renames. */
 export async function protectManualTitle(tx:Prisma.TransactionClient,id:string) {
   const c=await tx.conversation.findUnique({where:{id},select:{backend:true,title:true}});
-  if(c?.backend!=='codex')return;
+  if(!c||!supported(c.backend))return;
   const value=JSON.stringify({...newJob(c.title,'zh'),status:'manual'});
   await tx.setting.upsert({where:{key:titleJobKey(id)},create:{key:titleJobKey(id),value},update:{value}});
 }
 
 /** Persist registration before starting the first turn; never auto-replace an existing title. */
-export async function trackCodexTitle(id:string,locale:string) {
+export async function trackConversationTitle(id:string,locale:string) {
   const c=await db.conversation.findUnique({where:{id},select:{title:true,taskId:true,backend:true}});
-  if(!c||c.backend!=='codex'||c.taskId||c.title!==null)return;
+  if(!c||!supported(c.backend)||c.taskId||c.title!==null)return;
   await db.setting.upsert({where:{key:titleJobKey(id)},create:{key:titleJobKey(id),value:JSON.stringify(newJob(null,locale))},update:{}});
 }
 
-export async function queueCodexTitle(id:string,locale:string,force=false) {
+export async function queueConversationTitle(id:string,locale:string,force=false) {
   await db.$transaction(async tx=>{
     const c=await tx.conversation.findUnique({where:{id},select:{title:true,taskId:true,backend:true}});
-    if(!c||c.backend!=='codex'||c.taskId)throw new Error('Title generation is only available for Codex conversations');
+    if(!c||!supported(c.backend)||c.taskId)throw new Error('Title generation is only available for Codex/Pi conversations');
     const row=await tx.setting.findUnique({where:{key:titleJobKey(id)}}),old=row?parse(row.value):null;
     if(old&&['queued','running'].includes(old.status))return;
     if(!force&&(c.title!==null||old&&old.status!=='waiting'))return;
@@ -71,14 +74,20 @@ async function processJob(key:string,raw:string,job:Job) {
   if(await db.codexTurn.findFirst({where:{conversationId:id,status:{in:['queued','running']}}}))return;
   const c=await db.conversation.findUnique({where:{id},select:{title:true,backend:true,taskId:true}});
   if(!c){await db.setting.deleteMany({where:{key,value:raw}});return;}
-  if(c.backend!=='codex'||c.taskId||c.title!==job.expectedTitle){await db.setting.updateMany({where:{key,value:raw},data:{value:JSON.stringify({...job,status:'manual'})}});return;}
+  if(!supported(c.backend)||c.taskId||c.title!==job.expectedTitle){await db.setting.updateMany({where:{key,value:raw},data:{value:JSON.stringify({...job,status:'manual'})}});return;}
+  if(!enabled(c.backend))return;
   const claimed={...job,status:'running',attempts:job.attempts+1,owner:state.owner,pid:process.pid,leaseUntil:Date.now()+60000} satisfies Job;
   const running=JSON.stringify(claimed);
   if(!(await db.setting.updateMany({where:{key,value:raw},data:{value:running}})).count)return;
   try{
-    const messages=await excerpts(id,!!job.forced),cfg=await getCodexConfig(),cwd=path.resolve(UPLOAD_DIR,'../title-runtime');
-    await mkdir(cwd,{recursive:true});
-    const title=await generateCodexTitle(messages,{executable:cfg.executable,cwd,model:cfg.model,locale:job.locale});
+    const messages=await excerpts(id,!!job.forced);
+    let title:string;
+    if(c.backend==='pi')title=await generatePiTitle(messages,{locale:job.locale});
+    else {
+      const cfg=await getCodexConfig(),cwd=path.resolve(UPLOAD_DIR,'../title-runtime');
+      await mkdir(cwd,{recursive:true});
+      title=await generateCodexTitle(messages,{executable:cfg.executable,cwd,model:cfg.model,locale:job.locale});
+    }
     await db.$transaction(async tx=>{
       const current=await tx.setting.findUnique({where:{key}});
       if(current?.value!==running)return;
@@ -95,7 +104,7 @@ async function processJob(key:string,raw:string,job:Job) {
 }
 
 function wakeTitleWorker() {
-  if(!localCodexEnabled()||process.env.NEXT_PHASE==='phase-production-build'||state.running)return;
+  if(process.env.NEXT_PHASE==='phase-production-build'||state.running)return;
   clearTimeout(state.timer);
   state.running=(async()=>{
     const rows=await db.setting.findMany({where:{key:{startsWith:'conversation.title.'}},orderBy:{key:'asc'}});
@@ -103,20 +112,22 @@ function wakeTitleWorker() {
   })().catch(()=>console.warn('[chat] Title worker unavailable')).finally(()=>{
     state.running=undefined;
     // No permanent poll when the queue is empty. Waiting first rounds are idle.
-    void db.setting.findMany({where:{key:{startsWith:'conversation.title.'}},select:{value:true}}).then(rows=>{
-      const pending=rows.some(r=>{try{return ['queued','running'].includes(parse(r.value).status);}catch{return false;}});
+    void db.setting.findMany({where:{key:{startsWith:'conversation.title.'}},select:{key:true,value:true}}).then(async rows=>{
+      const pendingIds=rows.filter(r=>{try{return ['queued','running'].includes(parse(r.value).status);}catch{return false;}}).map(r=>r.key.slice('conversation.title.'.length));
+      const conversations=pendingIds.length?await db.conversation.findMany({where:{id:{in:pendingIds}},select:{backend:true}}):[];
+      const pending=conversations.some(c=>enabled(c.backend));
       if(pending){state.timer=setTimeout(()=>void startTitleWorker(),2000);state.timer.unref?.();}
     }).catch(()=>{});
   });
 }
 
 export async function startTitleWorker() {
-  if(!localCodexEnabled()||process.env.NEXT_PHASE==='phase-production-build')return;
+  if(process.env.NEXT_PHASE==='phase-production-build')return;
   const rows=await db.setting.findMany({where:{key:{startsWith:'conversation.title.'}}});
   for(const row of rows){
     let job:Job;try{job=parse(row.value);}catch{continue;}
     const id=row.key.slice('conversation.title.'.length);
-    if(job.status==='waiting'){await queueCodexTitle(id,job.locale).catch(()=>{});continue;}
+    if(job.status==='waiting'){await queueConversationTitle(id,job.locale).catch(()=>{});continue;}
     if(job.status==='running'&&job.owner!==state.owner&&(!alive(job.pid)||(job.leaseUntil??0)<Date.now())){
       await db.setting.updateMany({where:{key:row.key,value:row.value},data:{value:JSON.stringify({...job,status:job.attempts<2?'queued':'failed',retryAt:0})}});
     }

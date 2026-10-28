@@ -12,6 +12,7 @@ import { PrismaClient } from '@prisma/client';
 import { loadConfig } from './responses-pilot.mjs';
 import { runRecordScenarios } from './agent-records-cases.mjs';
 import { runMediaScenarios } from './agent-media-cases.mjs';
+import { runPiTitleScenarios } from './pi-title-cases.mjs';
 
 const root=path.resolve(import.meta.dirname,'..'),dir=path.join(root,'data','pi-integration',new Date().toISOString().replace(/[:.]/g,'-'));
 await fs.mkdir(dir,{recursive:true});
@@ -36,18 +37,25 @@ if(webSearch){
   await fs.writeFile(fixture,`const original=globalThis.fetch;globalThis.fetch=async(input,init)=>{const url=String(input);if(url.startsWith('https://api.deepseek.com/v1/tools/')){if(init.headers.authorization!=='Bearer synthetic-search-key')throw new Error('Unexpected fixture key');const body=JSON.parse(init.body);if(url.endsWith('/search'))return Response.json({results:[{title:'Synthetic web source',url:'https://example.com/public',snippet:'Synthetic public summary',summary:'Public fixture J7X9'}]});if(url.endsWith('/fetch')&&body.url==='https://example.com/public')return Response.json({title:'Synthetic web source',content:'Synthetic original public page J7X9'});throw new Error('Unexpected fixture request');}return original(input,init);};`);
   env.NODE_OPTIONS=(env.NODE_OPTIONS||'')+' --require "'+fixture.replaceAll('\\','/')+'"';
 }
-let requests=0,blockedResolve;const upstreamPayloads=[];
+let requests=0,blockedResolve,holdTitles=false,titleBlockedResolve;const upstreamPayloads=[],titlePayloads=[];
 let usage={prompt_tokens:0,completion_tokens:0,total_tokens:0};
 const upstream=http.createServer(async(req,res)=>{
   let raw='';for await(const part of req)raw+=part;
-  const payload=JSON.parse(raw);requests++;upstreamPayloads.push(payload);
+  const payload=JSON.parse(raw);
+  if(JSON.stringify(payload.messages?.filter(m=>m.role==='system')).includes('Secretary title summary.')) {
+    titlePayloads.push(payload);
+    assert.ok(!payload.tools?.length);assert.notEqual(payload.stream,true);
+    assert.equal(req.headers.authorization,'Bearer synthetic-key');
+    if(holdTitles){titleBlockedResolve?.();return;}
+    if(!live){res.writeHead(200,{'Content-Type':'application/json'});res.end(JSON.stringify({id:'synthetic-title',object:'chat.completion',model:'synthetic-model',choices:[{index:0,message:{role:'assistant',content:'Travel budget planning'},finish_reason:'stop'}],usage:{prompt_tokens:50,completion_tokens:5,total_tokens:55}}));return;}
+  }else {requests++;upstreamPayloads.push(payload);}
   assert.equal(req.headers.authorization,'Bearer synthetic-key');
   const user=payload.messages.findLast(m=>m.role==='user');const prompt=typeof user?.content==='string'?user.content:JSON.stringify(user?.content);
   const mediaUser=media?payload.messages.findLast(m=>m.role==='user'&&JSON.stringify(m.content).includes('[qa:media]')):null;
   if(prompt.includes('[qa:search-off]'))assert.ok(!(payload.tools||[]).some(t=>['webSearch','fetchWebPage'].includes(t.function.name)));
   if(prompt.includes('[qa:cancel]')){blockedResolve?.();req.on('close',()=>res.end());return;}
   if(live){
-    if(requests>16){res.writeHead(429);res.end('Live test request limit');return;}
+    if(requests+titlePayloads.length>16){res.writeHead(429);res.end('Live test request limit');return;}
     const controller=new AbortController();res.on('close',()=>controller.abort());
     try{
       const upstream=await fetch(live.baseUrl+'/chat/completions',{method:'POST',headers:{Authorization:'Bearer '+live.apiKey,'Content-Type':'application/json'},body:JSON.stringify({...payload,thinking:{type:'disabled'}}),signal:AbortSignal.any([controller.signal,AbortSignal.timeout(120000)]),redirect:'error'});
@@ -135,7 +143,16 @@ const chat=async(id,msg)=>{
 };
 try{
   start();await ready();
-  if(media){
+  if(process.argv.includes('--titles')) {
+    assert.ok(!live,'Title integration fixtures do not use live credentials');
+    const receipt=await runPiTitleScenarios({db,origin,uploads:env.UPLOAD_DIR,chat:(id,text)=>chat(id,message(text)),restart:async()=>{await stop();holdTitles=false;start();await ready();},holdNextTitle:()=>{holdTitles=true;return new Promise(r=>titleBlockedResolve=r);},titlePayloads,mainPayloads:upstreamPayloads});
+    await fs.writeFile(path.join(dir,'receipt.json'),JSON.stringify({status:'passed',standalone,electron,...receipt},null,2));
+    console.log(JSON.stringify({status:'passed',origin,directory:dir,...receipt}));
+    if(process.argv.includes('--browser'))await new Promise(resolve=>{
+      const finish=()=>{clearTimeout(timer);process.stdin.off('data',finish);process.stdin.pause();resolve();};
+      const timer=setTimeout(finish,180000);process.stdin.once('data',finish);
+    });
+  }else if(media){
     const rounds=await runMediaScenarios({db,origin,backend:'pi',uploads:env.UPLOAD_DIR,synthetic:!live,taskModes:live?[true]:[false,true],chat:(id,text)=>chat(id,message(text))});
     const receipt={status:'passed',media:true,standalone,electron,live:!!live,model:live?.model||'synthetic-model',requests,usage,rounds};await fs.writeFile(path.join(dir,'receipt.json'),JSON.stringify(receipt,null,2));console.log(JSON.stringify(receipt));
   }else if(records){

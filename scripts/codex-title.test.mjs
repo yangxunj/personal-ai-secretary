@@ -57,17 +57,18 @@ test('title protocol closes timed-out and cancelled clients and rejects malforme
 const root=path.resolve(import.meta.dirname,'..'),dir=path.join(root,'data/codex-title-tests',Date.now().toString());await fs.mkdir(dir,{recursive:true});
 process.env.DATABASE_URL='file:'+path.join(dir,'test.db').replaceAll('\\','/');process.env.UPLOAD_DIR=path.join(dir,'uploads');process.env.ENABLE_LOCAL_CODEX='true';
 execFileSync(process.execPath,[path.join(root,'node_modules/prisma/build/index.js'),'db','push','--skip-generate'],{env:process.env,stdio:'pipe'});
-const state=globalThis.__codexTitleTest={authorized:true,generate:async()=> '旅行预算规划',calls:[]};
+const state=globalThis.__codexTitleTest={authorized:true,codexEnabled:true,generate:async()=> '旅行预算规划',calls:[]};
 const data=s=>'data:text/javascript;base64,'+Buffer.from(s).toString('base64');
 const mocks={
-  '@/lib/codex/config':data("export const localCodexEnabled=()=>true;export const getCodexConfig=async()=>({executable:'synthetic',model:'synthetic-model'});"),
+  '@/lib/codex/config':data("export const localCodexEnabled=()=>globalThis.__codexTitleTest.codexEnabled;export const getCodexConfig=async()=>({executable:'synthetic',model:'synthetic-model'});"),
   '@/lib/codex/title.mjs':data('export const generateCodexTitle=async(messages,options)=>{globalThis.__codexTitleTest.calls.push({messages,options});return globalThis.__codexTitleTest.generate(messages,options);};'),
+  '@/lib/pi/title':data('export const generatePiTitle=async(messages,options)=>{globalThis.__codexTitleTest.calls.push({messages,options});return globalThis.__codexTitleTest.generate(messages,options);};'),
   '@/lib/i18n/server':data("export const getLocale=async()=>'en';export const getT=async()=>s=>s;"),
   '@/lib/auth':data('export const sessionIsCurrent=async()=>globalThis.__codexTitleTest.authorized;'),
 };
 const hooks=registerHooks({resolve(s,c,next){if(mocks[s])return{url:mocks[s],shortCircuit:true};if(s.startsWith('@/')){const base=path.join(root,'src',s.slice(2)),f=['','.ts','.mjs','/index.ts'].map(e=>base+e).find(existsSync);return{url:pathToFileURL(f).href,shortCircuit:true};}return next(s,c);},load(url,c,next){if(url.startsWith('file:')&&url.endsWith('.ts')&&!url.includes('/node_modules/'))return{format:'module',source:ts.transpileModule(readFileSync(fileURLToPath(url),'utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ESNext}}).outputText,shortCircuit:true};return next(url,c);}});
 const {db}=await import('../src/lib/db.ts');
-const {trackCodexTitle,queueCodexTitle,startTitleWorker,titleStatus,titleJobKey}=await import('../src/lib/conversation-titles.ts');
+const {trackConversationTitle,queueConversationTitle,startTitleWorker,titleStatus,titleJobKey}=await import('../src/lib/conversation-titles.ts');
 const {renameConversation,deleteConversation,autoTitle}=await import('../src/lib/conversations.ts');
 const {GET,POST}=await import('../src/app/api/chat/title/route.ts');
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
@@ -81,37 +82,41 @@ const completed=async(id,status='completed')=>{
 const idle=async()=>{if(globalThis.secretaryTitleWorker?.running)await globalThis.secretaryTitleWorker.running;};
 test.after(async()=>{await idle();clearTimeout(globalThis.secretaryTitleWorker?.timer);await db.$disconnect();hooks.deregister();});
 
-test('automatic title needs two successful turns, never an API key, and preserves activity and main thread',async()=>{
-  const c=await db.conversation.create({data:{backend:'codex',codexThreadId:'main-thread'}});await trackCodexTitle(c.id,'en');
-  await completed(c.id);await completed(c.id,'failed');await queueCodexTitle(c.id,'en');await idle();assert.equal(state.calls.length,0);assert.equal(await autoTitle(c.id,'first','reply'),null);
+for(const backend of ['codex','pi']) {
+test(backend+' automatic title needs two successful turns and preserves activity and main thread',async()=>{
+  await idle();state.calls=[];state.generate=async()=> '旅行预算规划';state.codexEnabled=backend==='codex';
+  const c=await db.conversation.create({data:{backend,codexThreadId:'main-thread'}});await trackConversationTitle(c.id,'en');
+  await completed(c.id);await completed(c.id,'failed');await queueConversationTitle(c.id,'en');await idle();assert.equal(state.calls.length,0);assert.equal(await autoTitle(c.id,'first','reply'),null);
   await completed(c.id);const activity=new Date('2026-01-01');await db.conversation.update({where:{id:c.id},data:{updatedAt:activity}});
-  await Promise.all(Array.from({length:4},()=>queueCodexTitle(c.id,'en')));await wait(async()=> (await titleStatus(c.id)).status==='auto');
+  await Promise.all(Array.from({length:4},()=>queueConversationTitle(c.id,'en')));await wait(async()=> (await titleStatus(c.id)).status==='auto');
   assert.equal(state.calls.length,1);assert.equal(state.calls[0].options.locale,'en');assert.equal(state.calls[0].messages.length,4);
   const saved=await db.conversation.findUnique({where:{id:c.id}});assert.equal(saved.title,'旅行预算规划');assert.equal(saved.codexThreadId,'main-thread');assert.equal(saved.updatedAt.toISOString(),activity.toISOString());
 });
-test('old names are untouched automatically, explicit regeneration works, same-value rename wins an active job',async()=>{
-  const c=await db.conversation.create({data:{backend:'codex',title:'Original'}});await completed(c.id);await completed(c.id);const before=state.calls.length;
-  await trackCodexTitle(c.id,'zh');await queueCodexTitle(c.id,'zh');await idle();assert.equal(state.calls.length,before);assert.equal((await titleStatus(c.id)).title,'Original');
-  let release;state.generate=()=>new Promise(r=>{release=r;});await queueCodexTitle(c.id,'zh',true);await wait(()=>!!release);await renameConversation(c.id,'Original');release('Must not overwrite');await idle();
+test(backend+' old names are untouched automatically, explicit regeneration works, same-value rename wins an active job',async()=>{
+  const c=await db.conversation.create({data:{backend,title:'Original'}});await completed(c.id);await completed(c.id);const before=state.calls.length;
+  await trackConversationTitle(c.id,'zh');await queueConversationTitle(c.id,'zh');await idle();assert.equal(state.calls.length,before);assert.equal((await titleStatus(c.id)).title,'Original');
+  let release;state.generate=()=>new Promise(r=>{release=r;});await queueConversationTitle(c.id,'zh',true);await wait(()=>!!release);await renameConversation(c.id,'Original');release('Must not overwrite');await idle();
   assert.equal((await titleStatus(c.id)).title,'Original');assert.equal((await titleStatus(c.id)).status,'manual');
-  state.generate=async()=> 'Explicit regenerated title';await queueCodexTitle(c.id,'en',true);await wait(async()=> (await titleStatus(c.id)).status==='auto');assert.equal((await titleStatus(c.id)).title,'Explicit regenerated title');
+  state.generate=async()=> 'Explicit regenerated title';await queueConversationTitle(c.id,'en',true);await wait(async()=> (await titleStatus(c.id)).status==='auto');assert.equal((await titleStatus(c.id)).title,'Explicit regenerated title');
 });
-test('deletion cleans pending state and cannot resurrect a title; task chats are excluded',async()=>{
-  const c=await db.conversation.create({data:{backend:'codex'}});await completed(c.id);await completed(c.id);let release;state.generate=()=>new Promise(r=>{release=r;});await trackCodexTitle(c.id,'zh');await queueCodexTitle(c.id,'zh');await wait(()=>!!release);await deleteConversation(c.id);release('Deleted title');await idle();assert.equal(await titleStatus(c.id),null);assert.equal(await db.setting.findUnique({where:{key:titleJobKey(c.id)}}),null);
-  const task=await db.task.create({data:{title:'Synthetic'}}),tc=await db.conversation.create({data:{backend:'codex',taskId:task.id}});await trackCodexTitle(tc.id,'zh');assert.equal(await db.setting.findUnique({where:{key:titleJobKey(tc.id)}}),null);await assert.rejects(queueCodexTitle(tc.id,'zh',true));
+test(backend+' deletion cleans pending state and cannot resurrect a title; task chats are excluded',async()=>{
+  const c=await db.conversation.create({data:{backend}});await completed(c.id);await completed(c.id);let release;state.generate=()=>new Promise(r=>{release=r;});await trackConversationTitle(c.id,'zh');await queueConversationTitle(c.id,'zh');await wait(()=>!!release);await deleteConversation(c.id);release('Deleted title');await idle();assert.equal(await titleStatus(c.id),null);assert.equal(await db.setting.findUnique({where:{key:titleJobKey(c.id)}}),null);
+  const task=await db.task.create({data:{title:'Synthetic'}}),tc=await db.conversation.create({data:{backend,taskId:task.id}});await trackConversationTitle(tc.id,'zh');assert.equal(await db.setting.findUnique({where:{key:titleJobKey(tc.id)}}),null);await assert.rejects(queueConversationTitle(tc.id,'zh',true));
 });
-test('waiting/queued jobs and interrupted leases recover; failures stop after two attempts and preserve original title',async()=>{
-  const c=await db.conversation.create({data:{backend:'codex'}});await trackCodexTitle(c.id,'zh');await completed(c.id);await completed(c.id);state.generate=async()=> 'Recovered title';await startTitleWorker();await wait(async()=> (await titleStatus(c.id)).status==='auto');
-  const legacy=await db.conversation.create({data:{backend:'codex',title:'Fallback'}});await completed(legacy.id);await completed(legacy.id);
+test(backend+' waiting/queued jobs and interrupted leases recover; failures stop after two attempts and preserve original title',async()=>{
+  const c=await db.conversation.create({data:{backend}});await trackConversationTitle(c.id,'zh');await completed(c.id);await completed(c.id);state.generate=async()=> 'Recovered title';await startTitleWorker();await wait(async()=> (await titleStatus(c.id)).status==='auto');
+  const legacy=await db.conversation.create({data:{backend,title:'Fallback'}});await completed(legacy.id);await completed(legacy.id);
   const row={version:1,revision:crypto.randomUUID(),status:'running',attempts:1,locale:'en',expectedTitle:'Fallback',retryAt:0,owner:'dead-process',pid:2147483640,leaseUntil:Date.now()+60000,forced:true};
   await db.setting.create({data:{key:titleJobKey(legacy.id),value:JSON.stringify(row)}});state.generate=async()=>{throw new Error('Sensitive upstream failure');};await startTitleWorker();await wait(async()=> (await titleStatus(legacy.id)).status==='failed');assert.equal((await titleStatus(legacy.id)).title,'Fallback');const stored=await db.setting.findUnique({where:{key:titleJobKey(legacy.id)}});assert.equal(JSON.parse(stored.value).attempts,2);assert.ok(!stored.value.includes('Sensitive'));await startTitleWorker();await idle();assert.equal(JSON.parse((await db.setting.findUnique({where:{key:titleJobKey(legacy.id)}})).value).attempts,2);
 });
-test('title endpoints authenticate, validate origin/scope and reject pending main turns',async()=>{
-  const c=await db.conversation.create({data:{backend:'codex',title:'Keep'}});await completed(c.id);await completed(c.id,'running');
+test(backend+' title endpoints authenticate, validate origin/scope and reject pending main turns',async()=>{
+  const c=await db.conversation.create({data:{backend,title:'Keep'}});await completed(c.id);await completed(c.id,'running');
   const url='http://localhost/api/chat/title?conversationId='+c.id;
   state.authorized=false;assert.equal((await GET(new Request(url))).status,401);state.authorized=true;
   assert.equal((await GET(new Request('http://localhost/api/chat/title?conversationId=bad'))).status,400);
   assert.equal((await POST(new Request(url,{method:'POST',body:JSON.stringify({conversationId:c.id})}))).status,403);
   assert.equal((await POST(new Request(url,{method:'POST',headers:{Origin:'http://localhost',Host:'localhost'},body:JSON.stringify({conversationId:c.id})}))).status,409);
   const response=await GET(new Request(url));assert.equal(response.headers.get('cache-control'),'no-store');assert.equal((await response.json()).title,'Keep');
+  assert.equal((await titleStatus(c.id)).canRegenerate,true);
 });
+}

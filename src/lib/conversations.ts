@@ -109,9 +109,9 @@ export async function autoTitle(id: string, user: string, reply: string): Promis
 async function generateTitle(id: string, user: string, reply: string): Promise<string | null> {
   const conv = await db.conversation.findUnique({ where: { id }, select: { title: true, backend: true } });
   if (!conv) return null;
-  // Codex titles are queued server-side after two saved successful turns.
+  // Harness titles are queued server-side after two saved successful turns.
   // Do not persist the first-message placeholder as a permanent title.
-  if (conv.backend === 'codex') return conv.title;
+  if (conv.backend === 'codex' || conv.backend === 'pi') return conv.title;
   if (conv.title) return conv.title;
 
   let title = '';

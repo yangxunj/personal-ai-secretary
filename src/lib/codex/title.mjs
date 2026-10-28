@@ -1,13 +1,8 @@
 import { CodexConnection, runTurn } from './protocol.mjs';
 import { codexSearchConfig } from './web-search.mjs';
 
-export const TITLE_SCHEMA={type:'object',properties:{title:{type:'string'}},required:['title'],additionalProperties:false};
-export function validateCodexTitle(value,locale='zh') {
-  if(!value||typeof value!=='object'||Array.isArray(value)||Object.keys(value).join(',')!=='title'||typeof value.title!=='string')throw new Error('Invalid title response');
-  const title=value.title.trim(),length=[...title].length;
-  if(length<2||length>(locale==='en'?60:32)||/[\r\n<>]/.test(title)||/sk-[\w-]{8,}|\d{7,}/i.test(title))throw new Error('Invalid title content');
-  return title;
-}
+import { TITLE_SCHEMA, validateTitle as validateCodexTitle } from '../title-content.mjs';
+export { TITLE_SCHEMA, validateCodexTitle };
 
 /** No main thread is opened/resumed. Check ephemeral acknowledgement before sending excerpts.
  * @param {Array<{role:string,content:string}>} messages

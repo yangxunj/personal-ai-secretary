@@ -22,8 +22,10 @@ import { piDirectory } from './storage';
 import { getWebSearchConfig } from '@/lib/web-search/config';
 import { buildWebTools } from '@/lib/web-search/tools';
 import { buildAgentMediaTools, PLATFORM_MEDIA_GUIDE, piToolContent, visibleMediaResult } from '@/lib/agent-media';
+import { trackConversationTitle, queueConversationTitle } from '@/lib/conversation-titles';
 
-export function piChatResponse(options:{conversationId:string;newest:UIMessage;instructions:string;locale:string;displayText?:string}) {
+export async function piChatResponse(options:{conversationId:string;newest:UIMessage;instructions:string;locale:string;displayText?:string}) {
+  await trackConversationTitle(options.conversationId,options.locale).catch(()=>{});
   return durableAgentResponse({...options,generate:(turn,emit,signal)=>generate(turn,options,emit,signal)});
 }
 
@@ -105,6 +107,7 @@ async function generate(turn:CodexTurn,options:{newest:UIMessage;instructions:st
     ]);
     // SQL is authoritative if the process stops between the two durable stores.
     try {await run.saveManifest({pendingTurn:null});}catch {console.error('[pi] Session manifest needs recovery');}
+    await queueConversationTitle(conv.id,options.locale).catch(()=>{});
     write(finish);
   }catch(e){
     await session?.abort();await toolsTail;

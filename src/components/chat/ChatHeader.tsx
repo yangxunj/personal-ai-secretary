@@ -53,6 +53,9 @@ export default function ChatHeader({
   useEffect(() => {
     const on = (e: Event) => {
       const d = (e as CustomEvent<ConvEventDetail>).detail ?? {};
+      // Saved replies broadcast without an id. Recheck the durable title queue
+      // after every completion, including the second turn that starts a job.
+      if (!d.id) { setTitleRevision(n=>n+1); return; }
       if (d.id !== conversationId) return;
       if (d.title) setTitle(d.title);
       if (!d.removed) setExists(true);
