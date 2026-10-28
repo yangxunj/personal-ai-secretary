@@ -178,8 +178,8 @@ export async function setLocaleAction(formData: FormData) {
 export async function saveChatBackendAction(form:FormData) {
   if(!(await sessionIsCurrent()))redirect('/login');
   const t=await getT();
-  const backend=String(form.get('backend') || 'api');
-  if(!['api','codex','pi'].includes(backend))throw new Error('Invalid backend');
+  const backend=String(form.get('backend') || 'pi');
+  if(!['codex','pi'].includes(backend))throw new Error('Invalid backend');
   if(backend==='pi') {
     const value=String(form.get('piContextWindow')||128000),size=Number(value);
     if(!Number.isInteger(size)||size<8192||size>1000000)throw new Error('Pi context window must be between 8192 and 1000000');

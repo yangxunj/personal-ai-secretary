@@ -108,6 +108,8 @@ New installations use embedded Pi by default. Existing installations keep their 
 
 Without an AI backend, tasks and the vault can still be edited by hand.
 
+The current source offers two backend choices: embedded Pi and local Codex. A legacy API backend preference now resolves to Pi for new chats. Existing API conversations keep their backend and history; their model settings remain available under Pi model configuration.
+
 ## Privacy
 
 - The database (SQLite), uploaded originals and backups all live in that `data` folder. Menu **Settings → Open data folder** takes you there.

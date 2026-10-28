@@ -8,7 +8,9 @@ import { codexSearchConfig } from './web-search.mjs';
 export const localCodexEnabled = () => process.env.DESKTOP_APP === '1' || process.env.ENABLE_LOCAL_CODEX === 'true';
 export async function getChatBackend() {
   const selected=(await db.setting.findUnique({where:{key:'ai.backend'}}))?.value;
-  return selected==='pi'?'pi':selected==='codex'&&localCodexEnabled()?'codex':'api';
+  // Only choose a harness for new chats. Existing conversations retain their
+  // stored backend, including legacy API chats; do not rewrite their history.
+  return selected==='codex'&&localCodexEnabled()?'codex':'pi';
 }
 export async function getCodexConfig() {
   const rows=await db.setting.findMany({where:{key:{in:['codex.path','codex.model','codex.effort','codex.webSearch']}}});

@@ -64,9 +64,9 @@ export default async function SettingsPage({
 
         {/* ---------- 模型 ---------- */}
         <section className="surface border rounded-2xl p-4" style={{ borderColor: 'var(--border)' }}>
-          <h2 className="text-[15px] font-semibold mb-1">{t('API 模型配置')}</h2>
+          <h2 className="text-[15px] font-semibold mb-1">{t('Pi 模型配置')}</h2>
           <p className="muted text-[12px] leading-relaxed mb-3">
-            {t('只用于 API 后端。选择本机 Codex 时可以留空。填自己的 API Key，')}
+            {t('用于内置 Pi 和旧版 API 对话。选择本机 Codex 时可以留空。填自己的 API Key，')}
             <strong className="font-semibold">{t('保存后立刻生效，不用重启')}</strong>
             {t('。')}
           </p>

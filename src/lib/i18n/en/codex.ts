@@ -1,5 +1,8 @@
 import type { Dict } from '../core';
 export const codex: Dict = {
+  'Pi 模型配置': 'Pi model configuration',
+  '用于内置 Pi 和旧版 API 对话。选择本机 Codex 时可以留空。填自己的 API Key，': 'Used by built-in Pi and legacy API chats. Leave blank when using local Codex. Enter your own API key; ',
+  '使用下方 Pi 模型配置，由 Pi 管理会话、工具循环与压缩。支持按附件读取及生成文件；更换模型后请新建对话。': 'Uses the Pi model configuration below. Pi manages sessions, tool loops and compaction, with attachment reading and output files. Start a new chat after changing models.',
   '查看文件结构': 'Inspecting file structure',
   '读取文档结构原文': 'Reading document structure',
   '查看文件图像': 'Viewing file image',
