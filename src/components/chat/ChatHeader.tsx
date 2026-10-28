@@ -38,6 +38,13 @@ export default function ChatHeader({
   const [title, setTitle] = useState(initialTitle);
   const [exists, setExists] = useState(initialExists);
   const [drawer, setDrawer] = useState(false);
+  const [titleRevision,setTitleRevision]=useState(0);
+  const [canRegenerate,setCanRegenerate]=useState(false);
+  const [titleBusy,setTitleBusy]=useState(false);
+  const [titleFailed,setTitleFailed]=useState(false);
+  const currentTitle=useRef(initialTitle);
+  currentTitle.current=title;
+  const requestedTitle=useRef(false);
   const t = useT();
   // 服务端重新给了一份（后退后 Chat 里那次 refresh）就跟上
   useEffect(() => setTitle(initialTitle), [initialTitle]);
@@ -49,10 +56,38 @@ export default function ChatHeader({
       if (d.id !== conversationId) return;
       if (d.title) setTitle(d.title);
       if (!d.removed) setExists(true);
+      setTitleRevision(n=>n+1);
     };
     window.addEventListener(CONV_EVENT, on);
     return () => window.removeEventListener(CONV_EVENT, on);
   }, [conversationId]);
+
+  useEffect(()=>{
+    if(!exists)return;
+    const controller=new AbortController();let timer:ReturnType<typeof setTimeout>|undefined;
+    const poll=async()=>{
+      try {
+        const response=await fetch('/api/chat/title?conversationId='+encodeURIComponent(conversationId),{signal:AbortSignal.any([controller.signal,AbortSignal.timeout(10000)]),cache:'no-store'});
+        if(!response.ok)return;
+        const state=await response.json();if(controller.signal.aborted)return;
+        setCanRegenerate(state.canRegenerate===true);
+        const busy=['queued','running'].includes(state.status);setTitleBusy(busy);
+        setTitleFailed(requestedTitle.current&&state.status==='failed');
+        if(typeof state.title==='string'&&state.title!==currentTitle.current){currentTitle.current=state.title;setTitle(state.title);emitConversations({id:conversationId,title:state.title});}
+        if(busy)timer=setTimeout(poll,2000);
+      }catch{if(!controller.signal.aborted)timer=setTimeout(poll,4000);}
+    };
+    void poll();return()=>{controller.abort();clearTimeout(timer);};
+  },[conversationId,exists,titleRevision]);
+
+  async function regenerateTitle() {
+    setTitleBusy(true);setTitleFailed(false);requestedTitle.current=true;
+    try {
+      const response=await fetch('/api/chat/title',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({conversationId})});
+      if(!response.ok)throw new Error('Title request failed');
+      setTitleRevision(n=>n+1);
+    }catch{setTitleBusy(false);setTitleFailed(true);}
+  }
 
   return (
     <header className="sticky top-0 z-20 surface border-b pt-safe" style={{ borderColor: 'var(--border)' }}>
@@ -69,7 +104,7 @@ export default function ChatHeader({
           </button>
           <div className="min-w-0">
             <h1 className="font-semibold truncate">{title ?? t('新对话')}</h1>
-            <p className="muted text-[11px] -mt-0.5 truncate">{subtitle}</p>
+            <p className="muted text-[11px] -mt-0.5 truncate">{titleBusy?t('正在整理对话标题…'):titleFailed?t('标题未更新，原名已保留，可稍后重试。'):subtitle}</p>
           </div>
         </div>
 
@@ -83,7 +118,7 @@ export default function ChatHeader({
               {t('回到最新')}
             </Link>
           )}
-          {exists && <ConversationMenu id={conversationId} title={title ?? ''} onRenamed={setTitle} />}
+          {exists && <ConversationMenu id={conversationId} title={title ?? ''} onRenamed={setTitle} canRegenerate={canRegenerate} titleBusy={titleBusy} onRegenerate={regenerateTitle} />}
           <Link
             href="/chat"
             aria-label={t('新对话')}
@@ -122,22 +157,32 @@ export default function ChatHeader({
 }
 
 /** 「⋯」：改名、删除。删除两步确认，第二步才是红的（跟附件、页面一个规矩） */
-function ConversationMenu({ id, title, onRenamed }: { id: string; title: string; onRenamed: (t: string) => void }) {
+function ConversationMenu({ id, title, onRenamed,canRegenerate,titleBusy,onRegenerate }: { id: string; title: string; onRenamed: (t: string) => void;canRegenerate:boolean;titleBusy:boolean;onRegenerate:()=>Promise<void> }) {
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState<'menu' | 'rename' | 'confirm'>('menu');
   const [draft, setDraft] = useState(title);
   const [pending, start] = useTransition();
+  const [menuLeft, setMenuLeft] = useState<number>();
   const router = useRouter();
   const box = useRef<HTMLDivElement>(null);
   const t = useT();
 
   useEffect(() => {
     if (!open) return;
+    const place = () => {
+      const rect = box.current?.getBoundingClientRect();
+      if (rect) setMenuLeft(Math.max(8 - rect.left, rect.width - 240));
+    };
+    place();
+    window.addEventListener('resize', place);
     const close = (e: MouseEvent) => {
       if (!box.current?.contains(e.target as Node)) setOpen(false);
     };
     document.addEventListener('mousedown', close);
-    return () => document.removeEventListener('mousedown', close);
+    return () => {
+      document.removeEventListener('mousedown', close);
+      window.removeEventListener('resize', place);
+    };
   }, [open]);
 
   const item = 'block w-full text-left px-3 py-2 text-[13px] rounded-lg hover:bg-brand-500/5 transition';
@@ -163,13 +208,14 @@ function ConversationMenu({ id, title, onRenamed }: { id: string; title: string;
       {open && (
         <div
           className="absolute right-0 top-11 z-30 w-60 surface border rounded-xl p-1.5 shadow-lg"
-          style={{ borderColor: 'var(--border)' }}
+          style={{ borderColor: 'var(--border)', ...(menuLeft === undefined ? {} : { left: menuLeft, right: 'auto' }) }}
         >
           {mode === 'menu' && (
             <>
               <button className={item} onClick={() => setMode('rename')}>
                 {t('改个名字')}
               </button>
+              {canRegenerate&&<button className={item} disabled={titleBusy} onClick={()=>{setOpen(false);void onRegenerate();}}>{t('重新生成标题')}</button>}
               <button className={`${item} text-red-600 dark:text-red-400`} onClick={() => setMode('confirm')}>
                 {t('删除这个对话')}
               </button>

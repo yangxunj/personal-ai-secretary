@@ -24,6 +24,10 @@ export async function register() {
   }
   if (process.env.NEXT_RUNTIME === 'nodejs') {
     try {
+      const { startTitleWorker } = await import('@/lib/conversation-titles');
+      await startTitleWorker();
+    } catch { console.error('[chat] Title recovery unavailable.'); }
+    try {
       const { startMailScheduler } = await import('@/lib/mail/service');
       await startMailScheduler();
     } catch { console.error('[mail] Scheduler unavailable; check the desktop mail connection.'); }

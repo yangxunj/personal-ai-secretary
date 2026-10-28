@@ -14,6 +14,7 @@ import { runFileScenarios } from './codex-files-cases.mjs';
 import { runRecordScenarios } from './agent-records-cases.mjs';
 import { legacyDynamicTools } from './codex-legacy-profile.mjs';
 import { runMediaScenarios } from './agent-media-cases.mjs';
+import { runTitleScenarios } from './codex-title-cases.mjs';
 
 if(!process.argv.includes('--live'))throw new Error('Pass --live to use local Codex allowance for public-information tests');
 const root=path.resolve(import.meta.dirname,'..'),dir=path.join(root,'data/codex-search-integration',new Date().toISOString().replace(/[:.]/g,'-'));
@@ -47,6 +48,17 @@ try {
   child=spawn(electron?path.join(root,'desktop/node_modules/electron/dist/electron.exe'):process.execPath,standalone?['--require',guard,path.join(bundle,'server.js')]:[path.join(root,'node_modules/next/dist/bin/next'),'dev','-p',String(port),'-H','127.0.0.1'],{cwd:standalone?bundle:root,env:{...env,...(electron?{ELECTRON_RUN_AS_NODE:'1'}:{}),PORT:String(port),HOSTNAME:'127.0.0.1',NODE_ENV:standalone?'production':'development'},stdio:['ignore',log.fd,log.fd],windowsHide:true});
   let ready=false;for(let n=0;n<120;n++){if(child.exitCode!==null)throw new Error('Next exited');try{if((await fetch(origin+'/api/agent/state')).ok){ready=true;break;}}catch{}await new Promise(r=>setTimeout(r,500));}assert.ok(ready,'Next did not start');
   control=new CodexConnection({executable,cwd:workspace});await control.connect();control.on('request',msg=>denyRequest(control,msg));
+  if(process.argv.includes('--titles')){
+    const restart=async()=>{
+      await stop();
+      child=spawn(electron?path.join(root,'desktop/node_modules/electron/dist/electron.exe'):process.execPath,standalone?['--require',guard,path.join(bundle,'server.js')]:[path.join(root,'node_modules/next/dist/bin/next'),'dev','-p',String(port),'-H','127.0.0.1'],{cwd:standalone?bundle:root,env:{...env,...(electron?{ELECTRON_RUN_AS_NODE:'1'}:{}),PORT:String(port),HOSTNAME:'127.0.0.1',NODE_ENV:standalone?'production':'development'},stdio:['ignore',log.fd,log.fd],windowsHide:true});
+      for(let i=0;i<120;i++){try{if((await fetch(origin+'/api/agent/state')).ok)return;}catch{}await new Promise(r=>setTimeout(r,500));}throw new Error('Restart failed');
+    };
+    const titles=await runTitleScenarios({db,chat,origin,threads,restart});
+    const receipt={status:'passed',standalone,electron,titleMode:true,executable,origin,directory:dir,titles};
+    await fs.writeFile(path.join(dir,'receipt.json'),JSON.stringify(receipt,null,2));console.log(JSON.stringify(receipt));
+    if(process.argv.includes('--browser'))await new Promise(resolve=>{const timer=setTimeout(resolve,120000);process.stdin.once('data',()=>{clearTimeout(timer);resolve();});});
+  }else{
   // Prime two old threads with disabled search and a random marker, without platform tools.
   const scenarios=[];
   for(const taskMode of [false,true])for(const existing of [false,true]){
@@ -119,6 +131,7 @@ try {
   assert.equal(await db.task.count(),recordMode||mediaMode?5:2);if(!fileMode&&!recordMode&&!mediaMode)assert.equal(await db.codexToolRun.count({where:{name:{not:'codexWebSearch'}}}),0);
   const receipt={status:'passed',standalone,electron,fileMode,recordMode,mediaMode,rounds,checks:mediaMode?['real image-only random code recognition in scanned page 8 and crop, DOCX embedded image and archived raster','Word revisions comments headers and footnotes read','native images and citations on new/resumed general/task threads','profile 2 retains business tools without silent upgrade']:recordMode?['general/task originals and history versioned tail reads','native citations persisted','profile 2 resumes with tools','legacy thread memory retained']:fileMode?['versioned file tail beyond upload preview','source citations and registered output files','new tools persist on resume','legacy threads retain memory and old tools']:['new and old general/task threads search and open real public pages','old thread markers retained and not sent to search','web citations rendered and saved','native activity audit','disable applies to old thread','no business writes'],threadCount:threads.size};
   await fs.writeFile(path.join(dir,'receipt.json'),JSON.stringify(receipt,null,2));console.log(JSON.stringify({status:'passed',directory:dir}));
+  }
 } catch(e){console.error(e.message);process.exitCode=1;await fs.writeFile(path.join(dir,'failure.json'),JSON.stringify({error:e.message,rounds},null,2));}
 finally {
   await stop();for(const c of await db.conversation.findMany({where:{codexThreadId:{not:null}},select:{codexThreadId:true}}))threads.add(c.codexThreadId);

@@ -6,6 +6,7 @@ import { getLocale, getT } from '@/lib/i18n/server';
 import { cleanTitle, titleInput, titlePrompt } from '@/lib/system-prompt';
 import { rm } from 'node:fs/promises';
 import { piDirectory } from '@/lib/pi/storage';
+import { protectManualTitle, titleJobKey } from '@/lib/conversation-titles';
 
 /**
  * 多个对话：列表、改名、删除、自动起标题。
@@ -59,10 +60,10 @@ export async function listConversations(): Promise<ConversationItem[]> {
 export async function renameConversation(id: string, title: string) {
   const t = title.replace(/\s+/g, ' ').trim().slice(0, 60);
   if (!t) return;
-  const cur = await db.conversation.findUnique({ where: { id }, select: { updatedAt: true } });
-  if (!cur) return;
-  // 显式带上原来的 updatedAt：@updatedAt 会自动刷新，改个名这个对话就跳到列表最上面去了
-  await db.conversation.update({ where: { id }, data: { title: t, updatedAt: cur.updatedAt } });
+  await db.$transaction(async tx=>{
+    const count=await tx.$executeRaw`UPDATE "Conversation" SET "title"=${t} WHERE "id"=${id}`;
+    if(count)await protectManualTitle(tx,id);
+  });
 }
 
 /**
@@ -78,6 +79,7 @@ export async function deleteConversation(id: string) {
   if (await db.codexTurn.findFirst({where:{conversationId:id,status:{in:['queued','running']}}})) throw new Error('Wait for this conversation to finish before deleting it.');
   await db.$transaction([
     db.setting.deleteMany({where:{key:'codex.tools.'+id}}),
+    db.setting.deleteMany({where:{key:titleJobKey(id)}}),
     db.message.updateMany({ where: { conversationId: id, taskId: { not: null } }, data: { conversationId: null } }),
     db.message.deleteMany({ where: { conversationId: id } }),
     db.chatSummary.deleteMany({ where: { conversationId: id } }),
@@ -107,6 +109,9 @@ export async function autoTitle(id: string, user: string, reply: string): Promis
 async function generateTitle(id: string, user: string, reply: string): Promise<string | null> {
   const conv = await db.conversation.findUnique({ where: { id }, select: { title: true, backend: true } });
   if (!conv) return null;
+  // Codex titles are queued server-side after two saved successful turns.
+  // Do not persist the first-message placeholder as a permanent title.
+  if (conv.backend === 'codex') return conv.title;
   if (conv.title) return conv.title;
 
   let title = '';

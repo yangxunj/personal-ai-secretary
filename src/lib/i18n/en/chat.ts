@@ -2,6 +2,9 @@ import type { Dict } from '../core';
 
 /** 中文原文 → 英文。key 必须跟 t('…') 里的字符串一字不差。对话页、对话列表、/api/chat */
 export const chat: Dict = {
+  '正在整理对话标题…': 'Summarizing the conversation title…',
+  '标题未更新，原名已保留，可稍后重试。': 'The title was not updated. The original is preserved; you can retry later.',
+  '重新生成标题': 'Regenerate title',
   '正在读取更早的对话…': 'Loading earlier messages…',
   '读取失败，请重试；当前草稿和对话已保留。': 'Could not load messages. Please retry; your current draft and chat are preserved.',
   '实时语音': 'Realtime voice',

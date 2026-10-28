@@ -77,7 +77,7 @@ export function denyRequest(client, msg) {
 }
 
 // One app-server per turn: persistent threads, no daemon port or orphan long-lived process.
-export async function runTurn(client, { threadId, input, effort, onEvent = () => {}, onStarted = () => {}, timeoutMs = 600000 }) {
+export async function runTurn(client, { threadId, input, effort, outputSchema, onEvent = () => {}, onStarted = () => {}, timeoutMs = 600000 }) {
   let turnId, final = '', timer;
   let resolveDone, rejectDone;
   const done = new Promise((resolve,reject) => {resolveDone=resolve;rejectDone=reject;});
@@ -92,7 +92,7 @@ export async function runTurn(client, { threadId, input, effort, onEvent = () =>
   client.on('notification',event);client.on('disconnect',disconnect);
   timer=setTimeout(()=>{ if(turnId)void client.request('turn/interrupt',{threadId,turnId}).catch(()=>{});rejectDone(new Error('Codex turn timed out. Check task results before submitting again.')); },timeoutMs);
   try {
-    const r=await client.request('turn/start',{threadId,input,...(effort?{effort}:{} )});turnId=r.turn.id;await onStarted(turnId);
+    const r=await client.request('turn/start',{threadId,input,...(effort?{effort}:{} ),...(outputSchema?{outputSchema}:{})});turnId=r.turn.id;await onStarted(turnId);
     return await done;
   } finally { clearTimeout(timer);client.off('notification',event);client.off('disconnect',disconnect); }
 }

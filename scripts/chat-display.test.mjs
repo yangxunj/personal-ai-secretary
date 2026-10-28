@@ -22,7 +22,7 @@ const mocks={
 };
 const hooks=registerHooks({resolve(s,c,next){
   if(mocks[s])return{url:mocks[s],shortCircuit:true};
-  if(s.startsWith('@/')){const base=path.join(root,'src',s.slice(2));return{url:pathToFileURL(['.ts','/index.ts'].map(e=>base+e).find(existsSync)).href,shortCircuit:true};}
+  if(s.startsWith('@/')){const base=path.join(root,'src',s.slice(2));return{url:pathToFileURL(['','.ts','.mjs','/index.ts'].map(e=>base+e).find(existsSync)).href,shortCircuit:true};}
   return next(s,c);
 },load(url,c,next){if(url.startsWith('file:')&&url.endsWith('.ts')&&!url.includes('/node_modules/'))return{format:'module',source:ts.transpileModule(readFileSync(fileURLToPath(url),'utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ESNext}}).outputText,shortCircuit:true};return next(url,c);}});
 const {db}=await import('../src/lib/db.ts');
@@ -88,5 +88,5 @@ test('a stalled title aborts within its deadline and saves a fallback; Codex nev
   const c=await db.conversation.create({data:{}});let signal;state.generate=options=>{signal=options.abortSignal;return new Promise(()=>{});};
   const started=Date.now();assert.equal(await autoTitle(c.id,'Fallback title','reply'),'Fallback title');assert.ok(signal.aborted);assert.ok(Date.now()-started<10000);
   const codex=await db.conversation.create({data:{backend:'codex'}}),count=state.calls.length;
-  assert.equal(await autoTitle(codex.id,'Codex first message','reply'),'Codex first message');assert.equal(state.calls.length,count);
+  assert.equal(await autoTitle(codex.id,'Codex first message','reply'),null);assert.equal(state.calls.length,count);
 });

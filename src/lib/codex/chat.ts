@@ -18,10 +18,12 @@ import { verifyPlatformSource } from '@/lib/agent-source-verifier';
 import { CitationStream, sourceKey, type AgentSource } from '@/lib/agent-citations.mjs';
 import { getCodexToolVersion, codexToolProfileKey } from './tool-profile';
 import { buildAgentMediaTools, PLATFORM_MEDIA_GUIDE, visibleMediaResult, codexToolContent } from '@/lib/agent-media';
+import { trackCodexTitle, queueCodexTitle } from '@/lib/conversation-titles';
 
 export {recoverAgentTurns as recoverCodexTurns, cancelAgentConversation as cancelCodexConversation} from '@/lib/agent-turns';
 import {durableAgentResponse, archiveAgentFiles as archiveFiles, executeAgentTool, agentError as errorText} from '@/lib/agent-turns';
 export async function codexChatResponse({conversationId,newest,instructions,locale}:{conversationId:string;newest:UIMessage;instructions:string;locale:string}) {
+  await trackCodexTitle(conversationId,locale).catch(()=>{});
   return durableAgentResponse({conversationId,newest,generate:(turn,emit,signal)=>generate(turn,newest,instructions,locale,emit,signal)});
 }
 
@@ -128,6 +130,7 @@ async function generate(turn:CodexTurn,newest:UIMessage,instructions:string,loca
       db.conversation.update({where:{id:turn.conversationId},data:{updatedAt:new Date()}}),
       db.codexTurn.update({where:{id:turn.id},data:{status:'completed',chunksJson:JSON.stringify([...saved,finish])}}),
     ]);
+    await queueCodexTitle(conv.id,locale).catch(()=>{});
     write(finish);
   }catch(e){
     localAbort.abort();client?.close();await callbacks;
