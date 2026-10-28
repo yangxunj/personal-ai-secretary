@@ -24,6 +24,10 @@ const nextConfig = {
   // .exe 里**。这行从"以后别删"升级成了"删了就出事"。
   // desktop/scripts/prepare.mjs 里有一道体检专门防这个。
   outputFileTracingRoot: import.meta.dirname,
+  // Pi's lazy import is compiled into the server chunks. NFT also traces its
+  // raw TypeScript file unnecessarily; the standalone/Electron tool loop has
+  // been verified without that duplicate. Keep the package top-level audit.
+  outputFileTracingExcludes: { '/*': ['./src/lib/pi/chat.ts'] },
 
   // 带原生二进制的包不让 webpack 打进 bundle，运行时从 node_modules 加载。
   // @napi-rs/canvas 是扫描版 PDF 渲染页面用的（lib/doc-extract.ts），里面是 .node 文件，

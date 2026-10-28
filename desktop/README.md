@@ -6,7 +6,9 @@
 这份讲怎么构建和发布，以及桌面端特有的几件事。应用本身的设计见
 [`docs/开发笔记.md`](../docs/开发笔记.md)。
 
-`0.6.0-beta.2` 的 Gmail 桌面试点见 [使用与隐私说明](../docs/Gmail桌面试点.md)。官方测试包内置 Desktop OAuth 应用参数，可直接点击连接；Google 应用仍处于 Testing，仅测试名单中的账号可授权。自备配置保留在高级设置。构建时自动准备并校验 GWS v0.22.5 Windows x64 工具及其 Apache-2.0 LICENSE；邮箱令牌、Cloud CLI 登录与模型密钥禁止打包。内置应用参数可被提取，不是保密的服务端密钥。
+当前预发布版为 [`0.6.0-beta.3`](../docs/releases/v0.6.0-beta.3.md)：新安装默认内置 Pi + DeepSeek，交付搜索、文件原文、长对话与标题优化，并暂时隐藏阿里云预设和语音 UI。已有数据库、配置和会话保留。
+
+Gmail 桌面试点见 [使用与隐私说明](../docs/Gmail桌面试点.md)。官方测试包内置 Desktop OAuth 应用参数，可直接点击连接；Google 应用仍处于 Testing，仅测试名单中的账号可授权。自备配置保留在高级设置。构建时自动准备并校验 GWS v0.22.5 Windows x64 工具及其 Apache-2.0 LICENSE；邮箱令牌、Cloud CLI 登录与模型密钥禁止打包。内置应用参数可被提取，不是保密的服务端密钥。
 
 v0.5.0 的安装版、ZIP 与单文件免安装版均包含录音输入、回答朗读、连续语音和实时语音。
 在设置页分别配置阿里云语音服务；音频或朗读正文会发送给对应云端服务，选择本机 Codex 也一样。
@@ -42,9 +44,9 @@ v0.5.0 的安装版、ZIP 与单文件免安装版均包含录音输入、回答
 
 | 产物 | 大小 | 数据放哪 | 什么时候用 |
 | --- | --- | --- | --- |
-| `家庭管家 Setup <版本>.exe` | 110M | `%APPDATA%\家庭管家\data\` | **默认推荐**。装一次，开始菜单和桌面有图标 |
-| `家庭管家-<版本>-win.zip` | 151M | 解压目录里 `data\` | 免安装。解压即用，拷到 U 盘能带走 |
-| `家庭管家-免安装-<版本>.exe` | 109M | exe 同目录 `data\` | 单文件免安装。**每次启动都要把 400M 解到临时目录，冷启动慢**，除非真需要"就一个文件"，否则用上面那个 zip |
+| `家庭管家 Setup <版本>.exe` | 131 MB | `%APPDATA%\家庭管家\data\` | **默认推荐**。装一次，开始菜单和桌面有图标 |
+| `家庭管家-<版本>-win.zip` | 181 MB | 解压目录里 `data\` | 免安装。解压即用，拷到 U 盘能带走 |
+| `家庭管家-免安装-<版本>.exe` | 131 MB | exe 同目录 `data\` | 单文件免安装。每次启动都要解压到临时目录，冷启动慢，通常优先用 ZIP |
 
 ### 数据落点是怎么判断的
 
@@ -137,11 +139,20 @@ Electron 的 `app.getName()` 读的是 package.json **顶层**的 `productName`�
 
 ## 关于 API key
 
-`prepare.mjs` 会把根目录 `.env` 里的 `AI_BASE_URL/AI_MODEL` 抽成
-`runtime/resources/ai.json` 打进安装包，当作设置页的默认值。
+公开构建 `prepare.mjs --no-key` 从根目录 `.env.example` 读取 `AI_BASE_URL/AI_MODEL`，
+写入 `runtime/resources/ai.json` 作为默认值，避免混入开发机当前服务商配置。
+新模板只有 `ai.backend=pi` 设置，业务表为空；已有用户数据库不会被模板覆盖。
 
 `npm run dist` 带着 `--no-key`，**key 一律不打进去** —— 拿到安装包的人能把它抠出来。
 使用者装好后在「设置」页填自己的 key，存在本机数据库里。
+
+发布前对实际解压后的应用执行审计（路径按构建输出调整）：
+
+```powershell
+node scripts/audit-package.mjs --app=dist/win-unpacked/resources/app
+```
+
+审计检查公开默认配置、空业务模板、开发机环境文件中的密钥是否混入、Gmail Testing 客户端和 GWS 校验值。它不能代替客户端启动与升级验收。
 
 只有打给自己家里人用、想让他们装完就能对话时，才手动跑不带 `--no-key` 的
 `node scripts/prepare.mjs`，而且那个 key 最好单独申请、出事好吊销。

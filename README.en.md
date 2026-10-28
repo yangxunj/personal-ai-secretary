@@ -7,7 +7,7 @@ and it files away your to-dos, accounts, bills, medical checkup reports and insu
 policies, so they're right there when you need them.
 
 **Your database, uploaded originals and backups stay on your computer.** The app sends no telemetry.
-AI conversations go to your chosen model provider. The current source phase focuses on DeepSeek/Pi and local Codex text chat. Alibaba Cloud chat presets, voice controls and voice settings are temporarily hidden; implementations and saved settings are retained for a later phase. No new installer has been released for this change.
+AI conversations go to your chosen model provider. v0.6.0-beta.3 focuses on DeepSeek/Pi and local Codex text chat. Alibaba Cloud chat presets, voice controls and voice settings are temporarily hidden; implementations and saved settings are retained for a later phase.
 
 The interface comes in **English and Chinese**. It follows your system language on
 first launch; switch any time under **Settings → Language**. In English, the AI
@@ -21,7 +21,7 @@ replies in English and saves what it records in English too.
 
 ## What it does
 
-The **v0.5.0 Windows packages include four voice modes**, including realtime voice with interruptions and background agent work. See the voice guide below.
+The **v0.6.0-beta.3 Windows packages default to embedded Pi + DeepSeek** and include optional search, file/source tools and long-chat improvements. Voice UI is temporarily hidden; v0.5.0 retains the historical voice modes described below.
 
 Talk to it like you'd text a person:
 
@@ -39,7 +39,8 @@ Talk to it like you'd text a person:
 
 Also:
 
-- **Gmail desktop pilot (`0.6.0-beta.2` prerelease)**: the test packages include a Google app configuration, so you can click Connect and authorize in your browser. **Only accounts on Google's test list can use the built-in connection.** Other users can import their own configuration under Advanced. Explicitly allow AI analysis, review findings and create tasks yourself; both API and local Codex are supported. Checks pause when the app exits. See the [pilot guide](docs/Gmail桌面试点.md) and [release notes](docs/releases/v0.6.0-beta.2.md). The stable release remains v0.5.0.
+- **Gmail desktop pilot (`0.6.0-beta.3` prerelease)**: the test packages include a Google app configuration, so you can click Connect and authorize in your browser. **Only accounts on Google's test list can use the built-in connection.** Other users can import their own configuration under Advanced. Explicitly allow AI analysis, review findings and create tasks yourself; both API and local Codex are supported. Checks pause when the app exits. See the [pilot guide](docs/Gmail桌面试点.md) and [release notes](docs/releases/v0.6.0-beta.3.md). The stable release remains v0.5.0.
+- **Embedded Pi**: persistent sessions, tool loops and context compaction without a separate Pi installation. Optional DeepSeek search is off by default and has separate usage charges. Pi and Codex share business, attachment and source tools; image understanding needs a vision-capable model.
 - **Multiple conversations**: one topic per conversation, auto-titled. The vault, tasks and pages are shared, so every conversation can see them.
 - **Local Codex backend (v0.4.0+)**: use the Codex login on this computer for persistent chat, business tools and independent HTML generation. The API backend remains available. See [local Codex details](docs/Codex本机对话.md).
 - **Task-specific AI chat (v0.4.0+)**: discuss a task from its detail page with current requirements, progress and linked records. Both API and Codex backends are supported. See [task chat details](docs/任务专属AI对话.md).
@@ -80,7 +81,7 @@ The default realtime model is `qwen-audio-3.0-realtime-flash`; Plus is also supp
 
 Grab one from [Releases](../../releases):
 
-> Latest: [v0.5.0](../../releases/tag/v0.5.0), with all four voice modes, local Codex, task-specific chat and persistent pages. See the [release notes](docs/releases/v0.5.0.md) for upgrades, validation and known limitations.
+> Latest prerelease: [v0.6.0-beta.3](../../releases/tag/v0.6.0-beta.3), with embedded Pi, optional DeepSeek search, file/source tools, incremental history and automatic titles. See the [release notes](docs/releases/v0.6.0-beta.3.md) for upgrades and validation. The stable release remains [v0.5.0](../../releases/tag/v0.5.0).
 
 | File | Where your data lives | Best for |
 | --- | --- | --- |
@@ -103,7 +104,7 @@ Windows only for now.
 2. **Settings → Household members**: list who's in your household so tasks can be assigned to them.
 3. Go to **Chat** and say something.
 
-Alternatively, select **Settings → Chat backend → Local Codex** after installing and signing in to Codex on this computer, then start a new chat. Existing chats keep their backend. This uses your Codex account allowance and still needs internet. Source installations must set `ENABLE_LOCAL_CODEX=true`; desktop builds enable it automatically. Voice services still require separate configuration.
+New installations use embedded Pi by default. Existing installations keep their backend selection and chats; select Pi and start a new chat to try it. Alternatively, select **Settings → Chat backend → Local Codex** after installing and signing in to Codex on this computer, then start a new chat. This uses your Codex account allowance and still needs internet. Source installations must set `ENABLE_LOCAL_CODEX=true`; desktop builds enable it automatically.
 
 Without an AI backend, tasks and the vault can still be edited by hand.
 

@@ -19,6 +19,7 @@ import path from 'node:path';
 import os from 'node:os';
 import { prepareGws } from './prepare-gws.mjs';
 import { prepareBundledGmail } from './prepare-gmail.mjs';
+import { DatabaseSync } from 'node:sqlite';
 
 const HERE = path.resolve(import.meta.dirname, '..');   // desktop/
 const CLOUD = path.resolve(HERE, '..');                 // 仓库根目录（Next 应用）
@@ -165,6 +166,11 @@ const tmpDb = path.join(os.tmpdir(), `secretary-template-${Date.now()}.db`);
 node(PRISMA_BIN, ['db', 'push', '--skip-generate'], {
   DATABASE_URL: `file:${tmpDb.replace(/\\/g, '/')}`,
 });
+// New installations use the embedded harness. Existing user databases are never
+// overwritten: main.js copies this template only when the database is absent.
+const template = new DatabaseSync(tmpDb);
+try { template.prepare('INSERT INTO Setting(key,value,updatedAt) VALUES(?,?,?)').run('ai.backend','pi',Date.now()); }
+finally { template.close(); }
 mkdirSync(path.join(OUT, 'resources'), { recursive: true });
 cpSync(tmpDb, path.join(OUT, 'resources', 'template.db'));
 rmSync(tmpDb, { force: true });
@@ -185,8 +191,9 @@ cpSync(path.join(CLOUD, 'prisma', 'schema.prisma'), path.join(OUT, 'resources', 
 //                                   只在打给自己家里人用时考虑，且 key 要单独申请。
 say('抽取模型配置');
 const noKey = process.argv.includes('--no-key');
-// 没有 .env（刚 clone 下来）就用 .env.example 里的默认接口和模型名
-const envPath = [path.join(CLOUD, '.env'), path.join(CLOUD, '.env.example')].find(existsSync);
+// Public packages use the reviewed public preset, never the developer's current
+// provider. Private local builds can still use their own .env configuration.
+const envPath = (noKey ? [path.join(CLOUD, '.env.example')] : [path.join(CLOUD, '.env'), path.join(CLOUD, '.env.example')]).find(existsSync);
 if (!envPath) throw new Error('根目录没有 .env 也没有 .env.example，没法取模型配置');
 const env = Object.fromEntries(
   readFileSync(envPath, 'utf8')
