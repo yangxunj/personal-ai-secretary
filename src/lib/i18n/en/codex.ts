@@ -1,5 +1,13 @@
 import type { Dict } from '../core';
 export const codex: Dict = {
+  '用于内置 Pi 和旧版 API 对话。填自己的 API Key，': 'Used by built-in Pi and legacy API chats. Enter your own API key; ',
+  '当前新对话使用：{backend}': 'New chats currently use: {backend}',
+  '切换查看配置不会改变当前后端；保存后，新对话使用所选后端，已有对话保持原来的后端和记忆。': 'Switching these tabs only previews settings. Save to select the backend for new chats; existing chats retain their backend and memory.',
+  '将 Pi 用于新对话': 'Use Pi for new chats',
+  'Codex 配置': 'Codex configuration',
+  '保存并使用 Codex': 'Save and use Codex',
+  '使用 DeepSeek 官方接口时复用聊天密钥，搜索按调用计费。': 'The official DeepSeek endpoint reuses the chat key; search calls are billed separately.',
+  '使用本机 Codex 的登录和额度，无需 DeepSeek 密钥。': 'Uses local Codex sign-in and allowance. No DeepSeek key is required.',
   '公开网络搜索已默认启用，AI 会按需搜索和读取公开网页。': 'Public web search is enabled by default. AI searches and reads public pages when needed. ',
   'Pi 复用 DeepSeek 官方聊天密钥；搜索按调用计费。Codex 使用本机登录与额度。': 'Pi reuses the official DeepSeek chat key; search calls are billed separately. Codex uses local sign-in and allowance.',
   '高级：搜索专用密钥': 'Advanced: dedicated search key',

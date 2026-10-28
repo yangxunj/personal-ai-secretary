@@ -5,7 +5,7 @@ import { loadAsrConfig } from '@/lib/asr-config';
 import { loadTtsConfig } from '@/lib/tts-config';
 import { loadRealtimeConfig, REALTIME_MODELS } from '@/lib/realtime/config';
 import ProviderFields from './ProviderFields';
-import LocalCodexSettings from './LocalCodexSettings';
+import HarnessSettings from './HarnessSettings';
 import SettingsTabs from './SettingsTabs';
 import { getWebSearchConfig } from '@/lib/web-search/config';
 import { getChatBackend, getCodexConfig, localCodexEnabled } from '@/lib/codex/config';
@@ -59,22 +59,18 @@ export default async function SettingsPage({
       <div className="px-4 py-4 space-y-4">
         <SettingsTabs initialTab={initialTab} navigationKey={JSON.stringify(params)}
           ai={<>
-        <LocalCodexSettings backend={await getChatBackend()} enabled={localCodexEnabled()} config={await getCodexConfig()} searchConfigured={!!webSearch.apiKey} />
-
+        {aiOk && <p role="status" className="text-[13px] text-emerald-600 dark:text-emerald-400">✓ {aiOk}</p>}
+        {aiE && <p role="alert" className="text-[13px] text-red-500 leading-relaxed">{aiE}</p>}
+        <HarnessSettings backend={await getChatBackend()} enabled={localCodexEnabled()} config={await getCodexConfig()} searchConfigured={!!webSearch.apiKey}
+          piSettings={<>
         {/* ---------- 模型 ---------- */}
         <section className="surface border rounded-2xl p-4" style={{ borderColor: 'var(--border)' }}>
           <h2 className="text-[15px] font-semibold mb-1">{t('Pi 模型配置')}</h2>
           <p className="muted text-[12px] leading-relaxed mb-3">
-            {t('用于内置 Pi 和旧版 API 对话。选择本机 Codex 时可以留空。填自己的 API Key，')}
+            {t('用于内置 Pi 和旧版 API 对话。填自己的 API Key，')}
             <strong className="font-semibold">{t('保存后立刻生效，不用重启')}</strong>
             {t('。')}
           </p>
-
-          {aiOk && (
-            <p className="text-[13px] text-emerald-600 dark:text-emerald-400 mb-3">✓ {aiOk}</p>
-          )}
-          {aiE && <p className="text-[13px] text-red-500 mb-3 leading-relaxed">{aiE}</p>}
-
           <form action={saveAiConfigAction} className="space-y-3">
             <ProviderFields
               baseUrl={ai.baseUrl}
@@ -122,6 +118,8 @@ export default async function SettingsPage({
             {t('你发给 AI 的内容会传给这个服务商 —— AI 要读到账单才能帮你录入。不想让它看的东西就别发给它。')}
           </p>
         </section>
+          </>}
+        />
 
         {asr && tts && realtime && <>
         <section id="voice" className="surface border rounded-2xl p-4 scroll-mt-4" style={{ borderColor: 'var(--border)' }}>
