@@ -13,9 +13,9 @@ export async function getChatBackend() {
   return selected==='codex'&&localCodexEnabled()?'codex':'pi';
 }
 export async function getCodexConfig() {
-  const rows=await db.setting.findMany({where:{key:{in:['codex.path','codex.model','codex.effort','codex.webSearch']}}});
+  const rows=await db.setting.findMany({where:{key:{in:['codex.path','codex.model','codex.effort']}}});
   const m=new Map(rows.map(r=>[r.key,r.value]));
-  return {executable:m.get('codex.path') || process.env.SECRETARY_CODEX_PATH || '',model:m.get('codex.model') || '',effort:m.get('codex.effort') || 'medium',webSearchEnabled:m.get('codex.webSearch')==='true'};
+  return {executable:m.get('codex.path') || process.env.SECRETARY_CODEX_PATH || '',model:m.get('codex.model') || '',effort:m.get('codex.effort') || 'medium',webSearchEnabled:true};
 }
 export async function openCodex({forChat=false}={}) {
   if (!localCodexEnabled()) throw new Error('Local Codex is disabled on this deployment.');

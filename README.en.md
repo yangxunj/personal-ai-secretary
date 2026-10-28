@@ -40,7 +40,7 @@ Talk to it like you'd text a person:
 Also:
 
 - **Gmail desktop pilot (`0.6.0-beta.3` prerelease)**: the test packages include a Google app configuration, so you can click Connect and authorize in your browser. **Only accounts on Google's test list can use the built-in connection.** Other users can import their own configuration under Advanced. Explicitly allow AI analysis, review findings and create tasks yourself; both API and local Codex are supported. Checks pause when the app exits. See the [pilot guide](docs/Gmail桌面试点.md) and [release notes](docs/releases/v0.6.0-beta.3.md). The stable release remains v0.5.0.
-- **Embedded Pi**: persistent sessions, tool loops and context compaction without a separate Pi installation. Optional DeepSeek search is off by default and has separate usage charges. Pi and Codex share business, attachment and source tools; image understanding needs a vision-capable model.
+- **Embedded Pi**: persistent sessions, tool loops and context compaction without a separate Pi installation. Pi and Codex share business, attachment and source tools; image understanding needs a vision-capable model. Search behavior depends on the release; see the current-source policy below.
 - **Multiple conversations**: one topic per conversation, auto-titled. The vault, tasks and pages are shared, so every conversation can see them.
 - **Local Codex backend (v0.4.0+)**: use the Codex login on this computer for persistent chat, business tools and independent HTML generation. The API backend remains available. See [local Codex details](docs/Codex本机对话.md).
 - **Task-specific AI chat (v0.4.0+)**: discuss a task from its detail page with current requirements, progress and linked records. Both API and Codex backends are supported. See [task chat details](docs/任务专属AI对话.md).
@@ -109,6 +109,8 @@ New installations use embedded Pi by default. Existing installations keep their 
 Without an AI backend, tasks and the vault can still be edited by hand.
 
 The current source offers two backend choices: embedded Pi and local Codex. A legacy API backend preference now resolves to Pi for new chats. Existing API conversations keep their backend and history; their model settings remain available under Pi model configuration.
+
+In the current source, public web search is enabled for Pi and Codex, with no settings switches; legacy disabled settings no longer apply. AI searches when needed. Pi reuses the official DeepSeek chat key for Search/Fetch (up to six calls per turn, billed separately); custom model endpoints may use a dedicated search key in collapsed Advanced settings. Codex uses local sign-in and allowance. Titles, page generation and connection tests do not enable search. Released packages follow their versioned release notes.
 
 ## Privacy
 

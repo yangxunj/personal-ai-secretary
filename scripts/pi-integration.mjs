@@ -52,7 +52,7 @@ const upstream=http.createServer(async(req,res)=>{
   assert.equal(req.headers.authorization,'Bearer synthetic-key');
   const user=payload.messages.findLast(m=>m.role==='user');const prompt=typeof user?.content==='string'?user.content:JSON.stringify(user?.content);
   const mediaUser=media?payload.messages.findLast(m=>m.role==='user'&&JSON.stringify(m.content).includes('[qa:media]')):null;
-  if(prompt.includes('[qa:search-off]'))assert.ok(!(payload.tools||[]).some(t=>['webSearch','fetchWebPage'].includes(t.function.name)));
+  if(prompt.includes('[qa:search-default]'))for(const name of ['webSearch','fetchWebPage'])assert.ok((payload.tools||[]).some(t=>t.function.name===name));
   if(prompt.includes('[qa:cancel]')){blockedResolve?.();req.on('close',()=>res.end());return;}
   if(live){
     if(requests+titlePayloads.length>16){res.writeHead(429);res.end('Live test request limit');return;}
@@ -217,18 +217,18 @@ try{
   assert.equal(await db.task.count(),1);
   console.log('PASS new Next process resumes Pi context with no replay or shell tools');
   if(webSearch){
-    await db.setting.createMany({data:[{key:'webSearch.enabled',value:'true'},{key:'webSearch.apiKey',value:'synthetic-search-key'}]});
+    await db.setting.createMany({data:[{key:'webSearch.enabled',value:'false'},{key:'webSearch.apiKey',value:'synthetic-search-key'}]});
     const searchMessage=message('[qa:search] Search public fixture information');
     result=await chat(id,searchMessage);assert.equal(result.chunks.at(-1).finishReason,'stop',result.raw);assert.match(result.raw,/https:\/\/example.com\/public/);
     const count=requests;await chat(id,searchMessage);assert.equal(requests,count);
     result=await chat(scoped.id,message('[qa:fetch] Read the public fixture page'));assert.equal(result.chunks.at(-1).finishReason,'stop',result.raw);assert.match(result.raw,/https:\/\/example.com\/public/);
     const webRuns=await db.codexToolRun.findMany({where:{name:{in:['webSearch','fetchWebPage']}}});assert.equal(webRuns.length,2);assert.ok(webRuns.every(r=>r.status==='completed'));
     assert.doesNotMatch((await db.message.findFirst({where:{conversationId:scoped.id,role:'secretary'},orderBy:{createdAt:'desc'}})).content,/\[\[cite:/);
-    const html=await (await fetch(origin+'/settings')).text();assert.match(html,/name="webSearchEnabled"/);assert.doesNotMatch(html,/synthetic-search-key/);
+    const html=await (await fetch(origin+'/settings')).text();assert.doesNotMatch(html,/name="(?:webSearchEnabled|codexWebSearch)"/);assert.doesNotMatch(html,/synthetic-search-key/);
     await db.setting.update({where:{key:'webSearch.enabled'},data:{value:'false'}});
-    result=await chat(id,message('[qa:search-off] Check the current tools'));assert.equal(result.chunks.at(-1).finishReason,'stop',result.raw);
+    result=await chat(id,message('[qa:search-default] Check the current tools without searching'));assert.equal(result.chunks.at(-1).finishReason,'stop',result.raw);
     assert.equal(await db.codexToolRun.count({where:{name:{in:['webSearch','fetchWebPage']}}}),2);
-    console.log('PASS real routes: existing Pi chat gains/loses web tools, task chat fetches public page, sources persist, retries deduplicate and settings expose no search key');
+    console.log('PASS real routes: existing Pi chat keeps default web tools despite legacy disabled setting, task chat fetches public page, sources persist, retries deduplicate and settings expose no search key');
   }
   if(!live){
     const crashId=randomUUID().replaceAll('-',''),crashMessage=message('[qa:crash] Create a synthetic task then wait');

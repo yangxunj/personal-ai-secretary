@@ -1,5 +1,9 @@
 import type { Dict } from '../core';
 export const codex: Dict = {
+  '公开网络搜索已默认启用，AI 会按需搜索和读取公开网页。': 'Public web search is enabled by default. AI searches and reads public pages when needed. ',
+  'Pi 复用 DeepSeek 官方聊天密钥；搜索按调用计费。Codex 使用本机登录与额度。': 'Pi reuses the official DeepSeek chat key; search calls are billed separately. Codex uses local sign-in and allowance.',
+  '高级：搜索专用密钥': 'Advanced: dedicated search key',
+  '保存搜索密钥': 'Save search key',
   'Pi 模型配置': 'Pi model configuration',
   '用于内置 Pi 和旧版 API 对话。选择本机 Codex 时可以留空。填自己的 API Key，': 'Used by built-in Pi and legacy API chats. Leave blank when using local Codex. Enter your own API key; ',
   '使用下方 Pi 模型配置，由 Pi 管理会话、工具循环与压缩。支持按附件读取及生成文件；更换模型后请新建对话。': 'Uses the Pi model configuration below. Pi manages sessions, tool loops and compaction, with attachment reading and output files. Start a new chat after changing models.',

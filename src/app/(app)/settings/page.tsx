@@ -59,7 +59,7 @@ export default async function SettingsPage({
       <div className="px-4 py-4 space-y-4">
         <SettingsTabs initialTab={initialTab} navigationKey={JSON.stringify(params)}
           ai={<>
-        <LocalCodexSettings backend={await getChatBackend()} enabled={localCodexEnabled()} config={await getCodexConfig()} searchEnabled={webSearch.enabled} searchConfigured={!!webSearch.apiKey} />
+        <LocalCodexSettings backend={await getChatBackend()} enabled={localCodexEnabled()} config={await getCodexConfig()} searchConfigured={!!webSearch.apiKey} />
 
         {/* ---------- 模型 ---------- */}
         <section className="surface border rounded-2xl p-4" style={{ borderColor: 'var(--border)' }}>
