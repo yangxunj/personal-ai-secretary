@@ -7,7 +7,7 @@ and it files away your to-dos, accounts, bills, medical checkup reports and insu
 policies, so they're right there when you need them.
 
 **Your database, uploaded originals and backups stay on your computer.** The app sends no telemetry.
-AI conversations go to your chosen model provider. Voice features also send recordings or text to the separately configured Alibaba Cloud voice services, even when chat uses local Codex.
+AI conversations go to your chosen model provider. The current source phase focuses on DeepSeek/Pi and local Codex text chat. Alibaba Cloud chat presets, voice controls and voice settings are temporarily hidden; implementations and saved settings are retained for a later phase. No new installer has been released for this change.
 
 The interface comes in **English and Chinese**. It follows your system language on
 first launch; switch any time under **Settings → Language**. In English, the AI
@@ -49,7 +49,9 @@ Also:
 - **Household members**: tasks can be assigned to different people at home.
 - **English / Chinese interface**: switch under Settings → Language.
 
-## Voice modes (v0.5.0)
+## Historical voice modes (v0.5.0)
+
+The guide below applies to released voice versions. Since 2026-10-28 the current source hides voice UI and settings while retaining the services and saved configuration. Existing release packages are unchanged.
 
 Configure Alibaba Cloud speech recognition, speech synthesis and realtime voice separately in Settings, then allow microphone access in chat.
 
@@ -96,7 +98,6 @@ Windows only for now.
 ## First run
 
 1. **Enter an AI model key.** Menu **Settings → AI model / API key…**, pick a provider, paste the key, click **Save and test**.
-   - **Alibaba Cloud Model Studio (Bailian)**: create a key on the "API-KEY" page of the [console](https://bailian.console.aliyun.com/)
    - **DeepSeek**: "API keys" at [platform.deepseek.com](https://platform.deepseek.com/)
    - Any other OpenAI-compatible endpoint works too; fill in the base URL and model name yourself. Reading bills and checkup reports needs a **vision-capable** model.
 2. **Settings → Household members**: list who's in your household so tasks can be assigned to them.

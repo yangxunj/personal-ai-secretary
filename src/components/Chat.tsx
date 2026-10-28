@@ -16,6 +16,7 @@ import VoiceInput from '@/components/chat/VoiceInput';
 import SpeechButton, { setSpeechRecording, stopSpeechPlayback } from '@/components/chat/SpeechButton';
 import VoiceConversation from '@/components/chat/VoiceConversation';
 import RealtimeVoice from '@/components/chat/RealtimeVoice';
+import { VOICE_UI_ENABLED } from '@/lib/product-features';
 import { displayCursor, mergeDisplayMessages } from '@/components/chat/history-state';
 
 /** 工具名 → 人话。工具卡片上显示它，用户不该看见 createTask 这种字眼 */
@@ -602,7 +603,7 @@ export function Chat({
                 }
                 return null;
               })}
-              {m.role === 'assistant' && (index !== messages.length - 1 || !busy) &&
+              {VOICE_UI_ENABLED && m.role === 'assistant' && (index !== messages.length - 1 || !busy) &&
                 <SpeechButton text={textOf(m.parts)} active={active} disabled={voiceBusy} />}
             </div>
           </Bubble>
@@ -634,13 +635,13 @@ export function Chat({
           background: 'color-mix(in srgb, var(--bg) 85%, transparent)',
         }}
       >
-        <RealtimeVoice conversationId={conversationId} taskId={taskId} active={active} disabled={busy || voiceBusy || continuousVoice}
+        {VOICE_UI_ENABLED && <RealtimeVoice conversationId={conversationId} taskId={taskId} active={active} disabled={busy || voiceBusy || continuousVoice}
           onRunningChange={setRealtimeVoice} onHeard={rememberAddress} onPersisted={() => {
             emitConversations();
             if (embedded && onReply) void onReply().catch(() => {});
             else setHistoryRevision(revision => revision + 1);
-          }} />
-        <VoiceConversation active={active} disabled={busy || voiceBusy || realtimeVoice} onRunningChange={setContinuousVoice} onSubmit={sendVoice} />
+          }} />}
+        {VOICE_UI_ENABLED && <VoiceConversation active={active} disabled={busy || voiceBusy || realtimeVoice} onRunningChange={setContinuousVoice} onSubmit={sendVoice} />}
         {/* 待发送的附件。发出去之前一直看得见、点得掉 —— 传错一张图不该只能整条重来 */}
         {files.length > 0 && (
           <div className="flex flex-wrap gap-2 mb-2">
@@ -735,13 +736,13 @@ export function Chat({
             className="flex-1 min-w-0 resize-none rounded-2xl border px-3.5 py-2.5 text-[15px] bg-transparent outline-none focus:border-brand-500 transition max-h-32"
             style={{ borderColor: 'var(--border)' }}
           />
-          <VoiceInput disabled={busy || autoVoice} active={active} onBusyChange={(recording) => {
+          {VOICE_UI_ENABLED && <VoiceInput disabled={busy || autoVoice} active={active} onBusyChange={(recording) => {
             setSpeechRecording(recordingOwner.current, recording);
             setVoiceBusy(recording);
           }} onTranscript={(text) => {
             setInput((previous) => previous ? `${previous}${/\s$/.test(previous) ? '' : '\n'}${text}` : text);
             inputRef.current?.focus({ preventScroll: true });
-          }} />
+          }} />}
           {busy ? (
             <button
               onClick={stopReply}
@@ -797,7 +798,7 @@ const HistoryItem = memo(function HistoryItem({ msg, focused, active, speechDisa
         style={mine ? undefined : { borderColor: 'var(--border)' }}
       >
         <MessageBody>{msg.content}</MessageBody>
-        {!mine && <SpeechButton text={msg.content} active={active} disabled={speechDisabled} />}
+        {VOICE_UI_ENABLED && !mine && <SpeechButton text={msg.content} active={active} disabled={speechDisabled} />}
       </div>
 
       {!!msg.attachments?.length && (

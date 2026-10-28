@@ -198,6 +198,7 @@ export const records: Dict = {
   接口地址: 'API URL',
   '接口地址（选了服务商就不用动）': 'API URL (no need to change it once a provider is picked)',
   '任何 OpenAI 兼容的接口都行。': 'Any OpenAI-compatible endpoint works.',
+  '联网搜索在「对话后端」中单独设置，DeepSeek 官方接口可复用聊天密钥。': 'Configure web search separately under Chat backend. The official DeepSeek API can reuse your chat key.',
   // lib/ai-providers.ts
   阿里云百炼: 'Alibaba Cloud Bailian',
   'DeepSeek 官方': 'DeepSeek',

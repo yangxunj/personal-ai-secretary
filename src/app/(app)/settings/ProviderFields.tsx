@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { PROVIDERS, modelSeesImages, providerOf, type ProviderId } from '@/lib/ai-providers';
 import { useT } from '@/lib/i18n/client';
+import { DASHSCOPE_PRESET_ENABLED } from '@/lib/product-features';
 
 const INPUT =
   'mt-1 w-full rounded-xl border px-3.5 py-2.5 text-[15px] bg-transparent outline-none focus:border-brand-500 transition';
@@ -30,10 +31,15 @@ export default function ProviderFields({
   keySource: string | null;
 }) {
   const t = useT();
-  const saved = providerOf(baseUrl);
+  const visibleProvider = (url: string): ProviderId => {
+    const id = providerOf(url);
+    return id === 'dashscope' && !DASHSCOPE_PRESET_ENABLED ? 'custom' : id;
+  };
+  const initialUrl = baseUrl || PROVIDERS.find(p=>p.id==='deepseek')!.baseUrl;
+  const saved = visibleProvider(initialUrl);
   const [pid, setPid] = useState<ProviderId>(saved);
-  const [url, setUrl] = useState(baseUrl);
-  const [mdl, setMdl] = useState(model);
+  const [url, setUrl] = useState(initialUrl);
+  const [mdl, setMdl] = useState(model || (!baseUrl ? PROVIDERS.find(p=>p.id==='deepseek')!.model : ''));
 
   const preset = PROVIDERS.find((p) => p.id === pid);
   const switched = pid !== saved;
@@ -59,7 +65,7 @@ export default function ProviderFields({
       <div>
         <span className="muted text-[12px]">{t('服务商')}</span>
         <div className="mt-1 flex flex-wrap gap-2" role="radiogroup" aria-label={t('服务商')}>
-          {[...PROVIDERS.map((p) => ({ id: p.id as ProviderId, label: t(p.label) })), { id: 'custom' as ProviderId, label: t('其他（自己填地址）') }].map(
+          {[...PROVIDERS.filter(p=>p.id!=='dashscope'||DASHSCOPE_PRESET_ENABLED).map((p) => ({ id: p.id as ProviderId, label: t(p.label) })), { id: 'custom' as ProviderId, label: t('其他（自己填地址）') }].map(
             (o) => {
               const on = pid === o.id;
               return (
@@ -82,9 +88,7 @@ export default function ProviderFields({
         </div>
         {preset && (
           <p className="muted text-[11px] leading-relaxed mt-1.5">
-            {preset.search
-              ? t('对话时会按需联网搜索（天气、新闻、价格这类），回答里附来源。')
-              : t('这家不能联网搜索，只凭模型自己知道的回答。')}
+            {t('联网搜索在「对话后端」中单独设置，DeepSeek 官方接口可复用聊天密钥。')}
           </p>
         )}
       </div>
@@ -144,7 +148,7 @@ export default function ProviderFields({
           onChange={(e) => {
             setUrl(e.target.value);
             // 手改地址后按新地址重新认一次是哪家，服务商那排跟着变
-            setPid(providerOf(e.target.value));
+            setPid(visibleProvider(e.target.value));
           }}
           required={pid === 'custom'}
           placeholder="https://…/v1"

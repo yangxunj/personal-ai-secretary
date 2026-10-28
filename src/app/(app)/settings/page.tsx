@@ -25,6 +25,7 @@ import { getLocale, getT } from '@/lib/i18n/server';
 import { LOCALES, LOCALE_NAMES } from '@/lib/i18n/core';
 import { getOwners } from '@/lib/owners';
 import Link from 'next/link';
+import { VOICE_UI_ENABLED } from '@/lib/product-features';
 
 export const dynamic = 'force-dynamic';
 
@@ -46,9 +47,9 @@ export default async function SettingsPage({
   const authOn = process.env.AUTH_ENABLED === 'true';
   const ai = await getAiConfig();
   const webSearch = await getWebSearchConfig();
-  const asr = await loadAsrConfig();
-  const tts = await loadTtsConfig();
-  const realtime = await loadRealtimeConfig();
+  const asr = VOICE_UI_ENABLED ? await loadAsrConfig() : null;
+  const tts = VOICE_UI_ENABLED ? await loadTtsConfig() : null;
+  const realtime = VOICE_UI_ENABLED ? await loadRealtimeConfig() : null;
   const owners = await getOwners();
   const locale = await getLocale();
   const t = await getT();
@@ -148,6 +149,7 @@ export default async function SettingsPage({
           </p>
         </section>
 
+        {asr && tts && realtime && <>
         <section id="voice" className="surface border rounded-2xl p-4 scroll-mt-4" style={{ borderColor: 'var(--border)' }}>
           <h2 className="text-[15px] font-semibold mb-1">{t('语音输入')}</h2>
           <p className="muted text-[12px] leading-relaxed mb-3">{t('使用阿里云百炼将录音转成文字，与聊天模型独立。录音会发送给语音服务商，识别后不在本应用保存。')}</p>
@@ -218,6 +220,8 @@ export default async function SettingsPage({
           </form>
           <p className="muted text-[11px] leading-relaxed mt-3">{t('开启后持续向阿里云发送麦克风音频。密钥与地址须属于同一区域，手机需要 HTTPS。')}</p>
         </section>
+
+        </>}
 
         {/* ---------- 家里的人 ---------- */}
         <section id="members" className="surface border rounded-2xl p-4 scroll-mt-4" style={{ borderColor: 'var(--border)' }}>
