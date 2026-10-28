@@ -34,7 +34,7 @@ export async function openPiSession({ directory, cfg, instructions, tools, conte
     onPayload:payload=>{
       // Base64 image bytes are not text tokens. Budget image blocks separately.
       const budget=JSON.stringify(payload,(_key,value)=>value?.type==='image_url'?{type:'image',estimatedTokens:'x'.repeat(3600)}:value);
-      if(tokens(JSON.parse(budget))+maxTokens>contextWindow)throw new Error('Pi input exceeds the configured context window. Split this message or attachment, or select a larger supported window.');
+      if(tokens(JSON.parse(budget))+maxTokens>contextWindow)throw new Error('Pi input exceeds the context window. Split this message or attachment.');
       return {...payload,max_tokens:maxTokens,...(url.hostname==='api.deepseek.com'?{thinking:{type:'disabled'}}:{})};
     }});
   const resources={getExtensions:()=>({extensions:[],errors:[],runtime:createExtensionRuntime()}),getSkills:()=>({skills:[],diagnostics:[]}),

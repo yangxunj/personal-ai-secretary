@@ -180,11 +180,6 @@ export async function saveChatBackendAction(form:FormData) {
   const t=await getT();
   const backend=String(form.get('backend') || 'pi');
   if(!['codex','pi'].includes(backend))throw new Error('Invalid backend');
-  if(backend==='pi') {
-    const value=String(form.get('piContextWindow')||128000),size=Number(value);
-    if(!Number.isInteger(size)||size<8192||size>1000000)throw new Error('Pi context window must be between 8192 and 1000000');
-    await db.setting.upsert({where:{key:'pi.contextWindow'},create:{key:'pi.contextWindow',value},update:{value}});
-  }
   if(backend==='codex') {
     if(!localCodexEnabled())throw new Error('Local Codex is disabled');
     const effort=String(form.get('codexEffort') || 'medium');

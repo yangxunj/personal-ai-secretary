@@ -8,7 +8,6 @@ import ProviderFields from './ProviderFields';
 import LocalCodexSettings from './LocalCodexSettings';
 import SettingsTabs from './SettingsTabs';
 import { getWebSearchConfig } from '@/lib/web-search/config';
-import { db } from '@/lib/db';
 import { getChatBackend, getCodexConfig, localCodexEnabled } from '@/lib/codex/config';
 import {
   changePasswordAction,
@@ -60,7 +59,7 @@ export default async function SettingsPage({
       <div className="px-4 py-4 space-y-4">
         <SettingsTabs initialTab={initialTab} navigationKey={JSON.stringify(params)}
           ai={<>
-        <LocalCodexSettings backend={await getChatBackend()} enabled={localCodexEnabled()} config={await getCodexConfig()} piContextWindow={Number((await db.setting.findUnique({where:{key:'pi.contextWindow'}}))?.value||128000)} searchEnabled={webSearch.enabled} searchConfigured={!!webSearch.apiKey} />
+        <LocalCodexSettings backend={await getChatBackend()} enabled={localCodexEnabled()} config={await getCodexConfig()} searchEnabled={webSearch.enabled} searchConfigured={!!webSearch.apiKey} />
 
         {/* ---------- 模型 ---------- */}
         <section className="surface border rounded-2xl p-4" style={{ borderColor: 'var(--border)' }}>

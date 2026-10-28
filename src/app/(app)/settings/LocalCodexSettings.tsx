@@ -2,7 +2,7 @@
 import { useState } from 'react';
 import { useT } from '@/lib/i18n/client';
 import { saveChatBackendAction, testCodexAction, saveWebSearchAction, saveCodexSearchAction } from './actions';
-export default function LocalCodexSettings({backend,enabled,config,piContextWindow=128000,searchEnabled=false,searchConfigured=false}:{backend:string;enabled:boolean;config:{executable:string;model:string;effort:string;webSearchEnabled:boolean};piContextWindow?:number;searchEnabled?:boolean;searchConfigured?:boolean}) {
+export default function LocalCodexSettings({backend,enabled,config,searchEnabled=false,searchConfigured=false}:{backend:string;enabled:boolean;config:{executable:string;model:string;effort:string;webSearchEnabled:boolean};searchEnabled?:boolean;searchConfigured?:boolean}) {
   const t=useT();const [selected,setSelected]=useState(backend==='codex'?'codex':'pi');
   return <section className="surface border rounded-2xl p-4" style={{borderColor:'var(--border)'}}>
     <h2 className="text-[15px] font-semibold mb-2">{t('对话后端')}</h2>
@@ -14,7 +14,6 @@ export default function LocalCodexSettings({backend,enabled,config,piContextWind
       {!enabled && <p className="muted text-[12px]">{t('桌面版支持本机 Codex；本地源码运行需启用 ENABLE_LOCAL_CODEX。')}</p>}
       {selected==='pi' && <>
         <p className="muted text-[12px]">{t('使用下方 Pi 模型配置，由 Pi 管理会话、工具循环与压缩。支持按附件读取及生成文件；更换模型后请新建对话。')}</p>
-        <label className="block text-[12px]">{t('Pi 上下文窗口（token，不超过模型实际支持值）')}<input type="number" name="piContextWindow" min="8192" max="1000000" defaultValue={piContextWindow} className="mt-1 w-full rounded-xl border p-2.5 bg-transparent" style={{borderColor:'var(--border)'}} /></label>
       </>}
       {selected==='codex' && <>
         <p className="muted text-[12px]">{t('先在当前电脑安装并登录 Codex。使用该登录的额度；无需填写 DeepSeek API Key，仍需联网，电脑关闭后无法处理。')}</p>
