@@ -82,6 +82,13 @@ body {
 /* 输入框在 iOS 上不缩放 */
 input, textarea, select { font-size: 16px; }
 
+/* Windows 原生下拉弹层不一定继承 select 的背景；显式配对选项的文字与底色。 */
+select option, select optgroup {
+  background-color: var(--surface);
+  color: var(--text);
+}
+select option:disabled, select optgroup:disabled { color: var(--muted); }
+
 /* 卡片上的负责人下拉。全局 select 是 16px（防 iOS 聚焦时缩放），
    但那条规则是给文本输入框用的 —— <select> 在 iOS 上弹的是选择器滚轮，不触发缩放，
    所以这里可以放心用小字号，跟旁边那排小按钮对齐。 */
