@@ -18,7 +18,7 @@
  */
 const { app, BrowserWindow, Menu, shell, dialog, ipcMain, Notification } = require('electron');
 const { randomBytes } = require('node:crypto');
-const { setupGmail } = require('./gmail');
+const { setupGmail, trustedSender } = require('./gmail');
 const path = require('node:path');
 const fs = require('node:fs');
 const net = require('node:net');
@@ -307,6 +307,12 @@ function startLan() {
   });
   // 上次开着就接着开 —— 手机主屏上那个图标，不该因为电脑重启过就打不开
   if (lan.state.enabled) lan.start().catch((e) => console.error('手机访问没起来:', e));
+
+  // Expose only opening this local dialog; gateway controls stay in lan-preload.
+  ipcMain.handle('desktop:open-phone-access', (event) => {
+    if (!trustedSender(event, win, baseUrl)) throw new Error('Desktop window required');
+    openLanWindow();
+  });
 
   ipcMain.handle('lan:state', async () => {
     const s = lan.snapshot();

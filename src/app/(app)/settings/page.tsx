@@ -6,6 +6,7 @@ import { loadTtsConfig } from '@/lib/tts-config';
 import { loadRealtimeConfig, REALTIME_MODELS } from '@/lib/realtime/config';
 import ProviderFields from './ProviderFields';
 import HarnessSettings from './HarnessSettings';
+import PhoneAccessSettings from './PhoneAccessSettings';
 import SettingsTabs from './SettingsTabs';
 import { getChatBackend, getCodexConfig, localCodexEnabled } from '@/lib/codex/config';
 import {
@@ -226,14 +227,7 @@ export default async function SettingsPage({
         </section>}
         {/* ---------- 手机访问（只有桌面端有） ---------- */}
         {process.env.DESKTOP_APP === '1' && (
-          <section className="surface border rounded-2xl p-4" style={{ borderColor: 'var(--border)' }}>
-            <h2 className="text-[15px] font-semibold mb-1">{t('用手机访问')}</h2>
-            <p className="muted text-[12px] leading-relaxed">
-              {t('同一个 WiFi 下的手机也能用。在电脑上点窗口顶部菜单')}
-              <strong className="font-semibold">{t('「设置 → 用手机访问…」')}</strong>
-              {t('，打开开关，用手机扫二维码。只有扫过码的手机进得来。')}
-            </p>
-          </section>
+          <PhoneAccessSettings />
         )}
 
         {/* ---------- 密码 ---------- */}

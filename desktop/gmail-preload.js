@@ -3,3 +3,7 @@ const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('desktopGmail', {
   invoke: (action, input = {}) => ipcRenderer.invoke('gmail:command', action, input),
 });
+
+contextBridge.exposeInMainWorld('desktopApp', {
+  openPhoneAccess: () => ipcRenderer.invoke('desktop:open-phone-access'),
+});
