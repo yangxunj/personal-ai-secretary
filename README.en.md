@@ -7,7 +7,7 @@ and it files away your to-dos, accounts, bills, medical checkup reports and insu
 policies, so they're right there when you need them.
 
 **Your database, uploaded originals and backups stay on your computer.** The app sends no telemetry.
-AI conversations go to your chosen model provider. v0.6.0-beta.3 focuses on DeepSeek/Pi and local Codex text chat. Alibaba Cloud chat presets, voice controls and voice settings are temporarily hidden; implementations and saved settings are retained for a later phase.
+AI conversations go to your chosen model provider. v0.6.0-beta.4 focuses on DeepSeek/Pi and local Codex text chat. Alibaba Cloud chat presets, voice controls and voice settings are temporarily hidden; implementations and saved settings are retained for a later phase.
 
 The interface comes in **English and Chinese**. It follows your system language on
 first launch; switch any time under **Settings → Language**. In English, the AI
@@ -21,7 +21,7 @@ replies in English and saves what it records in English too.
 
 ## What it does
 
-The **v0.6.0-beta.3 Windows packages default to embedded Pi + DeepSeek** and include optional search, file/source tools and long-chat improvements. Voice UI is temporarily hidden; v0.5.0 retains the historical voice modes described below.
+The **v0.6.0-beta.4 Windows packages default to embedded Pi + DeepSeek** and include on-demand search enabled by default, file/source tools, long-chat improvements and simpler settings. Voice UI is temporarily hidden; v0.5.0 retains the historical voice modes described below.
 
 Talk to it like you'd text a person:
 
@@ -81,7 +81,7 @@ The default realtime model is `qwen-audio-3.0-realtime-flash`; Plus is also supp
 
 Grab one from [Releases](../../releases):
 
-> Latest prerelease: [v0.6.0-beta.3](../../releases/tag/v0.6.0-beta.3), with embedded Pi, optional DeepSeek search, file/source tools, incremental history and automatic titles. See the [release notes](docs/releases/v0.6.0-beta.3.md) for upgrades and validation. The stable release remains [v0.5.0](../../releases/tag/v0.5.0).
+> Latest prerelease: [v0.6.0-beta.4](../../releases/tag/v0.6.0-beta.4), with grouped settings, simpler Pi/Codex configuration, on-demand search enabled by default, household-member rows and a direct desktop phone-access entry. See the [release notes](docs/releases/v0.6.0-beta.4.md) for upgrades and validation. The stable release remains [v0.5.0](../../releases/tag/v0.5.0).
 
 | File | Where your data lives | Best for |
 | --- | --- | --- |
@@ -98,19 +98,21 @@ Windows only for now.
 
 ## First run
 
-1. **Enter an AI model key.** Menu **Settings → AI model / API key…**, pick a provider, paste the key, click **Save and test**.
+1. **Choose a chat backend.** In **Settings → AI settings**, select embedded Pi or local Codex, configure it, and click **Save and use for new chats**. The official DeepSeek preset needs only an API key, with model and endpoint under Advanced. Local Codex needs an existing installation and sign-in, with an optional command path.
    - **DeepSeek**: "API keys" at [platform.deepseek.com](https://platform.deepseek.com/)
    - Any other OpenAI-compatible endpoint works too; fill in the base URL and model name yourself. Reading bills and checkup reports needs a **vision-capable** model.
-2. **Settings → Household members**: list who's in your household so tasks can be assigned to them.
+2. **Settings → General → Household members**: click **Add member** for each person, mark yourself and save. No comma-separated list is needed.
 3. Go to **Chat** and say something.
 
 New installations use embedded Pi by default. Existing installations keep their backend selection and chats; select Pi and start a new chat to try it. Alternatively, select **Settings → Chat backend → Local Codex** after installing and signing in to Codex on this computer, then start a new chat. This uses your Codex account allowance and still needs internet. Source installations must set `ENABLE_LOCAL_CODEX=true`; desktop builds enable it automatically.
 
 Without an AI backend, tasks and the vault can still be edited by hand.
 
-In the current source, Settings → AI settings offers radio choices for embedded Pi and local Codex, with only the selected configuration shown. Click **Save and use for new chats** to check connectivity and save the configuration and default backend together. Switching retains both drafts; failed checks preserve the previous backend and saved settings. A legacy API preference resolves to Pi for new chats. Existing API conversations keep their backend and history and use the Pi model configuration.
+In v0.6.0-beta.4, Settings → AI settings offers radio choices for embedded Pi and local Codex, with only the selected configuration shown. Click **Save and use for new chats** to check connectivity and save the configuration and default backend together. Switching retains both drafts; failed checks preserve the previous backend and saved settings. A legacy API preference resolves to Pi for new chats. Existing API conversations keep their backend and history and use the Pi model configuration.
 
-In the current source, public web search is enabled for Pi and Codex, with no settings switches; legacy disabled settings no longer apply. AI searches when needed. Official DeepSeek chat and Search/Fetch share the chat API key (up to six search calls per turn, billed separately). There is no separate search-key field, and legacy dedicated keys cannot override the official chat key. Codex uses local sign-in and allowance. Titles, page generation and connection tests do not enable search. Released packages follow their versioned release notes.
+In v0.6.0-beta.4, public web search is enabled for Pi and Codex, with no settings switches; legacy disabled settings no longer apply. AI searches when needed. Official DeepSeek chat and Search/Fetch share the chat API key (up to six search calls per turn, billed separately). There is no separate search-key field, and legacy dedicated keys cannot override the official chat key. Codex uses local sign-in and allowance. Titles, page generation and connection tests do not enable search. Older packages follow their versioned release notes.
+
+The desktop app also offers **Open phone access settings** under **Settings → Connections & security**, opening the native pairing dialog. Browsers have no phone-access switch. The native **Settings → Phone access…** menu remains available.
 
 ## Privacy
 
