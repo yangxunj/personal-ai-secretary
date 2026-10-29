@@ -22,7 +22,7 @@ export default function HarnessSettings({ backend, enabled, config, searchConfig
   const active = result.backend || backend;
 
   return <div className="space-y-4">
-    <form method="post" onSubmit={event => {
+    <form id="harness-settings-form" method="post" onSubmit={event => {
       event.preventDefault();
       const draft = new FormData(event.currentTarget);
       setSubmittedBackend(selected);
@@ -64,11 +64,6 @@ export default function HarnessSettings({ backend, enabled, config, searchConfig
         <label className="block text-[12px]">{t('对话推理强度')}<select name="codexEffort" value={codexEffort} onChange={event => setCodexEffort(event.target.value)} className="mt-1 w-full rounded-xl border p-2.5 bg-transparent" style={{ borderColor: 'var(--border)' }}><option value="low">{t('低')}</option><option value="medium">{t('中')}</option><option value="high">{t('高')}</option><option value="xhigh">{t('最高')}</option></select></label>
         <p className="muted text-[12px]">{t('公开网络搜索已默认启用，AI 会按需搜索和读取公开网页。')}{t('使用本机 Codex 的登录和额度，无需 DeepSeek 密钥。')}</p>
       </fieldset>
-
-      {result.message && submittedBackend === selected && <p role={result.ok ? 'status' : 'alert'} className={`text-[13px] px-1 ${result.ok ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500'}`}>{result.message}</p>}
-      <button disabled={pending} aria-busy={pending} className="w-full rounded-xl bg-brand-500 text-white py-2.5 text-[15px] disabled:opacity-50">
-        {pending ? t('正在检查并保存…') : t('保存并用于新对话')}
-      </button>
     </form>
 
     <div hidden={selected !== 'pi'} className={selected === 'pi' ? '' : 'hidden'}>
@@ -84,5 +79,9 @@ export default function HarnessSettings({ backend, enabled, config, searchConfig
         {hasCustomAiConfig && <form action={resetAiConfigAction} className="mt-3"><button className="w-full rounded-xl border py-2 text-[13px]" style={{ borderColor: 'var(--border)' }}>{t('恢复默认')}</button></form>}
       </details>
     </div>
+    {result.message && submittedBackend === selected && <p role={result.ok ? 'status' : 'alert'} className={`text-[13px] px-1 ${result.ok ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500'}`}>{result.message}</p>}
+    <button form="harness-settings-form" disabled={pending} aria-busy={pending} className="w-full rounded-xl bg-brand-500 text-white py-2.5 text-[15px] disabled:opacity-50">
+      {pending ? t('正在检查并保存…') : t('保存并用于新对话')}
+    </button>
   </div>;
 }

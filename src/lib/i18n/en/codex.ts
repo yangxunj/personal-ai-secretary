@@ -1,5 +1,6 @@
 import type { Dict } from '../core';
 export const codex: Dict = {
+  '高级配置': 'Advanced settings',
   '请选择对话后端': 'Choose a chat backend.',
   '对话推理强度无效': 'Invalid reasoning effort.',
   'Codex 连接检查失败：': 'Codex connection check failed: ',

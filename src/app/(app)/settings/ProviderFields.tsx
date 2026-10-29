@@ -87,11 +87,6 @@ export default function ProviderFields({
             },
           )}
         </div>
-        {preset && (
-          <p className="muted text-[11px] leading-relaxed mt-1.5">
-            {t('联网搜索在「对话后端」中单独设置，DeepSeek 官方接口可复用聊天密钥。')}
-          </p>
-        )}
       </div>
 
       <label className="block">
@@ -116,51 +111,53 @@ export default function ProviderFields({
         </span>
       </label>
 
-      <label className="block">
-        <span className="muted text-[12px]">{t('模型名')}</span>
-        <input
-          type="text"
-          name="model"
-          value={mdl}
-          onChange={(e) => setMdl(e.target.value)}
-          placeholder={preset?.model ?? t('服务商文档里的模型 ID')}
-          className={INPUT}
-          style={{ borderColor: 'var(--border)' }}
-        />
-        {pid === 'deepseek' && (
-          <span className="muted text-[11px] leading-relaxed block mt-1">
-            {t('deepseek-flash 快、便宜、能看图；deepseek-v4-pro 更强，但看不了图。')}
-          </span>
-        )}
-        {!modelSeesImages({ baseUrl: url, model: mdl }) && (
-          <span className="text-[11px] leading-relaxed block mt-1 text-amber-600 dark:text-amber-400">
-            {t('这个模型看不了图片：发照片给它会照常存档，但它读不出内容 —— 体检报告、账单截图这类要靠看图录入的，换成 deepseek-flash。')}
-          </span>
-        )}
-      </label>
-
-      {/* 预设的地址折起来（一般不用动）；自定义时直接摊开，那是必填的 */}
       <details open={pid === 'custom'}>
-        <summary className="muted text-[12px] cursor-pointer select-none">
-          {pid === 'custom' ? t('接口地址') : t('接口地址（选了服务商就不用动）')}
-        </summary>
-        <input
-          type="text"
-          name="baseUrl"
-          value={url}
-          onChange={(e) => {
-            setUrl(e.target.value);
-            // 手改地址后按新地址重新认一次是哪家，服务商那排跟着变
-            setPid(visibleProvider(e.target.value));
-          }}
-          required={pid === 'custom'}
-          placeholder="https://…/v1"
-          className="mt-2 w-full rounded-xl border px-3.5 py-2.5 text-[13px] bg-transparent outline-none focus:border-brand-500 transition"
-          style={{ borderColor: 'var(--border)' }}
-        />
-        <span className="muted text-[11px] leading-relaxed block mt-1">
-          {t('任何 OpenAI 兼容的接口都行。')}
-        </span>
+        <summary className="muted text-[12px] cursor-pointer select-none">{t('高级配置')}</summary>
+        <div className="space-y-3 mt-3">
+          <label className="block">
+            <span className="muted text-[12px]">{t('模型名')}</span>
+            <input
+              type="text"
+              name="model"
+              value={mdl}
+              onChange={(e) => setMdl(e.target.value)}
+              placeholder={preset?.model ?? t('服务商文档里的模型 ID')}
+              className={INPUT}
+              style={{ borderColor: 'var(--border)' }}
+            />
+            {pid === 'deepseek' && (
+              <span className="muted text-[11px] leading-relaxed block mt-1">
+                {t('deepseek-flash 快、便宜、能看图；deepseek-v4-pro 更强，但看不了图。')}
+              </span>
+            )}
+            {!modelSeesImages({ baseUrl: url, model: mdl }) && (
+              <span className="text-[11px] leading-relaxed block mt-1 text-amber-600 dark:text-amber-400">
+                {t('这个模型看不了图片：发照片给它会照常存档，但它读不出内容 —— 体检报告、账单截图这类要靠看图录入的，换成 deepseek-flash。')}
+              </span>
+            )}
+          </label>
+
+          <label className="block">
+            <span className="muted text-[12px]">{t('接口地址')}</span>
+            <input
+              type="text"
+              name="baseUrl"
+              value={url}
+              onChange={(e) => {
+                setUrl(e.target.value);
+                // 手改地址后按新地址重新认一次是哪家，服务商那排跟着变
+                setPid(visibleProvider(e.target.value));
+              }}
+              required={pid === 'custom'}
+              placeholder="https://…/v1"
+              className="mt-2 w-full rounded-xl border px-3.5 py-2.5 text-[13px] bg-transparent outline-none focus:border-brand-500 transition"
+              style={{ borderColor: 'var(--border)' }}
+            />
+            <span className="muted text-[11px] leading-relaxed block mt-1">
+              {t('任何 OpenAI 兼容的接口都行。')}
+            </span>
+          </label>
+        </div>
       </details>
     </>
   );
