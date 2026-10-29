@@ -1,12 +1,13 @@
 // This client only contacts DeepSeek. It never fetches a model-supplied URL locally.
 export const SEARCH_ENDPOINT='https://api.deepseek.com/v1/tools/';
 export function selectSearchKey({dedicatedKey='',baseUrl='',apiKey=''}) {
-  if(dedicatedKey.trim())return dedicatedKey.trim();
   try {
     const url=new URL(baseUrl);
     if(url.origin==='https://api.deepseek.com'&&!url.username&&!url.password&&!url.search&&!url.hash&&/^\/(v1\/?)?$/.test(url.pathname))return apiKey.trim();
   }catch {}
-  return '';
+  // Retain existing custom-provider integrations, without letting a legacy
+  // search key override the official DeepSeek chat credential.
+  return dedicatedKey.trim();
 }
 export function publicWebUrl(value) {
   if(typeof value!=='string'||value.length>8192)throw new Error('Invalid public web URL');

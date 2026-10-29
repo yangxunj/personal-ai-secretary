@@ -23,12 +23,14 @@ export default function ProviderFields({
   model,
   keyPlaceholder,
   keySource,
+  showReset = false,
 }: {
   baseUrl: string;
   model: string;
   keyPlaceholder: string;
   /** 当前 key 从哪来的那句说明；没存过 key 时为 null */
   keySource: string | null;
+  showReset?: boolean;
 }) {
   const t = useT();
   const visibleProvider = (url: string): ProviderId => {
@@ -158,6 +160,7 @@ export default function ProviderFields({
             </span>
           </label>
         </div>
+        {showReset && <button type="submit" form="pi-reset-config-form" className="mt-3 w-full rounded-xl border py-2 text-[13px]" style={{ borderColor: 'var(--border)' }}>{t('恢复默认')}</button>}
       </details>
     </>
   );

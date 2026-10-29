@@ -6,6 +6,8 @@ test('search credentials never reuse another provider or a deceptive official ad
   for(const baseUrl of ['https://other.example/v1','http://api.deepseek.com','https://api.deepseek.com.evil.example','https://api.deepseek.com/proxy','https://user@api.deepseek.com','https://api.deepseek.com?key=x'])assert.equal(selectSearchKey({baseUrl,apiKey:'other-secret'}),'');
   for(const baseUrl of ['https://api.deepseek.com','https://api.deepseek.com/v1/'])assert.equal(selectSearchKey({baseUrl,apiKey:'official-secret'}),'official-secret');
   assert.equal(selectSearchKey({dedicatedKey:'dedicated',baseUrl:'https://other.example',apiKey:'other'}),'dedicated');
+  assert.equal(selectSearchKey({dedicatedKey:'legacy-key',baseUrl:'https://api.deepseek.com',apiKey:'official-secret'}),'official-secret');
+  assert.equal(selectSearchKey({dedicatedKey:'legacy-key',baseUrl:'https://api.deepseek.com',apiKey:''}),'');
 });
 
 test('web sources reject nonpublic URLs and escape Markdown delimiters',()=>{

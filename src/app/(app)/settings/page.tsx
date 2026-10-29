@@ -7,7 +7,6 @@ import { loadRealtimeConfig, REALTIME_MODELS } from '@/lib/realtime/config';
 import ProviderFields from './ProviderFields';
 import HarnessSettings from './HarnessSettings';
 import SettingsTabs from './SettingsTabs';
-import { getWebSearchConfig } from '@/lib/web-search/config';
 import { getChatBackend, getCodexConfig, localCodexEnabled } from '@/lib/codex/config';
 import {
   changePasswordAction,
@@ -39,7 +38,6 @@ export default async function SettingsPage({
   const { tab, e, ok, aiE, aiOk, mE, mOk, asrE, asrOk, ttsE, ttsOk, rtE, rtOk } = params;
   const authOn = process.env.AUTH_ENABLED === 'true';
   const ai = await getAiConfig();
-  const webSearch = await getWebSearchConfig();
   const asr = VOICE_UI_ENABLED ? await loadAsrConfig() : null;
   const tts = VOICE_UI_ENABLED ? await loadTtsConfig() : null;
   const realtime = VOICE_UI_ENABLED ? await loadRealtimeConfig() : null;
@@ -58,7 +56,7 @@ export default async function SettingsPage({
           ai={<>
         {aiOk && <p role="status" className="text-[13px] text-emerald-600 dark:text-emerald-400">✓ {aiOk}</p>}
         {aiE && <p role="alert" className="text-[13px] text-red-500 leading-relaxed">{aiE}</p>}
-        <HarnessSettings backend={await getChatBackend()} enabled={localCodexEnabled()} config={await getCodexConfig()} searchConfigured={!!webSearch.apiKey} hasCustomAiConfig={ai.fromDb}
+        <HarnessSettings backend={await getChatBackend()} enabled={localCodexEnabled()} config={await getCodexConfig()} hasCustomAiConfig={ai.fromDb}
           piSettings={<>
         {/* ---------- 模型 ---------- */}
         <section className="surface border rounded-2xl p-4" style={{ borderColor: 'var(--border)' }}>
@@ -70,6 +68,7 @@ export default async function SettingsPage({
           </p>
           <div className="space-y-3">
             <ProviderFields
+              showReset={ai.fromDb}
               baseUrl={ai.baseUrl}
               model={ai.model}
               keyPlaceholder={ai.apiKey ? maskKey(ai.apiKey) : t('还没填')}

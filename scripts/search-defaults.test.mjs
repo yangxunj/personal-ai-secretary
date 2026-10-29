@@ -65,6 +65,13 @@ test('a dedicated search key remains available for custom model endpoints', asyn
   assert.deepEqual(await getWebSearchConfig(), { enabled: true, apiKey: 'synthetic-dedicated-key' });
 });
 
+test('official DeepSeek always shares its chat key despite stale dedicated keys', async () => {
+  state.ai = { ...state.ai, baseUrl: 'https://api.deepseek.com', apiKey: 'synthetic-current-chat-key' };
+  state.settings.set('webSearch.apiKey', 'synthetic-legacy-search-key');
+  process.env.DEEPSEEK_SEARCH_API_KEY = 'synthetic-env-search-key';
+  assert.deepEqual(await getWebSearchConfig(), { enabled: true, apiKey: 'synthetic-current-chat-key' });
+});
+
 test('Codex enables search for chat while non-chat calls keep it disabled and inherited MCP blocked', async () => {
   process.env.DESKTOP_APP = '1';
   for (const forChat of [true, false]) {

@@ -2,13 +2,12 @@
 
 import { startTransition, useActionState, useState, type ReactNode } from 'react';
 import { useT } from '@/lib/i18n/client';
-import { saveHarnessSettingsAction, saveWebSearchKeyAction, resetAiConfigAction, type HarnessSaveResult } from './actions';
+import { saveHarnessSettingsAction, resetAiConfigAction, type HarnessSaveResult } from './actions';
 
-export default function HarnessSettings({ backend, enabled, config, searchConfigured = false, hasCustomAiConfig = false, piSettings }: {
+export default function HarnessSettings({ backend, enabled, config, hasCustomAiConfig = false, piSettings }: {
   backend: string;
   enabled: boolean;
   config: { executable: string; model: string; effort: string };
-  searchConfigured?: boolean;
   hasCustomAiConfig?: boolean;
   piSettings: ReactNode;
 }) {
@@ -66,19 +65,7 @@ export default function HarnessSettings({ backend, enabled, config, searchConfig
       </fieldset>
     </form>
 
-    <div hidden={selected !== 'pi'} className={selected === 'pi' ? '' : 'hidden'}>
-      <details className="surface border rounded-2xl p-4" style={{ borderColor: 'var(--border)' }}>
-        <summary className="cursor-pointer text-[13px]">{t('高级：搜索专用密钥')}</summary>
-        <form action={saveWebSearchKeyAction} className="mt-3 space-y-2">
-          <p className="muted text-[12px]">{t('搜索词和网页地址会发送给 DeepSeek。请勿要求搜索私人邮件、附件原文或其他敏感内容。')}</p>
-          <label className="block text-[12px]">{t('DeepSeek 搜索专用 API Key（留空保留）')}<input type="password" name="webSearchApiKey" autoComplete="new-password" className="mt-1 w-full rounded-xl border p-2.5 bg-transparent" style={{ borderColor: 'var(--border)' }} /></label>
-          <p className="muted text-[12px]">{searchConfigured ? t('搜索密钥可用。') : t('尚无搜索密钥。使用 DeepSeek 官方聊天接口时可复用聊天密钥；其他服务商需填写专用密钥。')}</p>
-          <label className="flex items-center gap-2 text-[12px]"><input type="checkbox" name="clearSearchKey" />{t('清除已保存的搜索专用密钥（仍可使用环境变量或官方聊天密钥）')}</label>
-          <button className="w-full rounded-xl border py-2 text-[13px]" style={{ borderColor: 'var(--border)' }}>{t('保存搜索密钥')}</button>
-        </form>
-        {hasCustomAiConfig && <form action={resetAiConfigAction} className="mt-3"><button className="w-full rounded-xl border py-2 text-[13px]" style={{ borderColor: 'var(--border)' }}>{t('恢复默认')}</button></form>}
-      </details>
-    </div>
+    {hasCustomAiConfig && <form id="pi-reset-config-form" action={resetAiConfigAction} hidden />}
     {result.message && submittedBackend === selected && <p role={result.ok ? 'status' : 'alert'} className={`text-[13px] px-1 ${result.ok ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500'}`}>{result.message}</p>}
     <button form="harness-settings-form" disabled={pending} aria-busy={pending} className="w-full rounded-xl bg-brand-500 text-white py-2.5 text-[15px] disabled:opacity-50">
       {pending ? t('正在检查并保存…') : t('保存并用于新对话')}
