@@ -7,6 +7,7 @@ import { loadRealtimeConfig, REALTIME_MODELS } from '@/lib/realtime/config';
 import ProviderFields from './ProviderFields';
 import HarnessSettings from './HarnessSettings';
 import PhoneAccessSettings from './PhoneAccessSettings';
+import FamilyMembersSettings from './FamilyMembersSettings';
 import SettingsTabs from './SettingsTabs';
 import { getChatBackend, getCodexConfig, localCodexEnabled } from '@/lib/codex/config';
 import {
@@ -15,7 +16,6 @@ import {
   saveAsrConfigAction,
   saveTtsConfigAction,
   saveRealtimeConfigAction,
-  saveOwnersAction,
   setLocaleAction,
 } from './actions';
 import { getLocale, getT } from '@/lib/i18n/server';
@@ -190,35 +190,7 @@ export default async function SettingsPage({
         </section>
 
         {/* ---------- 家里的人 ---------- */}
-        <section id="members" className="surface border rounded-2xl p-4 scroll-mt-4" style={{ borderColor: 'var(--border)' }}>
-          <h2 className="text-[15px] font-semibold mb-1">{t('家里的人')}</h2>
-          <p className="muted text-[12px] leading-relaxed mb-3">
-            {t('任务能派给谁、留言以谁的名义。用逗号或顿号隔开，第一个是你自己。AI 建任务时也会按这份名单填负责人。')}
-          </p>
-
-          {mOk && <p className="text-[13px] text-emerald-600 dark:text-emerald-400 mb-3">✓ {mOk}</p>}
-          {mE && <p className="text-[13px] text-red-500 mb-3">{mE}</p>}
-
-          <form action={saveOwnersAction} className="space-y-3">
-            <input
-              name="owners"
-              defaultValue={owners.join(locale === 'en' ? ', ' : '，')}
-              placeholder={t('例如：我，老婆，妈妈')}
-              className="w-full rounded-xl border px-3.5 py-2.5 text-[15px] bg-transparent outline-none focus:border-brand-500 transition"
-              style={{ borderColor: 'var(--border)' }}
-            />
-            <button
-              type="submit"
-              className="w-full rounded-xl bg-brand-500 text-white py-2.5 text-[15px] active:opacity-80"
-            >
-              {t('保存')}
-            </button>
-          </form>
-
-          <p className="muted text-[11px] leading-relaxed mt-3">
-            {t('改名或删掉一个人，已经派给他的任务不会跟着变，还挂在原来的名字下。')}
-          </p>
-        </section>
+        <FamilyMembersSettings owners={owners} />
 
           </>}
           connections={<>

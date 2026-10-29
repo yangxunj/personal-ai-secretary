@@ -154,13 +154,22 @@ export async function saveRealtimeConfigAction(form: FormData) {
 
 // ---------- 家里的人 ----------
 /** 任务能派给谁。改名不会连带改已有任务上的名字 —— 那些是历史记录 */
-export async function saveOwnersAction(formData: FormData) {
+export type OwnersSaveResult = { ok: boolean; message: string };
+
+export async function saveOwnersAction(_previous: OwnersSaveResult, formData: FormData): Promise<OwnersSaveResult> {
+  if (!(await sessionIsCurrent())) redirect('/login');
   const t = await getT();
-  const r = parseOwners(String(formData.get('owners') ?? ''), t);
-  if (!r.ok) redirect('/settings?mE=' + encodeURIComponent(r.error) + '#members');
+  const names = formData.getAll('owners').map(value => typeof value === 'string' ? value.trim() : '');
+  if (!names.length) return { ok: false, message: t('至少留一个人') };
+  if (names.some(name => !name)) return { ok: false, message: t('请填写每位成员的称呼，或移除空白行。') };
+  if (names.some(name => /[,，、\r\n]/.test(name))) return { ok: false, message: t('每行只填一个称呼，不需要逗号或顿号。') };
+  if (new Set(names).size !== names.length) return { ok: false, message: t('成员称呼不能重复，请换一个容易区分的称呼。') };
+  const r = parseOwners(names.join('\n'), t);
+  if (!r.ok) return { ok: false, message: r.error };
   await setOwners(r.owners);
   revalidatePath('/tasks', 'layout');
-  redirect('/settings?mOk=' + encodeURIComponent(t('已保存：{names}', { names: r.owners.join(t('、')) })) + '#members');
+  revalidatePath('/settings');
+  return { ok: true, message: t('已保存：{names}', { names: r.owners.join(t('、')) }) };
 }
 
 /**
