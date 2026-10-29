@@ -40,6 +40,7 @@ export default function ProviderFields({
   const [pid, setPid] = useState<ProviderId>(saved);
   const [url, setUrl] = useState(initialUrl);
   const [mdl, setMdl] = useState(model || (!baseUrl ? PROVIDERS.find(p=>p.id==='deepseek')!.model : ''));
+  const [key, setKey] = useState('');
 
   const preset = PROVIDERS.find((p) => p.id === pid);
   const switched = pid !== saved;
@@ -98,6 +99,8 @@ export default function ProviderFields({
         <input
           type="password"
           name="apiKey"
+          value={key}
+          onChange={event => setKey(event.target.value)}
           autoComplete="off"
           required={switched}
           // 显示打码后的值当占位符：留空提交就是「不改」。

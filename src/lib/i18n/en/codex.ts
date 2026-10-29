@@ -1,5 +1,11 @@
 import type { Dict } from '../core';
 export const codex: Dict = {
+  '请选择对话后端': 'Choose a chat backend.',
+  '对话推理强度无效': 'Invalid reasoning effort.',
+  'Codex 连接检查失败：': 'Codex connection check failed: ',
+  '选择后填写对应配置，保存成功后用于新对话。已有对话保留原后端，另一种后端的配置也会保留。': 'Choose a backend and configure it below. Save successfully to use it for new chats. Existing chats and the other backend configuration are preserved.',
+  '保存并用于新对话': 'Save and use for new chats',
+  '正在检查并保存…': 'Checking and saving…',
   '用于内置 Pi 和旧版 API 对话。填自己的 API Key，': 'Used by built-in Pi and legacy API chats. Enter your own API key; ',
   '当前新对话使用：{backend}': 'New chats currently use: {backend}',
   '切换查看配置不会改变当前后端；保存后，新对话使用所选后端，已有对话保持原来的后端和记忆。': 'Switching these tabs only previews settings. Save to select the backend for new chats; existing chats retain their backend and memory.',

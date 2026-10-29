@@ -17,9 +17,9 @@ export async function getCodexConfig() {
   const m=new Map(rows.map(r=>[r.key,r.value]));
   return {executable:m.get('codex.path') || process.env.SECRETARY_CODEX_PATH || '',model:m.get('codex.model') || '',effort:m.get('codex.effort') || 'medium',webSearchEnabled:true};
 }
-export async function openCodex({forChat=false}={}) {
+export async function openCodex({forChat=false,settings}:{forChat?:boolean;settings?:Awaited<ReturnType<typeof getCodexConfig>>}={}) {
   if (!localCodexEnabled()) throw new Error('Local Codex is disabled on this deployment.');
-  const cfg=await getCodexConfig();
+  const cfg=settings ?? await getCodexConfig();
   const cwd=path.resolve(UPLOAD_DIR,'../codex-workspace');await mkdir(cwd,{recursive:true});
   const webSearch=forChat&&cfg.webSearchEnabled?'live':'disabled';
   const client=new CodexConnection({executable:cfg.executable,cwd,webSearch});
@@ -34,8 +34,8 @@ export async function openCodex({forChat=false}={}) {
     return {client,cfg,cwd,config,webSearch,account:account.account};
   } catch(e) {client.close();throw e;}
 }
-export async function diagnoseCodex() {
-  const {client,cfg,account}=await openCodex();
+export async function diagnoseCodex(settings?:Awaited<ReturnType<typeof getCodexConfig>>) {
+  const {client,cfg,account}=await openCodex({settings});
   try {
     const models=await client.request('model/list',{});
     return {authMode:account.type,plan:account.planType || null,model:cfg.model || models.data?.find((m:any)=>m.isDefault)?.model || '',models:(models.data || []).map((m:any)=>({id:m.model,name:m.displayName,efforts:(m.supportedReasoningEfforts || []).map((e:any)=>e.reasoningEffort)}))};

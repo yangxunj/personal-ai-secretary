@@ -108,7 +108,7 @@ New installations use embedded Pi by default. Existing installations keep their 
 
 Without an AI backend, tasks and the vault can still be edited by hand.
 
-The current source offers two backend choices: embedded Pi and local Codex. A legacy API backend preference now resolves to Pi for new chats. Existing API conversations keep their backend and history; their model settings remain available under Pi model configuration.
+In the current source, Settings → AI settings offers radio choices for embedded Pi and local Codex, with only the selected configuration shown. Click **Save and use for new chats** to check connectivity and save the configuration and default backend together. Switching retains both drafts; failed checks preserve the previous backend and saved settings. A legacy API preference resolves to Pi for new chats. Existing API conversations keep their backend and history and use the Pi model configuration.
 
 In the current source, public web search is enabled for Pi and Codex, with no settings switches; legacy disabled settings no longer apply. AI searches when needed. Pi reuses the official DeepSeek chat key for Search/Fetch (up to six calls per turn, billed separately); custom model endpoints may use a dedicated search key in collapsed Advanced settings. Codex uses local sign-in and allowance. Titles, page generation and connection tests do not enable search. Released packages follow their versioned release notes.
 

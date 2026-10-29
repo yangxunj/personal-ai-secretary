@@ -61,7 +61,7 @@ export async function setAiConfig(input: {
   baseUrl?: string;
   apiKey?: string;
   model?: string;
-}): Promise<SaveResult> {
+}, options: { useForNewChats?: boolean } = {}): Promise<SaveResult> {
   const t = await getT();
   const writes: { key: string; value: string }[] = [];
 
@@ -86,6 +86,7 @@ export async function setAiConfig(input: {
   }
 
   if (!writes.length) return { ok: false, error: t('没有要改的内容') };
+  if (options.useForNewChats) writes.push({ key: 'ai.backend', value: 'pi' });
 
   await db.$transaction(
     writes.map((w) =>

@@ -11,7 +11,7 @@ import { getT, setLocale } from '@/lib/i18n/server';
 import { isLocale } from '@/lib/i18n/core';
 import { sessionIsCurrent } from '@/lib/auth';
 import { db } from '@/lib/db';
-import { diagnoseCodex, localCodexEnabled, openCodex } from '@/lib/codex/config';
+import { diagnoseCodex, getCodexConfig, localCodexEnabled, openCodex } from '@/lib/codex/config';
 import { denyRequest, runTurn } from '@/lib/codex/protocol.mjs';
 
 /**
@@ -175,30 +175,40 @@ export async function setLocaleAction(formData: FormData) {
 }
 
 
-export async function saveChatBackendAction(form:FormData) {
-  if(!(await sessionIsCurrent()))redirect('/login');
-  const t=await getT();
-  const backend=String(form.get('backend') || 'pi');
-  if(!['codex','pi'].includes(backend))throw new Error('Invalid backend');
-  if(backend==='codex') {
-    if(!localCodexEnabled())throw new Error('Local Codex is disabled');
-    const effort=String(form.get('codexEffort') || 'medium');
-    if(!['low','medium','high','xhigh'].includes(effort))throw new Error('Invalid effort');
-    for(const [key,value] of [['codex.path',String(form.get('codexPath') || '').trim()],['codex.model',String(form.get('codexModel') || '').trim()],['codex.effort',effort]]) {
-      await db.setting.upsert({where:{key},create:{key,value},update:{value}});
-    }
-    let problem='';
+export type HarnessSaveResult = { ok: boolean; message: string; backend?: 'pi' | 'codex' };
+
+/** Validate the selected configuration first, then save it and the default together. */
+export async function saveHarnessSettingsAction(_previous: HarnessSaveResult, form: FormData): Promise<HarnessSaveResult> {
+  if (!(await sessionIsCurrent())) redirect('/login');
+  const t = await getT();
+  const backend = String(form.get('backend') || '');
+  if (backend !== 'pi' && backend !== 'codex') return { ok: false, message: t('请选择对话后端') };
+  if (backend === 'pi') {
+    const current = await getAiConfig();
+    const input = { baseUrl: String(form.get('baseUrl') ?? '').trim(), model: String(form.get('model') ?? '').trim(), apiKey: String(form.get('apiKey') ?? '').replace(/\s+/g, '') };
+    if (input.apiKey && input.apiKey.length < 8) return { ok: false, message: t('API Key 看起来不完整') };
+    const candidate = { ...current, ...input, apiKey: input.apiKey || current.apiKey };
+    const tested = await testAiConfig(candidate);
+    if (!tested.ok) return { ok: false, message: tested.error };
+    const saved = await setAiConfig(input, { useForNewChats: true });
+    if (!saved.ok) return { ok: false, message: saved.error };
+  } else {
+    if (!localCodexEnabled()) return { ok: false, message: t('桌面版支持本机 Codex；本地源码运行需启用 ENABLE_LOCAL_CODEX。') };
+    const current = await getCodexConfig();
+    const candidate = { ...current, executable: String(form.get('codexPath') ?? current.executable).trim(), model: String(form.get('codexModel') ?? current.model).trim(), effort: String(form.get('codexEffort') ?? current.effort) };
+    if (!['low', 'medium', 'high', 'xhigh'].includes(candidate.effort)) return { ok: false, message: t('对话推理强度无效') };
     try {
-      const result=await diagnoseCodex();
-      const model=result.models.find((m:{id:string})=>m.id===result.model);
-      if(!model)throw new Error('Configured model is not in the installed Codex model catalog.');
-      if(!model.efforts.includes(effort))throw new Error('Configured reasoning effort is not supported by this model.');
-    }catch(e){problem=e instanceof Error?e.message:String(e);}
-    if(problem)redirect('/settings?aiE='+encodeURIComponent(t('Codex 配置已保存，连接检查失败：')+problem));
+      const result = await diagnoseCodex(candidate);
+      const model = result.models.find((m: { id: string }) => m.id === result.model);
+      if (!model) throw new Error('Configured model is not in the installed Codex model catalog.');
+      if (!model.efforts.includes(candidate.effort)) throw new Error('Configured reasoning effort is not supported by this model.');
+    } catch (error) { return { ok: false, message: t('Codex 连接检查失败：') + (error instanceof Error ? error.message : String(error)) }; }
+    const values = [['codex.path', candidate.executable], ['codex.model', candidate.model], ['codex.effort', candidate.effort], ['ai.backend', 'codex']];
+    await db.$transaction(values.map(([key, value]) => db.setting.upsert({ where: { key }, create: { key, value }, update: { value } })));
   }
-  await db.setting.upsert({where:{key:'ai.backend'},create:{key:'ai.backend',value:backend},update:{value:backend}});
-  revalidatePath('/chat','layout');
-  redirect('/settings?aiOk='+encodeURIComponent(t('已保存，新对话使用所选后端。')));
+  revalidatePath('/settings');
+  revalidatePath('/chat', 'layout');
+  return { ok: true, message: t('已保存，新对话使用所选后端。'), backend };
 }
 
 export async function testCodexAction() {

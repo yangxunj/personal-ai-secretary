@@ -12,12 +12,9 @@ import { getChatBackend, getCodexConfig, localCodexEnabled } from '@/lib/codex/c
 import {
   changePasswordAction,
   logoutAction,
-  saveAiConfigAction,
   saveAsrConfigAction,
   saveTtsConfigAction,
   saveRealtimeConfigAction,
-  testAiConfigAction,
-  resetAiConfigAction,
   saveOwnersAction,
   setLocaleAction,
 } from './actions';
@@ -61,7 +58,7 @@ export default async function SettingsPage({
           ai={<>
         {aiOk && <p role="status" className="text-[13px] text-emerald-600 dark:text-emerald-400">✓ {aiOk}</p>}
         {aiE && <p role="alert" className="text-[13px] text-red-500 leading-relaxed">{aiE}</p>}
-        <HarnessSettings backend={await getChatBackend()} enabled={localCodexEnabled()} config={await getCodexConfig()} searchConfigured={!!webSearch.apiKey}
+        <HarnessSettings backend={await getChatBackend()} enabled={localCodexEnabled()} config={await getCodexConfig()} searchConfigured={!!webSearch.apiKey} hasCustomAiConfig={ai.fromDb}
           piSettings={<>
         {/* ---------- 模型 ---------- */}
         <section className="surface border rounded-2xl p-4" style={{ borderColor: 'var(--border)' }}>
@@ -71,7 +68,7 @@ export default async function SettingsPage({
             <strong className="font-semibold">{t('保存后立刻生效，不用重启')}</strong>
             {t('。')}
           </p>
-          <form action={saveAiConfigAction} className="space-y-3">
+          <div className="space-y-3">
             <ProviderFields
               baseUrl={ai.baseUrl}
               model={ai.model}
@@ -84,34 +81,6 @@ export default async function SettingsPage({
                   : null
               }
             />
-
-            <button
-              type="submit"
-              className="w-full rounded-xl bg-brand-500 text-white py-2.5 text-[15px] active:opacity-80"
-            >
-              {t('保存并测试')}
-            </button>
-          </form>
-
-          <div className="flex gap-2 mt-2">
-            <form action={testAiConfigAction} className="flex-1">
-              <button
-                className="w-full rounded-xl border py-2 text-[13px] active:opacity-60"
-                style={{ borderColor: 'var(--border)' }}
-              >
-                {t('只测试当前配置')}
-              </button>
-            </form>
-            {ai.fromDb && (
-              <form action={resetAiConfigAction} className="flex-1">
-                <button
-                  className="w-full rounded-xl border py-2 text-[13px] active:opacity-60"
-                  style={{ borderColor: 'var(--border)' }}
-                >
-                  {t('恢复默认')}
-                </button>
-              </form>
-            )}
           </div>
 
           <p className="muted text-[11px] leading-relaxed mt-3">
