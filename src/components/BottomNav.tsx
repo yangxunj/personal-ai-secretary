@@ -20,7 +20,7 @@ export default function BottomNav({ badge }: { badge?: number }) {
       style={{ borderColor: 'var(--border)' }}
     >
       <div className="mx-auto max-w-2xl grid grid-cols-7">
-        {TABS.filter((t) => !('wideOnly' in t && t.wideOnly)).map((tab) => {
+        {TABS.filter((t) => !('wideOnly' in t && t.wideOnly)).slice(0, 6).map((tab) => {
           // 原来第一格是 '/'，要特判才不会匹配所有路径。现在没有 '/' 这一格了，
           // 统一按「正好相等，或者是它的子路径」判断：/tasks/123 高亮任务，
           // 而 /chat 不会被别的格子抢走。
@@ -44,6 +44,10 @@ export default function BottomNav({ badge }: { badge?: number }) {
             </Link>
           );
         })}
+        <Link href="/more" className="flex flex-col items-center gap-1 py-2.5 transition"
+          style={{ color: ['/more', '/files', '/pages', '/mail', '/collections'].some(path => pathname === path || pathname.startsWith(path + '/')) ? 'var(--color-brand-500)' : 'var(--muted)' }}>
+          <NavIcon name="page" className="h-[22px] w-[22px]" /><span className="text-[10px] font-medium">{t('更多')}</span>
+        </Link>
       </div>
     </nav>
   );

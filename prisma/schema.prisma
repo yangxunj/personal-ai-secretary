@@ -558,6 +558,43 @@ model Setting {
   updatedAt DateTime @updatedAt
 }
 
+/// User-configured collections. Existing specialist modules keep their own tables.
+model CustomCollection {
+  id          String @id @default(cuid())
+  definition  String
+  enabled     Boolean @default(true)
+  draft       Boolean @default(false)
+  version     Int @default(1)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  records     CustomRecord[]
+  versions    CustomCollectionVersion[]
+}
+
+model CustomRecord {
+  id           String @id @default(cuid())
+  collectionId String
+  collection   CustomCollection @relation(fields: [collectionId], references: [id], onDelete: Restrict)
+  title        String
+  data         String
+  searchText   String
+  archived     Boolean @default(false)
+  version      Int @default(1)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  @@index([collectionId, archived, createdAt])
+}
+
+model CustomCollectionVersion {
+  id           String @id @default(cuid())
+  collectionId String
+  collection   CustomCollection @relation(fields: [collectionId], references: [id], onDelete: Restrict)
+  version      Int
+  definition   String
+  createdAt    DateTime @default(now())
+  @@unique([collectionId, version])
+}
+
 /// 对话的压缩摘要。上下文快满时，把早期对话总结成一份，之后发给模型的是
 /// 「最新一份摘要 + firstKeptId 那条及以后的原文」。旧摘要不删：每次压缩都在上一份
 /// 基础上续写，留着能回查「当时总结成了什么」。算法移植自 pi-mono，见 lib/chat-context.ts

@@ -24,6 +24,7 @@ export const TABS = [
   // 手机上的入口在专题页底部，跟文稿一样。wideOnly 就是这个意思
   { href: '/pages', label: '页面', icon: 'page', wideOnly: true },
   { href: '/mail', label: '邮件', icon: 'mail', wideOnly: true },
+  { href: '/collections', label: '栏目', icon: 'page', wideOnly: true },
 ] as const satisfies readonly { href: string; label: string; icon: string; wideOnly?: boolean }[];
 
 export type TabIcon = (typeof TABS)[number]['icon'];

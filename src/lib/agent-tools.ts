@@ -48,6 +48,8 @@ const TX_CATEGORIES = [
  * 原件必须留：模型读错数字是常态，没有原件就没法回查。
  */
 export type ToolContext = {
+  /** Existing Codex threads cannot receive new dynamic tools on resume. */
+  collectionTools?: boolean;
   incoming: StoredFile[];
   /** 这一轮在哪个对话里。留档、做页面都要记下来，才找得回「当初是怎么说的」 */
   conversationId: string;

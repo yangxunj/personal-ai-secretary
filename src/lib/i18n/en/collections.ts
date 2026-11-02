@@ -1,0 +1,28 @@
+import type { Dict } from '../core';
+
+export const collections: Dict = {
+  '查找自定义栏目': 'Find custom collections', '读取栏目配置': 'Read collection definition', '查找栏目记录': 'Find collection records', '读取栏目记录': 'Read collection record', '更新栏目记录': 'Update collection record', '归档或恢复记录': 'Archive or restore record', '准备栏目草案': 'Prepare collection draft',
+  '搜索关联记录：{field}': 'Search related records: {field}',
+  '已保存': 'Saved', '短文本': 'Short text', '长文本': 'Long text', '数字': 'Number', '日期': 'Date', '单选选项': 'Single choice', '勾选': 'Checkbox', '关联记录': 'Related record', '名称': 'Name',
+  '栏目名称': 'Collection name', '栏目说明': 'Description', '默认视图': 'Default view', '表格': 'Table', '卡片': 'Cards', '字段配置': 'Fields', '字段 {n}': 'Field {n}', '字段名称': 'Field name', '字段类型': 'Field type',
+  '可选值（每行一个）': 'Choices (one per line)', '关联栏目': 'Related collection', '请选择': 'Please select', '未启用': 'Disabled', '必填': 'Required', '添加字段': 'Add field', '记录标题使用哪个字段': 'Record title field', '未命名字段': 'Unnamed field',
+  '启用栏目并显示在导航中': 'Enable collection and show it in navigation',
+  '字段最多 20 个。改显示名称保留原数据；使用中的字段暂不能删除或改变类型。日期字段不会自动生成提醒。': 'Up to 20 fields. Renaming a label keeps its data. Fields in use cannot yet be removed or have their types changed. Date fields do not create reminders automatically.',
+  '确认创建栏目': 'Confirm collection', '保存栏目': 'Save collection', '新建栏目': 'New collection', '自定义栏目': 'Custom collections',
+  '用字段配置自己的档案和记录，界面与 AI 共用同一份数据。关闭栏目保留数据，重新启用即可继续使用。': 'Configure fields for your own records. The interface and AI share the same data. Disabling a collection keeps its data; enable it again to continue.',
+  '新建空白栏目': 'Create a blank collection', '我的栏目': 'My collections', '还没有自定义栏目，可以先用下方模板试试。': 'No custom collections yet. Try a template below.', '待确认草案': 'Draft awaiting review', '已启用': 'Enabled', '审阅并确认': 'Review and confirm', '配置栏目': 'Configure collection', '停用': 'Disable', '启用': 'Enable', '从模板开始': 'Start from a template',
+  '创建两个空栏目，不包含示例记录，可以继续调整字段。': 'Creates two empty collections without sample records. You can customize their fields.', '使用模板': 'Use template',
+  '搜索关联记录': 'Search related records', '输入关键词查找关联记录': 'Search related records by keyword', '选择关联记录': 'Select a related record', '未填写': 'Not set', '原关联记录': 'Previously linked record',
+  '无法读取关联记录，请检查目标栏目是否启用。': 'Could not load related records. Check that the target collection is enabled.', '此记录已归档，恢复后可以编辑。': 'This record is archived. Restore it to edit.', '保存记录': 'Save record',
+  '这是 AI 提议的草案，尚未启用。请检查名称、字段和关联目标，确认后再创建。': 'This AI-proposed draft is not enabled. Review the name, fields and reference targets before confirming.',
+  '新增记录': 'Add record', '栏目尚未启用，请先在栏目目录中启用。': 'This collection is not enabled. Enable it in the collection directory first.', '返回栏目目录': 'Back to collections', '已归档': 'Archived', '是': 'Yes', '否': 'No', '关联不可用': 'Reference unavailable', '搜索栏目记录': 'Search collection records', '共 {n} 条记录': '{n} records', '查看使用中': 'View active records', '查看已归档': 'View archived records', '切换为卡片': 'Switch to cards', '切换为表格': 'Switch to table', '没有符合条件的记录。': 'No matching records.', '上一页': 'Previous', '下一页': 'Next', '恢复记录': 'Restore record', '归档记录': 'Archive record', '更多': 'More', '管理自己的栏目、字段、模板和启用状态。': 'Manage your collections, fields, templates and enabled status.', '管理栏目': 'Manage collections', '栏目': 'Collections',
+  '操作未完成，请稍后重试。': 'The operation could not be completed. Please try again.',
+  '请检查栏目名称、字段及选项；标题字段须为必填短文本，字段标识不可重复。': 'Check the collection name, fields and choices. The title must be a required short-text field, and field IDs must be unique.',
+  '请填写「{field}」。': 'Enter a value for “{field}”.', '「{field}」的内容不符合字段类型或可选值。': '“{field}” does not match its field type or allowed choices.', '记录包含未定义的字段，请重新读取栏目配置。': 'This record contains undefined fields. Read the collection definition again.', '栏目或记录不存在。': 'The collection or record does not exist.',
+  '数据或配置已被更新，请刷新后重试，避免覆盖他人的修改。': 'The data or definition has changed. Refresh before trying again to avoid overwriting another change.',
+  '已有记录使用这个字段，暂不能删除、改变类型或关联目标；可以修改显示名称。': 'Existing records use this field. Its type, reference target and removal are protected; you can rename its label.',
+  '关联记录不存在、已归档或所属栏目未启用。': 'The related record is missing, archived, or belongs to a disabled collection.',
+  '已达到试点上限：每个栏目最多 2000 条记录，最多 100 个栏目。': 'Pilot limit reached: up to 2,000 records per collection and 100 collections.', '筛选条件与字段类型不匹配。': 'The filter does not match the field type.', '请检查记录内容。': 'Check the record values.',
+  '客户跟进': 'Customer follow-up', '客户档案与联系记录，通过关联字段连接。': 'Customer profiles and contact logs connected by a reference field.', '客户档案': 'Customers', '客户名称': 'Customer name', '联系人': 'Contact person', '联系电话': 'Phone', '合作阶段': 'Relationship stage', '初次联系': 'Initial contact', '沟通中': 'In discussion', '已合作': 'Working together', '下次联系日期': 'Next contact date', '备注': 'Notes', '客户联系记录': 'Customer contact logs', '记录标题': 'Record title', '关联客户': 'Customer', '联系日期': 'Contact date', '沟通内容': 'Discussion notes',
+  '宠物档案': 'Pets', '宠物档案与照护记录，支持日期、体重及关联字段。': 'Pet profiles and care logs with dates, weight and related-record fields.', '宠物名字': 'Pet name', '种类': 'Species', '出生日期': 'Date of birth', '体重（千克）': 'Weight (kg)', '宠物照护记录': 'Pet care logs', '关联宠物': 'Pet', '记录日期': 'Record date', '照护类型': 'Care type', '疫苗': 'Vaccination', '就诊': 'Vet visit', '驱虫': 'Deworming', '日常照护': 'Daily care', '记录内容': 'Details',
+};

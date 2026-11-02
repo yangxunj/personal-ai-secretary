@@ -189,11 +189,13 @@ test('Codex tool profile binds the exact thread and never upgrades legacy tools 
   assert.equal(await hasCodexFileTools(conv.id,null),true);assert.equal(await hasCodexFileTools(conv.id,'old-thread'),false);
   await db.setting.create({data:{key:codexToolProfileKey(conv.id),value:JSON.stringify({version:1,threadId:'new-thread'})}});
   assert.equal(await hasCodexFileTools(conv.id,'old-thread'),false);assert.equal(await hasCodexFileTools(conv.id,'new-thread'),true);
-  assert.equal(await getCodexToolVersion(conv.id,null),3);assert.equal(await getCodexToolVersion(conv.id,'new-thread'),1);
+  assert.equal(await getCodexToolVersion(conv.id,null),4);assert.equal(await getCodexToolVersion(conv.id,'new-thread'),1);
   await db.setting.update({where:{key:codexToolProfileKey(conv.id)},data:{value:JSON.stringify({version:2,threadId:'v2-thread'})}});
   assert.equal(await getCodexToolVersion(conv.id,'new-thread'),0);assert.equal(await getCodexToolVersion(conv.id,'v2-thread'),2);
   await db.setting.update({where:{key:codexToolProfileKey(conv.id)},data:{value:JSON.stringify({version:3,threadId:'rich-thread'})}});
   assert.equal(await getCodexToolVersion(conv.id,'rich-thread'),3);assert.equal(await getCodexToolVersion(conv.id,'v2-thread'),0);
+  await db.setting.update({where:{key:codexToolProfileKey(conv.id)},data:{value:JSON.stringify({version:4,threadId:'collections-thread'})}});
+  assert.equal(await getCodexToolVersion(conv.id,'collections-thread'),4);assert.equal(await getCodexToolVersion(conv.id,'rich-thread'),0);
   await db.setting.update({where:{key:codexToolProfileKey(conv.id)},data:{value:'invalid json'}});assert.equal(await hasCodexFileTools(conv.id,'new-thread'),false);
 });
 

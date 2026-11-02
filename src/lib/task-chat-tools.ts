@@ -7,10 +7,12 @@ import { taskChatContext, lightTaskChatContext } from '@/lib/task-chat-context';
 import { recordDescriptor } from '@/lib/agent-text';
 import { taskPatch } from '@/lib/task-chat-scope.mjs';
 import { makeT } from '@/lib/i18n/core';
+import { buildCollectionTools } from '@/lib/collections/tools';
 
 /** The scope is supplied from the persisted Conversation, never from the model. */
 export function buildChatTools(ctx: ToolContext & { taskId?: string | null;progressiveRead?:boolean }) {
-  const base = buildAgentTools(ctx), taskId = ctx.taskId;
+  const taskId = ctx.taskId;
+  const base = { ...buildAgentTools(ctx), ...(!taskId && ctx.collectionTools !== false ? buildCollectionTools() : {}) };
   if (!taskId) {
     if(!ctx.progressiveRead)return base;
     return {...base,listTasks:tool({description:'Find tasks with short requirement/result previews. Use readBusinessSource with the returned IDs for complete text, continuation and citations.',inputSchema:base.listTasks.inputSchema,

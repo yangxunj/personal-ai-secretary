@@ -4,6 +4,7 @@ import SideNav from '@/components/SideNav';
 import TestBanner from '@/components/TestBanner';
 import { db } from '@/lib/db';
 import { sessionIsCurrent } from '@/lib/auth';
+import { listCollections } from '@/lib/collections/service';
 
 export const dynamic = 'force-dynamic';
 
@@ -13,7 +14,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   // 还有 30 天才过期的 cookie 照样能用，改了等于没改。
   if (!(await sessionIsCurrent())) redirect('/login');
 
-  const openTasks = await db.task.count({ where: { status: { in: ['todo', 'doing'] } } });
+  const [openTasks, collections] = await Promise.all([db.task.count({ where: { status: { in: ['todo', 'doing'] } } }), listCollections()]);
   return (
     // 一套代码两种骨架：窄屏（手机、桌面端窗口拖窄）走底栏 + 单列；
     // 宽屏（lg 起）走左侧栏 + 加宽的内容区。
@@ -22,7 +23,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     // Tailscale 让手机连回来，手机那套还得用。
     <div className="min-h-dvh">
       <TestBanner />
-      <SideNav badge={openTasks} />
+      <SideNav badge={openTasks} collections={collections.map(c => ({ id: c.id, title: c.definition.title }))} />
       {/* 侧栏是 fixed 的，所以内容区要自己让出那 224px */}
       <div className="lg:pl-56">
         {/* pb-24 是给底栏让位的，宽屏没有底栏就不用留 */}

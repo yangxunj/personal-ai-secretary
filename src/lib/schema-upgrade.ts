@@ -31,6 +31,17 @@ async function hasTable(table: string) {
 }
 
 const STEPS: Step[] = [
+  {
+    name: 'CustomCollections',
+    needed: async () => !(await hasTable('CustomCollection')) || !(await hasTable('CustomRecord')) || !(await hasTable('CustomCollectionVersion')),
+    sql: [
+      `CREATE TABLE IF NOT EXISTS "CustomCollection" ("id" TEXT NOT NULL PRIMARY KEY,"definition" TEXT NOT NULL,"enabled" BOOLEAN NOT NULL DEFAULT true,"draft" BOOLEAN NOT NULL DEFAULT false,"version" INTEGER NOT NULL DEFAULT 1,"createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,"updatedAt" DATETIME NOT NULL)`,
+      `CREATE TABLE IF NOT EXISTS "CustomRecord" ("id" TEXT NOT NULL PRIMARY KEY,"collectionId" TEXT NOT NULL,"title" TEXT NOT NULL,"data" TEXT NOT NULL,"searchText" TEXT NOT NULL,"archived" BOOLEAN NOT NULL DEFAULT false,"version" INTEGER NOT NULL DEFAULT 1,"createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,"updatedAt" DATETIME NOT NULL,CONSTRAINT "CustomRecord_collectionId_fkey" FOREIGN KEY ("collectionId") REFERENCES "CustomCollection"("id") ON DELETE RESTRICT ON UPDATE CASCADE)`,
+      `CREATE INDEX IF NOT EXISTS "CustomRecord_collectionId_archived_createdAt_idx" ON "CustomRecord"("collectionId","archived","createdAt")`,
+      `CREATE TABLE IF NOT EXISTS "CustomCollectionVersion" ("id" TEXT NOT NULL PRIMARY KEY,"collectionId" TEXT NOT NULL,"version" INTEGER NOT NULL,"definition" TEXT NOT NULL,"createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,CONSTRAINT "CustomCollectionVersion_collectionId_fkey" FOREIGN KEY ("collectionId") REFERENCES "CustomCollection"("id") ON DELETE RESTRICT ON UPDATE CASCADE)`,
+      `CREATE UNIQUE INDEX IF NOT EXISTS "CustomCollectionVersion_collectionId_version_key" ON "CustomCollectionVersion"("collectionId","version")`,
+    ],
+  },
   { name:'VoiceJob', needed:async()=>!(await hasTable('VoiceJob')), sql:[
     'CREATE TABLE "VoiceJob" ("id" TEXT PRIMARY KEY NOT NULL,"requestKey" TEXT NOT NULL,"conversationId" TEXT NOT NULL,"transcript" TEXT NOT NULL,"objective" TEXT NOT NULL,"status" TEXT NOT NULL DEFAULT \'queued\',"result" TEXT,"error" TEXT,"processKey" TEXT NOT NULL,"announcedAt" DATETIME,"createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,"updatedAt" DATETIME NOT NULL,FOREIGN KEY ("conversationId") REFERENCES "Conversation"("id") ON DELETE CASCADE ON UPDATE CASCADE)',
     'CREATE UNIQUE INDEX "VoiceJob_requestKey_key" ON "VoiceJob"("requestKey")',

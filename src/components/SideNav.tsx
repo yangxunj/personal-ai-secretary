@@ -17,7 +17,7 @@ import { useT } from '@/lib/i18n/client';
  * 常驻展开（图标 + 文字）而不是只留图标条：桌面上不缺这 200px，而带文字的
  * 导航对第一次打开的人友好得多 —— 七个图标里哪个是"专题"，猜不出来。
  */
-export default function SideNav({ badge }: { badge?: number }) {
+export default function SideNav({ badge, collections = [] }: { badge?: number; collections?: { id: string; title: string }[] }) {
   const pathname = usePathname();
   const t = useT();
   return (
@@ -31,7 +31,7 @@ export default function SideNav({ badge }: { badge?: number }) {
 
       <div className="flex-1 overflow-y-auto px-2 pb-4 space-y-0.5">
         {TABS.map((tab) => {
-          const active = pathname === tab.href || pathname.startsWith(tab.href + '/');
+          const active = pathname === tab.href || tab.href !== '/collections' && pathname.startsWith(tab.href + '/');
           return (
             <Link
               key={tab.href}
@@ -57,6 +57,10 @@ export default function SideNav({ badge }: { badge?: number }) {
             </Link>
           );
         })}
+        {collections.map(collection => <Link key={collection.id} href={'/collections/' + collection.id}
+          className={`block rounded-xl py-2 pl-11 pr-3 text-[13px] break-words ${pathname === '/collections/' + collection.id || pathname.startsWith('/collections/' + collection.id + '/') ? 'bg-brand-500/10 text-brand-500' : 'muted'}`}>
+          {collection.title}
+        </Link>)}
       </div>
 
       {/* 全局的三样：跟当前是哪一页无关，所以不放页头放这里 —— 位置永远不变，

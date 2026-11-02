@@ -48,6 +48,7 @@ Also:
 - **Topics**: an ongoing matter (renovation, buying a car) with its related tasks and a list of "things we haven't figured out yet".
 - **Phone access**: pair your phone by QR code on the same Wi-Fi and use it in the mobile browser. Add it to your home screen and it feels like an app.
 - **Household members**: tasks can be assigned to different people at home.
+- **Custom collections (source pilot)**: configure fields for profiles, contact logs or reading lists, with table/card views and related records. The UI, Pi and new Codex conversations share the same records. Start blank or use customer/pet templates. Open Collections in the sidebar, More on mobile, or General settings. This is not yet included in the v0.6.0-beta.4 packages; see the [guide](docs/可配置栏目.md).
 - **English / Chinese interface**: switch under Settings → Language.
 
 ## Historical voice modes (v0.5.0)

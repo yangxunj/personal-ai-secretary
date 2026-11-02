@@ -4,6 +4,7 @@ import { buildChatTools } from '@/lib/task-chat-tools';
 import { taskChatInstructions } from '@/lib/task-chat-context';
 import { intake } from '@/lib/chat-intake';
 import { systemPrompt } from '@/lib/system-prompt';
+import { COLLECTION_GUIDE } from '@/lib/collections/tools';
 import { getLocale, getT } from '@/lib/i18n/server';
 import { db } from '@/lib/db';
 import { sessionIsCurrent } from '@/lib/auth';
@@ -121,7 +122,7 @@ export async function runChat(req: Request, trusted?: { t: T; locale: Locale; di
 
   const result = streamText({
     model: chatModel,
-    system: systemPrompt(!!search, await getOwners(), locale) + taskInstructions + summaryBlock(ctx.summary),
+    system: systemPrompt(!!search, await getOwners(), locale) + taskInstructions + (!conv.taskId ? COLLECTION_GUIDE : '') + summaryBlock(ctx.summary),
     messages: modelMessages,
     // 页面由同一个模型另起一次调用来写，推理拉满（见 lib/page-builder.ts）
     tools: buildChatTools({ incoming, conversationId, taskId: conv.taskId, t, pageBuilder: { model: chatModel, locale, ...pageBuildOptions(cfg) } }),

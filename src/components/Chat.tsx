@@ -21,6 +21,14 @@ import { displayCursor, mergeDisplayMessages } from '@/components/chat/history-s
 
 /** 工具名 → 人话。工具卡片上显示它，用户不该看见 createTask 这种字眼 */
 const toolLabels = (t: T): Record<string, string> => ({
+  listCollections: t('查找自定义栏目'),
+  describeCollection: t('读取栏目配置'),
+  queryCollectionRecords: t('查找栏目记录'),
+  readCollectionRecord: t('读取栏目记录'),
+  createCollectionRecord: t('新增记录'),
+  updateCollectionRecord: t('更新栏目记录'),
+  archiveCollectionRecord: t('归档或恢复记录'),
+  proposeCollection: t('准备栏目草案'),
   listAttachments: t('查找已保存附件'),
   readAttachment: t('读取附件原文'),
   createOutputFile: t('生成下载文件'),

@@ -191,6 +191,11 @@ export default async function SettingsPage({
 
         {/* ---------- 家里的人 ---------- */}
         <FamilyMembersSettings owners={owners} />
+        <section className="surface border rounded-2xl p-4" style={{ borderColor: 'var(--border)' }}>
+          <h2 className="text-[15px] font-semibold mb-2">{t('自定义栏目')}</h2>
+          <p className="muted text-xs mb-3">{t('管理自己的栏目、字段、模板和启用状态。')}</p>
+          <Link href="/collections" className="text-sm text-brand-500 dark:text-brand-300">{t('管理栏目')}</Link>
+        </section>
 
           </>}
           connections={<>
