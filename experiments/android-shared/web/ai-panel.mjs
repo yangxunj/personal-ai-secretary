@@ -1,4 +1,5 @@
 import { runPilotAgent, demoModelRequest } from './pi-runtime.mjs';
+import { attachConversationPanel } from './conversation-panel.mjs';
 
 const nonce = () => Array.from(crypto.getRandomValues(new Uint8Array(12)), byte => byte.toString(16).padStart(2, '0')).join('');
 
@@ -12,6 +13,7 @@ export function attachAiPanel(document, host, records, definition, refresh, task
   const bridge = host.SecretaryStorage;
   const pending = new Map();
   let active;
+  const conversations = attachConversationPanel(document, bridge, nonce);
   const mode = () => document.querySelector('input[name="ai-mode"]:checked').value;
   const settingsChanged = () => { document.getElementById('key-state').textContent = bridge.hasApiKey?.() ? '已保存密钥；是否有效需实际请求确认。' : '尚未配置密钥。'; };
   host.SecretaryAI = {
@@ -45,6 +47,7 @@ export function attachAiPanel(document, host, records, definition, refresh, task
     document.getElementById('demo-guide').hidden = real;
     send.textContent = real ? '发送给 DeepSeek' : '运行离线演练';
     settingsChanged();
+    conversations.load(real ? 'deepseek' : 'demo');
   }
   for (const radio of document.querySelectorAll('input[name="ai-mode"]')) radio.addEventListener('change', showMode);
   document.getElementById('model-key').addEventListener('click', () => bridge.openModelSettings());
@@ -58,15 +61,20 @@ export function attachAiPanel(document, host, records, definition, refresh, task
     if (!prompt) { output.textContent = '请填写请求。'; return; }
     if (typeof structuredClone !== 'function') { output.textContent = '当前 WebView 版本过旧，请先更新 Android System WebView。'; return; }
     active = new AbortController();
+    conversations.busy(true);
     send.disabled = true; cancel.hidden = false;
     document.getElementById('model-key').disabled = true;
     for (const radio of document.querySelectorAll('input[name="ai-mode"]')) radio.disabled = true;
     output.textContent = real ? '正在连接 DeepSeek…' : '正在运行固定演练，不调用模型…';
     events.replaceChildren();
+    let started = false;
     try {
-      const result = await runPilotAgent({ prompt, records, definition, tasks,
-        modelRequest: real ? nativeRequest : demoModelRequest('tasks'), signal: active.signal, turnId: nonce(),
+      const turnId = nonce();
+      const history = conversations.begin(turnId, prompt); started = true;
+      const result = await runPilotAgent({ prompt, records, definition, tasks, history,
+        modelRequest: real ? nativeRequest : demoModelRequest('tasks'), signal: active.signal, turnId,
         onEvent(event) {
+          if (event.type === 'message_end') conversations.record(event.message);
           if (event.type === 'tool_execution_start' || event.type === 'tool_execution_end') {
             const item = document.createElement('li');
             const labels = { describeCollection: '读取栏目定义', readCollectionRecord: '读取记录', createCollectionRecord: '创建书单记录', updateCollectionRecord: '修改书单记录', createTask: '创建待办', listTasks: '查询待办', updateTask: '修改待办' };
@@ -76,13 +84,15 @@ export function attachAiPanel(document, host, records, definition, refresh, task
           }
         },
       });
+      conversations.finish(result.reply, true); started = false;
       output.textContent = result.reply;
-      if (real) document.getElementById('ai-prompt').value = '';
     } catch (error) {
-      output.textContent = (active.signal.aborted ? '本轮已取消。' : error.message || '本轮未完成。') + ' 已保存的工具结果保留，请先查看书单；请求草稿仍保留。';
+      if (started) try { conversations.finish('本轮未完整结束。', false); } catch { conversations.fail(); }
+      output.textContent = (active.signal.aborted ? '本轮已取消。' : error.message || '本轮未完成。') + ' 已保存的工具结果保留，请先查看待办和书单；请求草稿仍保留。';
     } finally {
       try { refresh(); } catch {}
-      active = undefined; send.disabled = false; cancel.hidden = true;
+      active = undefined; send.disabled = !conversations.healthy; cancel.hidden = true;
+      conversations.busy(false);
       document.getElementById('model-key').disabled = false;
       for (const radio of document.querySelectorAll('input[name="ai-mode"]')) radio.disabled = false;
     }

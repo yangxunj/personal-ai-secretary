@@ -131,4 +131,27 @@ public final class SharedPilotTest {
             catch (RecordStore.StoreError error) { assertEquals("conflict", error.code); }
         }
     }
+
+    @Test public void fourthVersionMigrationAndConversationConflictPreserveBusinessData() throws Exception {
+        try (SQLiteDatabase db = SQLiteDatabase.create(null)) {
+            db.execSQL("CREATE TABLE records (id TEXT PRIMARY KEY, data TEXT NOT NULL, created_at INTEGER NOT NULL, version INTEGER NOT NULL DEFAULT 1)");
+            db.execSQL("CREATE TABLE tool_receipts (call_id TEXT PRIMARY KEY, request_hash TEXT NOT NULL, result TEXT NOT NULL)");
+            TaskStore.createTable(db);
+            db.execSQL("INSERT INTO records VALUES ('kept', '{}', 1, 3)");
+            RecordStore.migrate(db, 4, 5);
+            String id = "test-chat";
+            JSONObject snapshot = new JSONObject().put("id", id).put("mode", "deepseek").put("schemaVersion", 1)
+                    .put("title", "保留会话").put("draft", "未发送草稿").put("turns", new JSONArray());
+            JSONObject saved = ConversationStore.save(db, id, 0, snapshot.toString());
+            assertEquals(1, saved.getInt("version"));
+            assertEquals("未发送草稿", ConversationStore.read(db, id).getJSONObject("snapshot").getString("draft"));
+            try { ConversationStore.save(db, id, 0, snapshot.toString()); fail("Stale snapshot accepted"); }
+            catch (RecordStore.StoreError error) { assertEquals("conflict", error.code); }
+            assertEquals(1, ConversationStore.list(db, "deepseek").length());
+            assertEquals(0, ConversationStore.list(db, "demo").length());
+            try (Cursor cursor = db.rawQuery("SELECT version FROM records WHERE id='kept'", null)) {
+                assertTrue(cursor.moveToFirst()); assertEquals(3, cursor.getInt(0));
+            }
+        }
+    }
 }

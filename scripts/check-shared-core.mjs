@@ -9,6 +9,8 @@ export const sharedEntries = [
   'src/lib/collections/tool-contracts.ts',
   'src/lib/tasks/contracts.ts',
   'src/lib/tasks/policy.ts',
+  'src/lib/pi/conversation.mjs',
+  'src/lib/pi/context-budget.mjs',
 ];
 const repository = fileURLToPath(new URL('../', import.meta.url));
 

@@ -4,6 +4,7 @@ import { prepareRecordWrite } from '../../../src/lib/collections/record-write.ts
 import { runPilotAgent, demoModelRequest } from './pi-runtime.mjs';
 import { attachAiPanel } from './ai-panel.mjs';
 import { createTasks, attachTaskPanel, taskPolicy } from './tasks.mjs';
+import * as conversation from '../../../src/lib/pi/conversation.mjs';
 
 export const definition = parseDefinition({
   title: '平板书单', view: 'cards', titleFieldId: 'name', fields: [
@@ -165,5 +166,5 @@ export function startPage(document, host) {
   attachAiPanel(document, host, records, definition, () => { refresh(); refreshTasks(); }, tasks);
 }
 
-globalThis.PilotCore = { definition, validateValues, prepareRecordWrite, runRuleChecks, createRecords, createTasks, taskPolicy, startPage, runPilotAgent, demoModelRequest };
+globalThis.PilotCore = { definition, validateValues, prepareRecordWrite, runRuleChecks, createRecords, createTasks, taskPolicy, conversation, startPage, runPilotAgent, demoModelRequest };
 if (typeof document !== 'undefined') startPage(document, globalThis);

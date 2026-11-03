@@ -1,13 +1,11 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
+import { estimateContextTokens as tokens } from './context-budget.mjs';
 import { InMemoryCredentialStore } from '@earendil-works/pi-ai';
 import { ModelRuntime, SessionManager, SettingsManager, createAgentSession, createExtensionRuntime } from '@earendil-works/pi-coding-agent';
 
 export const configFingerprint = cfg => createHash('sha256').update(cfg.baseUrl.replace(/\/+$/, '')+'\n'+cfg.model).digest('hex');
-// Conservative preflight for uploads/new prompts, before the first usage receipt.
-// Pi still owns compaction; this only rejects a single request that cannot fit.
-function tokens(value){const s=JSON.stringify(value);let wide=0;for(const ch of s)if(/[\u3000-\u9fff\uac00-\ud7af\uff00-\uffef]/u.test(ch))wide++;return wide+Math.ceil((s.length-wide)/3);}
 export async function openPiSession({ directory, cfg, instructions, tools, contextWindow = 128000, history = [], fetchImpl = fetch }) {
   if(!Number.isInteger(contextWindow)||contextWindow<8192||contextWindow>1000000)throw new Error('Pi context window must be between 8192 and 1000000');
   const url=new URL(cfg.baseUrl);

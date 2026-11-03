@@ -75,6 +75,19 @@ public final class MainActivity extends Activity {
     }
 
     private final class StorageBridge {
+        @JavascriptInterface public String listConversations(String mode) {
+            try { return new JSONObject().put("ok", true).put("data", store.listConversations(mode)).toString(); }
+            catch (Exception error) { return failure(); }
+        }
+        @JavascriptInterface public String readConversation(String id) {
+            try { JSONObject result = store.readConversation(id); return new JSONObject().put("ok", true).put("data", result == null ? JSONObject.NULL : result).toString(); }
+            catch (Exception error) { return failure(); }
+        }
+        @JavascriptInterface public String saveConversation(String id, int version, String data) {
+            try { return new JSONObject().put("ok", true).put("data", store.saveConversation(id, version, data)).toString(); }
+            catch (RecordStore.StoreError error) { return "{\"ok\":false,\"code\":\"conflict\"}"; }
+            catch (Exception error) { return failure(); }
+        }
         @JavascriptInterface public String listTasks(String plan) {
             try { return new JSONObject().put("ok", true).put("data", store.listTasks(plan)).toString(); }
             catch (Exception error) { return failure(); }

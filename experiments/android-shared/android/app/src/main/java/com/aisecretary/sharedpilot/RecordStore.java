@@ -14,12 +14,13 @@ import java.security.MessageDigest;
 
 /** Storage adapter only; field rules are executed by the shared TypeScript module. */
 final class RecordStore extends SQLiteOpenHelper {
-    RecordStore(Context context) { super(context, "shared-pilot.db", null, 4); }
+    RecordStore(Context context) { super(context, "shared-pilot.db", null, 5); }
 
     @Override public void onCreate(SQLiteDatabase db) {
         db.execSQL("CREATE TABLE records (id TEXT PRIMARY KEY, data TEXT NOT NULL, created_at INTEGER NOT NULL, version INTEGER NOT NULL DEFAULT 1)");
         createReceipts(db);
         TaskStore.createTable(db);
+        ConversationStore.createTable(db);
     }
 
     @Override public void onUpgrade(SQLiteDatabase db, int oldVersion, int newVersion) {
@@ -27,19 +28,11 @@ final class RecordStore extends SQLiteOpenHelper {
     }
 
     static void migrate(SQLiteDatabase db, int oldVersion, int newVersion) {
-        if (oldVersion == 1 && newVersion >= 2 && newVersion <= 4) {
-            db.execSQL("ALTER TABLE records ADD COLUMN version INTEGER NOT NULL DEFAULT 1");
-            if (newVersion >= 3) createReceipts(db);
-            if (newVersion == 4) TaskStore.createTable(db);
-            return;
-        }
-        if (oldVersion == 2 && newVersion >= 3 && newVersion <= 4) {
-            createReceipts(db);
-            if (newVersion == 4) TaskStore.createTable(db);
-            return;
-        }
-        if (oldVersion == 3 && newVersion == 4) {
-            TaskStore.createTable(db);
+        if (oldVersion >= 1 && oldVersion < newVersion && newVersion <= 5) {
+            if (oldVersion < 2 && newVersion >= 2) db.execSQL("ALTER TABLE records ADD COLUMN version INTEGER NOT NULL DEFAULT 1");
+            if (oldVersion < 3 && newVersion >= 3) createReceipts(db);
+            if (oldVersion < 4 && newVersion >= 4) TaskStore.createTable(db);
+            if (oldVersion < 5 && newVersion >= 5) ConversationStore.createTable(db);
             return;
         }
         // Refuse unknown migrations rather than deleting user records.
@@ -92,6 +85,15 @@ final class RecordStore extends SQLiteOpenHelper {
     }
 
     synchronized JSONArray listTasks(String plan) throws Exception { return TaskStore.list(getReadableDatabase(), plan); }
+    synchronized JSONArray listConversations(String mode) throws Exception { return ConversationStore.list(getReadableDatabase(), mode); }
+    synchronized JSONObject readConversation(String id) throws Exception { return ConversationStore.read(getReadableDatabase(), id); }
+    synchronized JSONObject saveConversation(String id, int version, String data) throws Exception {
+        SQLiteDatabase db = getWritableDatabase(); db.beginTransaction();
+        try {
+            JSONObject result = ConversationStore.save(db, id, version, data);
+            db.setTransactionSuccessful(); return result;
+        } finally { db.endTransaction(); }
+    }
     synchronized JSONObject readTask(String id) throws Exception { return TaskStore.read(getReadableDatabase(), id); }
     synchronized JSONObject writeTask(String serialized, String id, int version) throws Exception {
         SQLiteDatabase db = getWritableDatabase(); db.beginTransaction();

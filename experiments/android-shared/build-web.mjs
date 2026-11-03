@@ -52,10 +52,12 @@ const manifest = {
   sharedToolContractsSha256: hash(await readFile(path.join(root, 'src/lib/collections/tool-contracts.ts'))),
   taskContractsSha256: hash(await readFile(path.join(root, 'src/lib/tasks/contracts.ts'))),
   taskPolicySha256: hash(await readFile(path.join(root, 'src/lib/tasks/policy.ts'))),
+  conversationSha256: hash(await readFile(path.join(root, 'src/lib/pi/conversation.mjs'))),
+  contextBudgetSha256: hash(await readFile(path.join(root, 'src/lib/pi/context-budget.mjs'))),
   piAgentCoreVersion: piPackage.version,
   piAgentLoopSha256: hash(await readFile(path.join(root, 'node_modules/@earendil-works/pi-agent-core/dist/agent-loop.js'))),
   bundleSha256: hash(await readFile(path.join(output, 'pilot.js'))),
-  scope: 'Shared formal task and collection tools, upstream Pi, durable tool receipts; task UI + fixed-host DeepSeek; single turn, no session compaction.',
+  scope: 'Shared task/collection policies and context estimate; upstream Pi messages with versioned SQLite conversations; fixed DeepSeek, no automatic compaction.',
 };
 await writeFile(path.join(output, 'build-manifest.json'), JSON.stringify(manifest, null, 2) + '\n');
 const assets = path.join(directory, 'android/app/src/main/assets');
