@@ -66,6 +66,11 @@ public final class MainActivity extends Activity {
             try { return new JSONObject().put("ok", true).put("data", store.append(values)).toString(); }
             catch (Exception error) { return failure(); }
         }
+        @JavascriptInterface public String updateRecord(String id, int expectedVersion, String values) {
+            try { return new JSONObject().put("ok", true).put("data", store.update(id, expectedVersion, values)).toString(); }
+            catch (RecordStore.StoreError error) { return "{\"ok\":false,\"code\":\"conflict\"}"; }
+            catch (Exception error) { return failure(); }
+        }
         private String failure() { return "{\"ok\":false,\"error\":\"本地存储操作失败，请重试；已填写内容仍保留。\"}"; }
     }
 

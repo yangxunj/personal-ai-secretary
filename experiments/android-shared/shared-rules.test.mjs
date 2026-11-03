@@ -15,6 +15,10 @@ const compiled = ts.transpileModule(original, {
 const serverContext = vm.createContext({ exports: {}, require });
 vm.runInContext(compiled, serverContext);
 const server = serverContext.exports;
+const serviceUrl = new URL('../../src/lib/collections/record-write.ts', import.meta.url);
+const serviceContext = vm.createContext({ exports: {}, require: specifier => specifier === './schema' ? server : require(specifier) });
+vm.runInContext(ts.transpileModule(readFileSync(serviceUrl, 'utf8'), { compilerOptions: { target: ts.ScriptTarget.ES2020, module: ts.ModuleKind.CommonJS } }).outputText, serviceContext);
+const serverWrite = serviceContext.exports.prepareRecordWrite;
 const browser = vm.createContext({ console });
 vm.runInContext(readFileSync(new URL('web-dist/pilot.js', import.meta.url), 'utf8'), browser);
 const core = browser.PilotCore;
@@ -24,7 +28,8 @@ test('Android bundle contains the exact current shared source and its rules pass
   const manifest = JSON.parse(readFileSync(new URL('web-dist/build-manifest.json', import.meta.url), 'utf8'));
   assert.equal(manifest.sharedSourceSha256, createHash('sha256').update(readFileSync(sourceUrl)).digest('hex'));
   assert.equal(manifest.bundleSha256, createHash('sha256').update(readFileSync(new URL('web-dist/pilot.js', import.meta.url))).digest('hex'));
-  assert.equal(core.runRuleChecks().length, 6);
+  assert.equal(manifest.sharedServiceSha256, createHash('sha256').update(readFileSync(serviceUrl)).digest('hex'));
+  assert.equal(core.runRuleChecks().length, 8);
   assert.ok(core.runRuleChecks().every(row => row.passed));
 });
 
@@ -61,6 +66,40 @@ test('storage adapter receives normalized values rather than raw form input', ()
   const result = records.append({ name: ' 测试 ', status: '想读', date: '' });
   assert.equal(result.id, 'synthetic');
   assert.deepEqual(saved, { name: '测试', status: '想读' });
+});
+
+test('formal Node service and Android bundle share partial-update and conflict policy', () => {
+  const current = { values: { name: '原书名', status: '在读', date: '2024-02-29' }, version: 2, archived: false };
+  const definition = server.parseDefinition(plain(core.definition));
+  for (const patch of [{ name: ' 新书名 ' }, { date: '' }, { unknown: '拒绝' }, null]) {
+    const outcome = (write, def) => {
+      try { return plain(write(def, patch, current, 2)); }
+      catch (error) { return { code: error.code, field: error.field }; }
+    };
+    assert.deepEqual(outcome(serverWrite, definition), outcome(core.prepareRecordWrite, core.definition));
+  }
+  const updated = plain(core.prepareRecordWrite(core.definition, { name: '新书名' }, current, 2));
+  assert.deepEqual(updated.values, { name: '新书名', status: '在读', date: '2024-02-29' });
+  assert.equal(updated.searchText, '新书名\n2024-02-29\n在读');
+  for (const write of [serverWrite, core.prepareRecordWrite]) {
+    assert.throws(() => write(core.definition, { name: '覆盖' }, current, 1), error => error.code === 'conflict');
+    assert.throws(() => write(core.definition, { name: '覆盖' }, { ...current, archived: true }, 2), error => error.code === 'conflict');
+  }
+});
+
+test('Android edits preserve unmentioned fields and reject stale versions before writing', () => {
+  const rows = [{ id: 'old-record', values: { name: '旧版保留记录', status: '想读', date: '2024-02-29' }, version: 1 }];
+  let writes = 0;
+  const records = core.createRecords({
+    list: () => rows,
+    update(id, version, values) { writes++; rows[0] = { id, version: version + 1, values: plain(values) }; return rows[0]; },
+  });
+  const result = records.update('old-record', 1, { status: '读完' });
+  assert.equal(result.version, 2);
+  assert.equal(result.values.name, '旧版保留记录');
+  assert.equal(result.values.date, '2024-02-29');
+  assert.throws(() => records.update('old-record', 1, { name: '过期编辑' }), error => error.code === 'conflict');
+  assert.equal(writes, 1);
 });
 
 test('the local pilot package cannot silently enable networking or remote frames', () => {

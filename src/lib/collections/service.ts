@@ -1,5 +1,6 @@
 import { db, withDatabaseTransaction } from '@/lib/db';
 import { CollectionError, MAX_RECORDS, parseDefinition, validateValues, type CollectionDefinition, type CollectionInfo, type RecordValues } from './schema';
+import { prepareRecordWrite } from './record-write';
 
 const decode = (row: { id: string; definition: string; enabled: boolean; draft: boolean; version: number }): CollectionInfo => ({ ...row, definition: parseDefinition(JSON.parse(row.definition)) });
 export async function listCollections(manage = false): Promise<CollectionInfo[]> {
@@ -102,14 +103,12 @@ export async function writeRecord(collectionId: string, schemaVersion: number, v
     await lockCollection(collectionId);
     const collection = await getCollection(collectionId);
     if (collection.version !== schemaVersion) throw new CollectionError('conflict');
-    let current = id ? await db.customRecord.findFirst({ where: { id, collectionId } }) : null;
+    const current = id ? await db.customRecord.findFirst({ where: { id, collectionId } }) : null;
     if (id && !current) throw new CollectionError('missing');
-    if (current && (current.version !== expectedVersion || current.archived)) throw new CollectionError('conflict');
-    const patch = values && typeof values === 'object' && !Array.isArray(values) ? values : null;
-    if (!patch) throw new CollectionError('values');
-    const clean = validateValues(collection.definition, { ...(current ? JSON.parse(current.data) : {}), ...patch });
-    await checkReferences(collection.definition, clean);
-    const data = { data: JSON.stringify(clean), title: String(clean[collection.definition.titleFieldId]), searchText: Object.values(clean).join('\n') };
+    const prepared = prepareRecordWrite(collection.definition, values,
+      current ? { values: JSON.parse(current.data), version: current.version, archived: current.archived } : undefined, expectedVersion);
+    await checkReferences(collection.definition, prepared.values);
+    const data = { data: prepared.data, title: prepared.title, searchText: prepared.searchText };
     if (!current && await db.customRecord.count({ where: { collectionId } }) >= MAX_RECORDS) throw new CollectionError('limit');
     const row = current ? await db.customRecord.update({ where: { id: current.id }, data: { ...data, version: { increment: 1 } } }) : await db.customRecord.create({ data: { ...data, collectionId } });
     return { record: recordDto(row), schemaVersion: collection.version };

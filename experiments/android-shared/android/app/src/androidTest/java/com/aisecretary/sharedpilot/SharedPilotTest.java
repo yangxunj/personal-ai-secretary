@@ -9,6 +9,8 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import static org.junit.Assert.*;
 import android.webkit.WebView;
+import android.database.Cursor;
+import android.database.sqlite.SQLiteDatabase;
 import org.json.JSONArray;
 import org.json.JSONObject;
 import org.json.JSONTokener;
@@ -48,9 +50,16 @@ public final class SharedPilotTest {
             String payload = (String) new JSONTokener(evaluate(first, "JSON.stringify({checks:window.Pilot.runRuleChecks(),before:window.Pilot.count(),record:window.Pilot.append({name:'安卓自动验收记录',status:'想读'}),after:window.Pilot.count()})")).nextValue();
             JSONObject result = new JSONObject(payload);
             JSONArray checks = result.getJSONArray("checks");
-            assertEquals(6, checks.length());
+            assertEquals(8, checks.length());
             for (int i = 0; i < checks.length(); i++) assertTrue(checks.getJSONObject(i).getBoolean("passed"));
             assertEquals(result.getInt("before") + 1, result.getInt("after"));
+            JSONObject record = result.getJSONObject("record");
+            String editedPayload = (String) new JSONTokener(evaluate(first,
+                    "JSON.stringify(window.Pilot.update(" + JSONObject.quote(record.getString("id")) + ",1,{status:'读完'}))")).nextValue();
+            JSONObject edited = new JSONObject(editedPayload);
+            assertEquals(2, edited.getInt("version"));
+            assertEquals("安卓自动验收记录", edited.getJSONObject("values").getString("name"));
+            assertEquals("读完", edited.getJSONObject("values").getString("status"));
             int after = result.getInt("after");
             getInstrumentation().runOnMainSync(first::finish);
             getInstrumentation().waitForIdleSync();
@@ -58,5 +67,20 @@ public final class SharedPilotTest {
             try { assertEquals(String.valueOf(after), evaluate(second, "window.Pilot.count()")); }
             finally { getInstrumentation().runOnMainSync(second::finish); }
         } finally { getInstrumentation().runOnMainSync(first::finish); }
+    }
+
+    @Test public void legacySchemaMigrationPreservesRecords() throws Exception {
+        try (SQLiteDatabase db = SQLiteDatabase.create(null)) {
+            db.execSQL("CREATE TABLE records (id TEXT PRIMARY KEY, data TEXT NOT NULL, created_at INTEGER NOT NULL)");
+            db.execSQL("INSERT INTO records VALUES (?, ?, ?)", new Object[]{"legacy", "{\"name\":\"旧版书单\",\"status\":\"想读\"}", 1});
+            RecordStore.migrate(db, 1, 2);
+            try (Cursor cursor = db.rawQuery("SELECT id, data, version FROM records", null)) {
+                assertTrue(cursor.moveToFirst());
+                assertEquals("legacy", cursor.getString(0));
+                assertEquals("旧版书单", new JSONObject(cursor.getString(1)).getString("name"));
+                assertEquals(1, cursor.getInt(2));
+                assertFalse(cursor.moveToNext());
+            }
+        }
     }
 }

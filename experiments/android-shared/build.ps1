@@ -22,7 +22,8 @@ if ($Offline) { $gradleArguments += '--offline' }
 if ($LASTEXITCODE -ne 0) { throw 'Android build failed.' }
 $artifacts = Join-Path $pilotRoot 'artifacts'
 New-Item -ItemType Directory -Path $artifacts -Force | Out-Null
-$apk = Join-Path $artifacts 'secretary-shared-pilot-0.1.0.apk'
+$pilotConfig = Get-Content -LiteralPath (Join-Path $pilotRoot 'pilot-config.json') -Raw | ConvertFrom-Json
+$apk = Join-Path $artifacts ('secretary-shared-pilot-' + $pilotConfig.version + '.apk')
 Copy-Item -LiteralPath (Join-Path $androidRoot 'app/build/outputs/apk/debug/app-debug.apk') -Destination $apk
 Get-Item -LiteralPath $apk | Select-Object Name,Length
 Get-FileHash -LiteralPath $apk -Algorithm SHA256 | Format-List Algorithm,Hash,Path

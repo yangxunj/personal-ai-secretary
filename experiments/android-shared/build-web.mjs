@@ -12,6 +12,8 @@ const directory = fileURLToPath(new URL('.', import.meta.url));
 const root = path.resolve(directory, '../..');
 const output = path.join(directory, 'web-dist');
 const schema = 'src/lib/collections/schema.ts';
+const service = 'src/lib/collections/record-write.ts';
+const config = JSON.parse(await readFile(path.join(directory, 'pilot-config.json'), 'utf8'));
 await mkdir(output, { recursive: true });
 await new Promise((resolve, reject) => webpack({
   mode: 'production', target: ['web', 'es2020'], context: root,
@@ -19,6 +21,7 @@ await new Promise((resolve, reject) => webpack({
   output: { path: output, filename: 'pilot.js' },
   devtool: false,
   optimization: { minimize: false },
+  resolve: { extensions: ['.ts', '.js', '.mjs', '.json'] },
   module: { rules: [{ test: /\.ts$/, use: path.join(directory, 'typescript-loader.cjs') }] },
   plugins: [{ apply(compiler) {
     compiler.hooks.normalModuleFactory.tap('SharedBoundary', factory => {
@@ -34,13 +37,15 @@ await new Promise((resolve, reject) => webpack({
   console.log(stats.toString({ all: false, assets: true, errors: true, warnings: true }));
   resolve();
 }));
-for (const file of ['index.html', 'pilot.css']) await copyFile(path.join(directory, 'web', file), path.join(output, file));
+await writeFile(path.join(output, 'index.html'), (await readFile(path.join(directory, 'web/index.html'), 'utf8')).replaceAll('__PILOT_VERSION__', config.version));
+await copyFile(path.join(directory, 'web/pilot.css'), path.join(output, 'pilot.css'));
 const hash = bytes => createHash('sha256').update(bytes).digest('hex');
 const manifest = {
-  pilot: '0.1.0', sharedSource: schema,
+  pilot: config.version, sharedSource: schema,
   sharedSourceSha256: hash(await readFile(path.join(root, schema))),
+  sharedService: service, sharedServiceSha256: hash(await readFile(path.join(root, service))),
   bundleSha256: hash(await readFile(path.join(output, 'pilot.js'))),
-  scope: 'Local collection validation and SQLite persistence only; no AI or remote backend.',
+  scope: 'Shared record write policy, local SQLite create/update and version-1 upgrade; no AI or remote backend.',
 };
 await writeFile(path.join(output, 'build-manifest.json'), JSON.stringify(manifest, null, 2) + '\n');
 const assets = path.join(directory, 'android/app/src/main/assets');

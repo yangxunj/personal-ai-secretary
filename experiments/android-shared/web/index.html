@@ -9,7 +9,7 @@
   <script defer src="pilot.js"></script>
 </head>
 <body>
-  <header><span class="tag">安卓 · 独立试验版 0.1.0</span><h1>我的平板书单</h1><p>记录保存在这台设备，无需打开电脑。</p></header>
+  <header><span class="tag">安卓 · 独立试验版 __PILOT_VERSION__</span><h1>我的平板书单</h1><p>记录保存在这台设备，无需打开电脑。</p></header>
   <main>
     <section aria-labelledby="add-title">
       <h2 id="add-title">添加阅读记录</h2>
@@ -19,10 +19,11 @@
         <label>阅读状态<select id="status" name="status"><option>想读</option><option>在读</option><option>读完</option></select></label>
         <p id="message" role="status" aria-live="polite"></p>
         <button id="save" type="submit" disabled>保存到平板</button>
+        <button class="secondary" id="cancel-edit" type="button" hidden>取消编辑</button>
       </form>
     </section>
     <section aria-labelledby="list-title"><h2 id="list-title">已保存的书单 <span id="count">0</span></h2><p id="empty">还没有阅读记录。</p><ul id="records"></ul><button class="secondary" id="refresh" type="button">重新读取</button></section>
   </main>
-  <footer><p>这是共用业务逻辑与本地存储试验包。暂不包含 AI、电脑数据导入或跨设备同步；请只填写测试内容。卸载会删除本地试验记录。</p><details><summary>检查规则是否一致</summary><p>下方检查不会保存记录。</p><button class="secondary" id="verify" type="button">运行规则检查</button><pre id="checks" aria-live="polite"></pre></details></footer>
+  <footer><p>本版新增书单编辑，直接复用正式项目的记录写入逻辑。暂不包含 AI、电脑数据导入或跨设备同步；请只填写测试内容。卸载会删除本地试验记录。</p><details><summary>检查规则是否一致</summary><p>下方检查不会保存记录。</p><button class="secondary" id="verify" type="button">运行规则检查</button><pre id="checks" aria-live="polite"></pre></details></footer>
 </body>
 </html>
