@@ -1,6 +1,8 @@
 // This is the same module used by the existing web/Windows collection service.
 import { parseDefinition, validateValues, collectionError, CollectionError, MAX_RECORDS } from '../../../src/lib/collections/schema.ts';
 import { prepareRecordWrite } from '../../../src/lib/collections/record-write.ts';
+import { runPilotAgent, demoModelRequest } from './pi-runtime.mjs';
+import { attachAiPanel } from './ai-panel.mjs';
 
 export const definition = parseDefinition({
   title: '平板书单', view: 'cards', titleFieldId: 'name', fields: [
@@ -50,6 +52,23 @@ export function createRecords(storage) {
       const prepared = prepareRecordWrite(definition, input, { values: current.values, version: current.version, archived: false }, expectedVersion);
       return storage.update(id, expectedVersion, prepared.values);
     },
+    toolWrite(key, name, args) {
+      const signature = name + ':' + JSON.stringify(args);
+      const prior = storage.readReceipt(key, signature);
+      if (prior) return prior;
+      let operation;
+      if (name === 'createCollectionRecord') {
+        const prepared = prepareRecordWrite(definition, args.values);
+        if (storage.list().length >= MAX_RECORDS) throw new CollectionError('limit');
+        operation = { kind: 'create', values: prepared.values };
+      } else {
+        const current = storage.list().find(row => row.id === args.recordId);
+        if (!current) throw new CollectionError('missing');
+        const prepared = prepareRecordWrite(definition, args.values, { values: current.values, version: current.version, archived: false }, args.expectedVersion);
+        operation = { kind: 'update', id: args.recordId, expectedVersion: args.expectedVersion, values: prepared.values };
+      }
+      return storage.commitTool(key, signature, operation);
+    },
   };
 }
 
@@ -73,6 +92,8 @@ export function startPage(document, host) {
     list: () => decode(bridge.listRecords()),
     append: values => decode(bridge.appendRecord(JSON.stringify(values))),
     update: (id, version, values) => decode(bridge.updateRecord(id, version, JSON.stringify(values))),
+    readReceipt: (key, signature) => decode(bridge.readToolReceipt(key, signature)),
+    commitTool: (key, signature, operation) => decode(bridge.commitTool(key, signature, JSON.stringify(operation))),
   });
   const cancel = document.getElementById('cancel-edit');
   function finishEdit() {
@@ -125,7 +146,8 @@ export function startPage(document, host) {
   try { refresh(); save.disabled = false; } catch (error) { showError(error); }
   // Debug instrumentation exercises the actual WebView bundle and native SQLite bridge.
   host.Pilot = { runRuleChecks, count: () => records.list().length, list: () => records.list(), append: values => records.append(values), update: (id, version, values) => records.update(id, version, values) };
+  attachAiPanel(document, host, records, definition, refresh);
 }
 
-globalThis.PilotCore = { definition, validateValues, prepareRecordWrite, runRuleChecks, createRecords, startPage };
+globalThis.PilotCore = { definition, validateValues, prepareRecordWrite, runRuleChecks, createRecords, startPage, runPilotAgent, demoModelRequest };
 if (typeof document !== 'undefined') startPage(document, globalThis);

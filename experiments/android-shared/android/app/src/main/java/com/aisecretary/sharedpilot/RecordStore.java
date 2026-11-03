@@ -9,13 +9,16 @@ import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 import java.util.UUID;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 
 /** Storage adapter only; field rules are executed by the shared TypeScript module. */
 final class RecordStore extends SQLiteOpenHelper {
-    RecordStore(Context context) { super(context, "shared-pilot.db", null, 2); }
+    RecordStore(Context context) { super(context, "shared-pilot.db", null, 3); }
 
     @Override public void onCreate(SQLiteDatabase db) {
         db.execSQL("CREATE TABLE records (id TEXT PRIMARY KEY, data TEXT NOT NULL, created_at INTEGER NOT NULL, version INTEGER NOT NULL DEFAULT 1)");
+        createReceipts(db);
     }
 
     @Override public void onUpgrade(SQLiteDatabase db, int oldVersion, int newVersion) {
@@ -23,12 +26,60 @@ final class RecordStore extends SQLiteOpenHelper {
     }
 
     static void migrate(SQLiteDatabase db, int oldVersion, int newVersion) {
-        if (oldVersion == 1 && newVersion == 2) {
+        if (oldVersion == 1 && newVersion >= 2 && newVersion <= 3) {
             db.execSQL("ALTER TABLE records ADD COLUMN version INTEGER NOT NULL DEFAULT 1");
+            if (newVersion == 3) createReceipts(db);
+            return;
+        }
+        if (oldVersion == 2 && newVersion == 3) {
+            createReceipts(db);
             return;
         }
         // Refuse unknown migrations rather than deleting user records.
         throw new IllegalStateException("Unsupported pilot database version");
+    }
+
+    private static void createReceipts(SQLiteDatabase db) {
+        db.execSQL("CREATE TABLE tool_receipts (call_id TEXT PRIMARY KEY, request_hash TEXT NOT NULL, result TEXT NOT NULL)");
+    }
+
+    private static String fingerprint(String signature) throws Exception {
+        if (signature == null || signature.length() > 60000) throw new IllegalArgumentException("Invalid receipt signature");
+        byte[] digest = MessageDigest.getInstance("SHA-256").digest(signature.getBytes(StandardCharsets.UTF_8));
+        StringBuilder value = new StringBuilder();
+        for (byte item : digest) value.append(String.format(java.util.Locale.ROOT, "%02x", item & 255));
+        return value.toString();
+    }
+
+    synchronized JSONObject receipt(String key, String signature) throws Exception {
+        if (key == null || !key.matches("[a-zA-Z0-9:_.-]{1,200}")) throw new IllegalArgumentException("Invalid tool key");
+        try (Cursor cursor = getReadableDatabase().query("tool_receipts", new String[]{"request_hash", "result"}, "call_id = ?", new String[]{key}, null, null, null)) {
+            if (!cursor.moveToFirst()) return null;
+            if (!cursor.getString(0).equals(fingerprint(signature))) throw new StoreError("conflict");
+            return new JSONObject(cursor.getString(1));
+        }
+    }
+
+    synchronized JSONObject commitTool(String key, String signature, String serialized) throws Exception {
+        if (serialized == null || serialized.length() > 100000) throw new IllegalArgumentException("Invalid tool operation");
+        JSONObject operation = new JSONObject(serialized);
+        SQLiteDatabase db = getWritableDatabase();
+        db.beginTransaction();
+        try {
+            JSONObject result = receipt(key, signature);
+            if (result == null) {
+                String values = operation.getJSONObject("values").toString();
+                String kind = operation.getString("kind");
+                if ("create".equals(kind)) result = append(values);
+                else if ("update".equals(kind)) result = update(operation.getString("id"), operation.getInt("expectedVersion"), values);
+                else throw new IllegalArgumentException("Unknown tool operation");
+                ContentValues row = new ContentValues();
+                row.put("call_id", key); row.put("request_hash", fingerprint(signature)); row.put("result", result.toString());
+                db.insertOrThrow("tool_receipts", null, row);
+            }
+            db.setTransactionSuccessful();
+            return result;
+        } finally { db.endTransaction(); }
     }
 
     synchronized JSONObject append(String serialized) throws JSONException {

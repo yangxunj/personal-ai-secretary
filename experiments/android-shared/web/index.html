@@ -23,7 +23,25 @@
       </form>
     </section>
     <section aria-labelledby="list-title"><h2 id="list-title">已保存的书单 <span id="count">0</span></h2><p id="empty">还没有阅读记录。</p><ul id="records"></ul><button class="secondary" id="refresh" type="button">重新读取</button></section>
+    <section class="ai-panel" aria-labelledby="ai-title">
+      <h2 id="ai-title">书单助手（单轮试点）</h2>
+      <form id="ai-form">
+        <label class="mode-choice"><input type="radio" name="ai-mode" value="demo" checked>离线演练（不调用 AI 模型）</label>
+        <label class="mode-choice"><input type="radio" name="ai-mode" value="deepseek">DeepSeek Flash</label>
+        <p id="demo-guide">固定演练：读取栏目定义，再创建一条“Pi离线演练书单”。无需密钥，不产生 API 费用；这不是自然语言 AI 测试。</p>
+        <fieldset id="deepseek-fields" disabled hidden>
+          <p>使用你自己的 DeepSeek API Key，调用会按服务商规则计费。本轮请求、前 25 条书单及调用工具读取的记录会发送到 DeepSeek。模型回复一次性显示。</p>
+          <button class="secondary" id="model-key" type="button">设置模型密钥</button><p id="key-state"></p>
+          <label>交代一件事<textarea id="ai-prompt" rows="3" maxlength="1000" placeholder="例如：在书单里添加《小王子》，状态想读"></textarea></label>
+          <p>目前是单轮工具试点，每次请求独立；只操作这台平板的书单，不支持待办或完整秘书对话。</p>
+        </fieldset>
+        <button id="ai-send" type="submit">运行离线演练</button>
+        <button class="secondary" id="ai-cancel" type="button" hidden>取消本轮</button>
+      </form>
+      <ol id="ai-events" aria-label="工具执行结果"></ol>
+      <p id="ai-output" role="status" aria-live="polite"></p>
+    </section>
   </main>
-  <footer><p>本版新增书单编辑，直接复用正式项目的记录写入逻辑。暂不包含 AI、电脑数据导入或跨设备同步；请只填写测试内容。卸载会删除本地试验记录。</p><details><summary>检查规则是否一致</summary><p>下方检查不会保存记录。</p><button class="secondary" id="verify" type="button">运行规则检查</button><pre id="checks" aria-live="polite"></pre></details></footer>
+  <footer><p>本版增加 Pi 工具循环与 DeepSeek 单轮试点。没有电脑数据导入、附件或跨设备同步；请只填写测试内容。卸载会删除本地试验记录。</p><details><summary>检查规则是否一致</summary><p>下方检查不会保存记录。</p><button class="secondary" id="verify" type="button">运行规则检查</button><pre id="checks" aria-live="polite"></pre></details></footer>
 </body>
 </html>

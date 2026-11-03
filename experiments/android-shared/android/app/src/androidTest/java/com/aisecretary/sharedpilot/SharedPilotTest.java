@@ -17,6 +17,7 @@ import org.json.JSONTokener;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.UUID;
 
 /** Runs on Android; compiling this test is not a device-test pass. */
 @RunWith(AndroidJUnit4.class)
@@ -81,6 +82,38 @@ public final class SharedPilotTest {
                 assertEquals(1, cursor.getInt(2));
                 assertFalse(cursor.moveToNext());
             }
+        }
+    }
+
+    @Test public void secondVersionMigrationAddsReceiptsWithoutChangingRecords() throws Exception {
+        try (SQLiteDatabase db = SQLiteDatabase.create(null)) {
+            db.execSQL("CREATE TABLE records (id TEXT PRIMARY KEY, data TEXT NOT NULL, created_at INTEGER NOT NULL, version INTEGER NOT NULL DEFAULT 1)");
+            db.execSQL("INSERT INTO records VALUES (?, ?, ?, ?)", new Object[]{"v2", "{\"name\":\"第二版保留书单\",\"status\":\"在读\"}", 1, 4});
+            RecordStore.migrate(db, 2, 3);
+            try (Cursor cursor = db.rawQuery("SELECT data, version FROM records WHERE id = 'v2'", null)) {
+                assertTrue(cursor.moveToFirst());
+                assertEquals("第二版保留书单", new JSONObject(cursor.getString(0)).getString("name"));
+                assertEquals(4, cursor.getInt(1));
+            }
+            try (Cursor receipts = db.rawQuery("SELECT COUNT(*) FROM tool_receipts", null)) {
+                assertTrue(receipts.moveToFirst()); assertEquals(0, receipts.getInt(0));
+            }
+        }
+    }
+
+    @Test public void nativeReceiptPreventsDuplicateToolWrites() throws Exception {
+        try (RecordStore store = new RecordStore(getInstrumentation().getTargetContext())) {
+            String key = "test:" + UUID.randomUUID();
+            String signature = "synthetic-create";
+            JSONObject operation = new JSONObject().put("kind", "create").put("values", new JSONObject().put("name", "工具回执自动验收记录").put("status", "想读"));
+            int before = store.list().length();
+            JSONObject first = store.commitTool(key, signature, operation.toString());
+            JSONObject repeated = store.commitTool(key, signature, operation.toString());
+            assertEquals(first.getString("id"), repeated.getString("id"));
+            assertEquals(before + 1, store.list().length());
+            try { store.commitTool(key, "changed-signature", operation.toString()); fail("Changed arguments reused a receipt key"); }
+            catch (RecordStore.StoreError error) { assertEquals("conflict", error.code); }
+            assertEquals(before + 1, store.list().length());
         }
     }
 }

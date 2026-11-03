@@ -2,9 +2,9 @@
 
 入口：[整体路线](../../docs/安卓与多端共用路线.md)、[首阶段实施计划](../../docs/安卓首阶段实施计划.md)。
 
-M0/M1 本地最小链路完成：用户报告 `0.1.0-pilot` 所列手工测试全部通过。当前 `0.2.0-pilot` 新增编辑、SQLite 增量升级和版本保护，直接复用正式服务抽出的 `record-write.ts`；正式数据库、根目录依赖锁文件和用户资料未改动。
+M0/M1 完成，用户已报告 `0.1.0-pilot` 与 `0.2.0-pilot` 全部测试通过。当前 `0.3.0-pilot` 接入上游 Pi 循环、共用工具契约、安卓工具回执和原生 DeepSeek 单轮传输；正式数据库、根目录依赖锁文件和用户资料未改动。
 
-设备未连接开发机，继续由用户手工验收。[首包验收结果](../../docs/安卓首个试验包验收.md)、[第二版下载与覆盖升级步骤](../../docs/安卓第二版覆盖升级验收.md)、[技术决策](../../docs/安卓运行层技术决策.md)。M2 进行中，不把首包通过当成新版升级也已通过。
+设备未连接开发机，继续由用户手工验收。[首包结果](../../docs/安卓首个试验包验收.md)、[第二版结果](../../docs/安卓第二版覆盖升级验收.md)、[第三版下载与验收](../../docs/安卓第三版Pi与模型连接验收.md)、[技术决策](../../docs/安卓运行层技术决策.md)。M2 进行中，第三版的实际 Pi/模型结果不能沿用第二版的通过状态。
 
 ## 构建与验证
 
@@ -16,7 +16,7 @@ M0/M1 本地最小链路完成：用户报告 `0.1.0-pilot` 所列手工测试�
 
 脚本默认使用工程的 Gradle 8.9 Wrapper；需要时可显式传入 `-NodePath`、`-GradlePath`。首次构建会从官方仓库下载依赖；依赖齐备后可加 `-Offline`。本轮已用 Gradle 8.9 补齐在线依赖，并使用 Wrapper 完成最终离线构建。
 
-脚本执行共享网页构建、七项 Node/浏览器规则测试，并生成应用 APK 与设备测试 APK。交付 APK 在被忽略的 `artifacts/`，版本来自 `pilot-config.json`。不要将调试密钥、构建缓存、应用数据或本机 SDK 路径加入 Git。
+脚本执行共享网页构建、12 项共用/Pi 检查，并生成应用 APK 与设备测试 APK。交付 APK 在被忽略的 `artifacts/`，版本来自 `pilot-config.json`。不要将调试密钥、构建缓存、应用数据或本机 SDK 路径加入 Git。
 
 设备自动验收（尚未运行）：
 
@@ -24,7 +24,7 @@ M0/M1 本地最小链路完成：用户报告 `0.1.0-pilot` 所列手工测试�
 ./experiments/android-shared/android/gradlew.bat -p experiments/android-shared/android connectedDebugAndroidTest
 ```
 
-该测试会启动独立试验应用，添加/修改合成书单，检查实际 WebView 规则与 Activity 重开后的记录；另在 Android SQLite 内存数据库验证旧表迁移保留内容。测试包已编译，未执行；不能替代旧 APK 覆盖安装或用户实际数据文件升级。
+设备测试会添加/修改合成书单、检查 WebView 和 Activity 重开，在 Android SQLite 验证迁移及工具回执去重。测试包已编译，未执行；不能替代本轮手工验收。Android Lint 另可通过 `gradlew.bat -p experiments/android-shared/android :app:lintDebug` 运行，本轮无错误，仅剩启用 JS 的预期提醒。
 
 桌面布局预览可运行 `node experiments/android-shared/preview-server.mjs`，仅监听 `127.0.0.1:8465`。普通浏览器没有原生桥接，保存按钮默认禁用；开发验收用合成替身注入，不将替身打进 APK。
 
@@ -55,18 +55,20 @@ node experiments/android-shared/inventory.mjs
 
 ## 本轮完成与后续链路
 
-1. 共用 `schema.ts` 与 `record-write.ts`，包含字段校验、局部合并、版本/归档保护与标题/搜索文本准备；正式网页/Windows 服务与安卓从同一源码调用。
-2. 首包的安卓本地保存、重开与进程恢复已获用户通过反馈；第二版的编辑和真实数据库升级待验。
-3. 正式栏目服务 12 项集成测试（含 Pi）与 TypeScript 检查通过；下一步完成第二版实机升级，然后扩展共享应用服务及 AI 创建待办。
+1. 共用 `schema.ts`、`record-write.ts` 和四项 `tool-contracts.ts`。正式网页/Windows 与安卓没有复制参数和字段规则；正式服务的事务、引用校验与审计仍保留。
+2. 首包本地保存/重开/进程恢复与第二版真实覆盖升级/编辑均获用户通过反馈。
+3. 第三版直接调用 Pi 1.4.0 上游 `runAgentLoop`，窄入口只重导出纯 Pi AI 工具；TypeBox 使用官方解释模式，不开放动态代码执行。没有迁移完整 coding-agent 的持久会话或压缩。
+4. SQLite 版本3新增工具回执，与对应记录写入同事务提交。单轮最多4次模型请求/8次工具操作；默认固定演练免费，真实 DeepSeek 仅在用户选中并发送时调用。
+5. 原生密钥由 Android Keystore 加密，不向网页暴露；原生网络固定 DeepSeek HTTPS，不允许动态 URL。WebView 的网页连接仍由 CSP 阻止。没有在开发机读取真实密钥或调用真实收费模型。
 
 这比先搬全部页面更容易分清运行环境、数据库和业务逻辑各自的问题。候选路线与完整通过条件以首阶段计划为准。
 
 ## 环境与证据边界
 
-工具链为 Node 24.19.0、JDK 17.0.20.1、Android SDK/build-tools 34、platform-tools 37.0.1、Gradle 8.9、AGP 8.5.2。两版实际构建与签名验证通过、签名证书相同；用户手工验收首包通过。ADB 没有连接设备，开发者设备自动测试尚未运行。
+工具链为 Node 24.19.0、JDK 17.0.20.1、Android SDK/build-tools 34、platform-tools 37.0.1、Gradle 8.9、AGP 8.5.2。三版实际构建和签名验证通过、签名证书相同；用户手工验收前两版通过。ADB 没有连接设备，开发者设备自动测试尚未运行。第三版需要支持 `structuredClone` 的系统 WebView，过旧时提示更新。
 
-浏览器在独立 Edge/CDP 会话中检查了横竖屏、保存/编辑、版本冲突与保留草稿，截图已查看；存储使用合成替身。构建有 webpack 资源大小提示（第二版约 369 KiB，未压缩），当前是试验包，不作为正式性能验收。
+浏览器在独立 Edge/CDP 会话中检查了横竖屏、保存/编辑、版本冲突、Pi 固定演练、模型错误/取消、所选配置可见及草稿保留，截图已查看；原生存储/网络使用合成替身。构建有 webpack 资源大小提示（第三版约 1.06 MiB，未压缩），当前不是正式性能验收。
 
-APK 包含项目 AGPL 及 Zod MIT、AndroidX Apache 许可说明；不包含本机配置、用户资料、调试签名私钥或原生 `.so`。
+APK 包含项目 AGPL、Zod/Pi/TypeBox MIT、AndroidX Apache 许可说明；不包含本机配置、用户资料、调试签名私钥或原生 `.so`。许可原文 `licenses/pi-MIT.txt` 来自上游公开仓库；真正模型请求、Keystore 保存及设备回执执行仍待第三版验收。
 
 试验使用合成记录与独立测试目录。后续如增加 APK、编译缓存或测试凭据，需要先添加精确忽略规则；本目录不是存放正式数据库或用户密钥的位置。

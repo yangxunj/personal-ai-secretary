@@ -1,7 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-    <!-- Intentionally no INTERNET permission: this first pilot only uses local data. -->
-    <application android:label="秘书共用逻辑试验" android:allowBackup="false"
+    <!-- Only native fixed-host DeepSeek transport uses the network; WebView CSP blocks it. -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <application android:label="秘书共用逻辑试验" android:allowBackup="false" android:fullBackupContent="false"
+        android:dataExtractionRules="@xml/data_extraction_rules" android:icon="@drawable/pilot_icon"
         android:usesCleartextTraffic="false" android:theme="@android:style/Theme.Material.Light.NoActionBar">
         <activity android:name=".MainActivity" android:exported="true" android:windowSoftInputMode="adjustResize">
             <intent-filter>
