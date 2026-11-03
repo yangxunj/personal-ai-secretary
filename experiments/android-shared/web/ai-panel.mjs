@@ -2,7 +2,7 @@ import { runPilotAgent, demoModelRequest } from './pi-runtime.mjs';
 
 const nonce = () => Array.from(crypto.getRandomValues(new Uint8Array(12)), byte => byte.toString(16).padStart(2, '0')).join('');
 
-export function attachAiPanel(document, host, records, definition, refresh) {
+export function attachAiPanel(document, host, records, definition, refresh, tasks) {
   const form = document.getElementById('ai-form');
   const output = document.getElementById('ai-output');
   const events = document.getElementById('ai-events');
@@ -53,7 +53,7 @@ export function attachAiPanel(document, host, records, definition, refresh) {
   form.addEventListener('submit', async event => {
     event.preventDefault(); if (active) return;
     const real = mode() === 'deepseek';
-    const prompt = real ? document.getElementById('ai-prompt').value.trim() : '创建一条固定的离线演练书单。';
+    const prompt = real ? document.getElementById('ai-prompt').value.trim() : '创建一条固定的离线演练待办。';
     if (real && !bridge.hasApiKey?.()) { output.textContent = '请先设置你自己的 DeepSeek 密钥。'; return; }
     if (!prompt) { output.textContent = '请填写请求。'; return; }
     if (typeof structuredClone !== 'function') { output.textContent = '当前 WebView 版本过旧，请先更新 Android System WebView。'; return; }
@@ -64,12 +64,12 @@ export function attachAiPanel(document, host, records, definition, refresh) {
     output.textContent = real ? '正在连接 DeepSeek…' : '正在运行固定演练，不调用模型…';
     events.replaceChildren();
     try {
-      const result = await runPilotAgent({ prompt, records, definition,
-        modelRequest: real ? nativeRequest : demoModelRequest(), signal: active.signal, turnId: nonce(),
+      const result = await runPilotAgent({ prompt, records, definition, tasks,
+        modelRequest: real ? nativeRequest : demoModelRequest('tasks'), signal: active.signal, turnId: nonce(),
         onEvent(event) {
           if (event.type === 'tool_execution_start' || event.type === 'tool_execution_end') {
             const item = document.createElement('li');
-            const labels = { describeCollection: '读取栏目定义', readCollectionRecord: '读取记录', createCollectionRecord: '创建记录', updateCollectionRecord: '修改记录' };
+            const labels = { describeCollection: '读取栏目定义', readCollectionRecord: '读取记录', createCollectionRecord: '创建书单记录', updateCollectionRecord: '修改书单记录', createTask: '创建待办', listTasks: '查询待办', updateTask: '修改待办' };
             item.textContent = `${labels[event.toolName] || '工具操作'}：${event.type === 'tool_execution_start' ? '执行中' : event.isError ? '失败' : '已完成'}`;
             events.append(item);
             if (event.type === 'tool_execution_end') { try { refresh(); } catch {} }

@@ -29,7 +29,7 @@ test('Android bundle contains the exact current shared source and its rules pass
   assert.equal(manifest.sharedSourceSha256, createHash('sha256').update(readFileSync(sourceUrl)).digest('hex'));
   assert.equal(manifest.bundleSha256, createHash('sha256').update(readFileSync(new URL('web-dist/pilot.js', import.meta.url))).digest('hex'));
   assert.equal(manifest.sharedServiceSha256, createHash('sha256').update(readFileSync(serviceUrl)).digest('hex'));
-  assert.equal(core.runRuleChecks().length, 8);
+  assert.equal(core.runRuleChecks().length, 10);
   assert.ok(core.runRuleChecks().every(row => row.passed));
 });
 
@@ -185,4 +185,57 @@ test('model network access is explicit while browser connections and remote fram
   assert.match(manifest, /<uses-permission[^>]+android\.permission\.INTERNET/);
   assert.match(html, /connect-src 'none'/);
   assert.match(html, /frame-src 'none'/);
+});
+
+function taskFixture() {
+  const rows = [], receipts = new Map();
+  const storage = {
+    list: plan => rows.filter(row => plan.statuses.includes(row.status) && (!plan.category || row.category === plan.category) && (!plan.keyword || row.title.includes(plan.keyword))).slice(0, plan.limit),
+    read: id => rows.find(row => row.id === id),
+    create(data) { const row = { ...plain(data), id: 'task-' + rows.length, version: 1 }; rows.push(row); return row; },
+    update(id, version, patch) { const row = this.read(id); if (row.version !== version) throw new Error('conflict'); Object.assign(row, plain(patch), { version: version + 1 }); return row; },
+    readReceipt(key, signature) { const prior = receipts.get(key); if (prior && prior.signature !== signature) throw new Error('receipt mismatch'); return prior?.row; },
+    commitTool(key, signature, operation) { const row = operation.kind === 'task-create' ? this.create(operation.values) : this.update(operation.id, operation.expectedVersion, operation.values); receipts.set(key, { signature, row: plain(row) }); return row; },
+  };
+  return { rows, receipts, tasks: core.createTasks(storage) };
+}
+
+test('shared task policy preserves original text, default values and omitted patch fields', () => {
+  const created = plain(core.taskPolicy.prepareTaskCreate({ title: ' 原始标题 ', detail: '原始要求\nExact text', owner: '  测试成员  ', dueDate: '2026-11-09' }));
+  assert.deepEqual(created, { title: ' 原始标题 ', detail: '原始要求\nExact text', owner: '测试成员', dueDate: '2026-11-09T00:00:00.000Z', category: '其他', priority: 2, status: 'todo', result: null });
+  assert.deepEqual(plain(core.taskPolicy.prepareTaskUpdate({ id: 'task', status: 'done', owner: '' })), { status: 'done', owner: null });
+  assert.deepEqual(plain(core.taskPolicy.prepareTaskQuery({})), { statuses: ['todo','doing','blocked'], category: null, keyword: null, limit: 20 });
+  assert.throws(() => core.taskPolicy.prepareTaskCreate({ title: 'bad date', dueDate: 'invalid' }));
+  assert.throws(() => core.taskPolicy.prepareTaskQuery({ limit: 51 }));
+});
+
+test('upstream Pi creates, queries and completes a task through the same formal task contracts', async () => {
+  const fixture = taskFixture(), books = agentFixture(); let step = 0;
+  const result = await core.runPilotAgent({ prompt: 'create then finish', tasks: fixture.tasks, records: books.records, definition: core.definition, signal: new AbortController().signal, turnId: 'task-turn', modelRequest: async body => {
+    const call = (name, args) => ({ choices: [{ finish_reason: 'tool_calls', message: { content: null, tool_calls: [{ id: 'task-call-' + step, function: { name, arguments: JSON.stringify(args) } }] } }] });
+    step++;
+    if (step === 1) return call('createTask', { title: '明确任务要求', detail: '保留原文，不改写。' });
+    if (step === 2) return call('listTasks', { keyword: '明确任务要求' });
+    if (step === 3) {
+      const queried = JSON.parse(body.messages.filter(message => message.role === 'tool').at(-1).content);
+      assert.equal(queried.count, 1);
+      return call('updateTask', { id: queried.tasks[0].id, status: 'done', result: '完成' });
+    }
+    return { choices: [{ finish_reason: 'stop', message: { content: '已完成测试任务。' } }] };
+  } });
+  assert.equal(result.reply, '已完成测试任务。');
+  assert.equal(fixture.rows.length, 1);
+  assert.equal(fixture.rows[0].status, 'done'); assert.equal(fixture.rows[0].detail, '保留原文，不改写。');
+  assert.equal(fixture.tasks.list({}).length, 0); assert.equal(fixture.tasks.list({ status: 'done' }).length, 1);
+  assert.equal(fixture.receipts.size, 2); assert.equal(books.rows.length, 0);
+});
+
+test('offline task rehearsal and task receipt replay do not duplicate one tool write', async () => {
+  const fixture = taskFixture(), books = agentFixture();
+  const result = await core.runPilotAgent({ prompt: 'demo', tasks: fixture.tasks, records: books.records, definition: core.definition, signal: new AbortController().signal, turnId: 'task-demo', modelRequest: core.demoModelRequest('tasks') });
+  assert.match(result.reply, /创建并查到/); assert.equal(fixture.rows.length, 1);
+  const args = { title: '一次任务', detail: '保留' };
+  fixture.tasks.toolWrite('same:task', 'createTask', args); fixture.tasks.toolWrite('same:task', 'createTask', args);
+  assert.equal(fixture.rows.length, 2);
+  assert.throws(() => fixture.tasks.toolWrite('same:task', 'createTask', { title: '换内容' }), /mismatch/);
 });

@@ -7,6 +7,8 @@ import { buildDataTools } from '@/lib/data-tools';
 import { buildPageTools } from '@/lib/page-tools';
 import type { PageBuilder } from '@/lib/page-builder';
 import { makeT, type T } from '@/lib/i18n/core';
+import { taskToolContracts } from '@/lib/tasks/contracts';
+import { prepareTaskCreate, prepareTaskUpdate, prepareTaskQuery, taskPublicDto } from '@/lib/tasks/policy';
 
 /**
  * 网页里那个 AI 能调用的全部动作。
@@ -29,11 +31,9 @@ function refresh(...paths: string[]) {
   for (const p of paths) revalidatePath(p);
 }
 
-const CATEGORIES = ['健康', '保险', '出行', '教育', '财务', '证件', '居家', '其他'] as const;
 const VAULT_CATEGORIES = [
   '银行', '学校', '证件', '住址', '公用事业', '税务', '保险', '医疗', '会员', '工作', '其他',
 ] as const;
-const STATUSES = ['todo', 'doing', 'blocked', 'done', 'cancelled'] as const;
 const TX_CATEGORIES = [
   'fixed_cost', 'daily_life', 'tools_subscription', 'big_purchase',
   'salary', 'other_income', 'self_transfer', 'pass_through',
@@ -74,52 +74,28 @@ export function buildAgentTools({ incoming, conversationId, t = makeT(null), pag
     // ---------- 任务 ----------
 
     createTask: tool({
-      description:
-        '建一条待办。用户说「记一下」「别忘了」「下周要…」这类需要以后跟进的事就用它。' +
-        '只是想聊天或问问题不要建。',
-      inputSchema: z.object({
-        title: z.string().describe('一句话说清要做什么，别写成长段落'),
-        detail: z.string().optional().describe('补充说明：背景、具体要求、注意事项'),
-        category: z.enum(CATEGORIES).optional().describe('不确定就别填，默认「其他」'),
-        priority: z.number().int().min(1).max(3).optional().describe('1=高 2=中 3=低，默认 2'),
-        dueDate: z.string().optional().describe('截止日期，格式 2026-09-30。没有明确期限就别填'),
-        owner: z.string().optional().describe('谁来办。从系统提示里「家里的人」中选；用户没说是谁的事就别填'),
-      }),
-      async execute({ title, detail, category, priority, dueDate, owner }) {
+      ...taskToolContracts.createTask,
+      async execute(args) {
         const t = await db.task.create({
-          data: {
-            title,
-            detail: detail ?? null,
-            category: category ?? '其他',
-            priority: priority ?? 2,
-            dueDate: dueDate ? new Date(dueDate) : null,
-            owner: owner?.trim() || null,
-          },
+          data: prepareTaskCreate(args),
         });
         refresh('/tasks', '/chat');
-        return { ok: true, id: t.id, title: t.title, dueDate: dueDate ?? null, owner: t.owner };
+        return { ok: true, id: t.id, title: t.title, dueDate: args.dueDate ?? null, owner: t.owner };
       },
     }),
 
     listTasks: tool({
-      description:
-        '查待办。用户问「还有什么没做」「这周要干嘛」「那件事怎么样了」时用。' +
-        '默认只看没完成的。',
-      inputSchema: z.object({
-        status: z.enum(STATUSES).optional().describe('不填 = 所有未完成的（todo/doing/blocked）'),
-        category: z.enum(CATEGORIES).optional(),
-        keyword: z.string().optional().describe('按标题模糊搜'),
-        limit: z.number().int().min(1).max(50).optional(),
-      }),
-      async execute({ status, category, keyword, limit }) {
+      ...taskToolContracts.listTasks,
+      async execute(input) {
+        const plan = prepareTaskQuery(input);
         const tasks = await db.task.findMany({
           where: {
-            ...(status ? { status } : { status: { in: ['todo', 'doing', 'blocked'] } }),
-            ...(category ? { category } : {}),
-            ...(keyword ? { title: { contains: keyword } } : {}),
+            status: { in: plan.statuses },
+            ...(plan.category ? { category: plan.category } : {}),
+            ...(plan.keyword ? { title: { contains: plan.keyword } } : {}),
           },
           orderBy: [{ priority: 'asc' }, { dueDate: 'asc' }, { createdAt: 'desc' }],
-          take: limit ?? 20,
+          take: plan.limit,
           select: {
             id: true, title: true, detail: true, status: true,
             category: true, priority: true, dueDate: true, result: true, owner: true,
@@ -127,38 +103,20 @@ export function buildAgentTools({ incoming, conversationId, t = makeT(null), pag
         });
         return {
           count: tasks.length,
-          tasks: tasks.map((t) => ({
-            ...t,
-            dueDate: t.dueDate ? t.dueDate.toISOString().slice(0, 10) : null,
-          })),
+          tasks: tasks.map(taskPublicDto),
         };
       },
     }),
 
     updateTask: tool({
-      description:
-        '改一条待办：标记完成、改状态、补充处理结果。' +
-        '**先用 listTasks 拿到 id**，不要凭印象编 id。',
-      inputSchema: z.object({
-        id: z.string().describe('任务 id，从 listTasks 的结果里取'),
-        status: z.enum(STATUSES).optional(),
-        result: z.string().optional().describe('处理结果 / 交付说明'),
-        title: z.string().optional(),
-        detail: z.string().optional(),
-        priority: z.number().int().min(1).max(3).optional(),
-        dueDate: z.string().optional().describe('格式 2026-09-30'),
-        owner: z.string().optional().describe('改派给谁（「家里的人」里选）；传空字符串 = 取消指派'),
-      }),
-      async execute({ id, dueDate, owner, ...rest }) {
+      ...taskToolContracts.updateTask,
+      async execute(args) {
+        const { id } = args;
         const exists = await db.task.findUnique({ where: { id }, select: { id: true } });
         if (!exists) return { ok: false, error: `没有 id 为 ${id} 的任务，先用 listTasks 查一下` };
         const t = await db.task.update({
           where: { id },
-          data: {
-            ...Object.fromEntries(Object.entries(rest).filter(([, v]) => v !== undefined)),
-            ...(dueDate ? { dueDate: new Date(dueDate) } : {}),
-            ...(owner !== undefined ? { owner: owner.trim() || null } : {}),
-          },
+          data: prepareTaskUpdate(args),
         });
         refresh('/tasks', `/tasks/${id}`, '/chat');
         return { ok: true, id: t.id, title: t.title, status: t.status };

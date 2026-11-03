@@ -3,6 +3,7 @@ import { parseDefinition, validateValues, collectionError, CollectionError, MAX_
 import { prepareRecordWrite } from '../../../src/lib/collections/record-write.ts';
 import { runPilotAgent, demoModelRequest } from './pi-runtime.mjs';
 import { attachAiPanel } from './ai-panel.mjs';
+import { createTasks, attachTaskPanel, taskPolicy } from './tasks.mjs';
 
 export const definition = parseDefinition({
   title: '平板书单', view: 'cards', titleFieldId: 'name', fields: [
@@ -35,6 +36,12 @@ export function runRuleChecks() {
     catch (error) { conflict = error.code === 'conflict'; }
     checks.push({ name: '共用版本保护', passed: conflict });
   } catch { checks.push({ name: '共用写入模块', passed: false }); }
+  try {
+    const created = taskPolicy.prepareTaskCreate({ title: '保留原标题', detail: '保留原始要求' });
+    checks.push({ name: '共用待办默认值', passed: created.status === 'todo' && created.priority === 2 && created.dueDate === null && created.detail === '保留原始要求' });
+    const patch = taskPolicy.prepareTaskUpdate({ id: 'synthetic', status: 'done' });
+    checks.push({ name: '共用待办局部更新', passed: patch.status === 'done' && !('detail' in patch) && !('title' in patch) });
+  } catch { checks.push({ name: '共用待办模块', passed: false }); }
   return checks;
 }
 
@@ -146,8 +153,17 @@ export function startPage(document, host) {
   try { refresh(); save.disabled = false; } catch (error) { showError(error); }
   // Debug instrumentation exercises the actual WebView bundle and native SQLite bridge.
   host.Pilot = { runRuleChecks, count: () => records.list().length, list: () => records.list(), append: values => records.append(values), update: (id, version, values) => records.update(id, version, values) };
-  attachAiPanel(document, host, records, definition, refresh);
+  const tasks = createTasks({
+    list: plan => decode(bridge.listTasks(JSON.stringify(plan))), read: id => decode(bridge.readTask(id)),
+    create: data => decode(bridge.createTask(JSON.stringify(data))),
+    update: (id, version, patch) => decode(bridge.updateTask(id, version, JSON.stringify(patch))),
+    readReceipt: (key, signature) => decode(bridge.readToolReceipt(key, signature)),
+    commitTool: (key, signature, operation) => decode(bridge.commitTool(key, signature, JSON.stringify(operation))),
+  });
+  const refreshTasks = attachTaskPanel(document, tasks);
+  host.Pilot.tasks = tasks;
+  attachAiPanel(document, host, records, definition, () => { refresh(); refreshTasks(); }, tasks);
 }
 
-globalThis.PilotCore = { definition, validateValues, prepareRecordWrite, runRuleChecks, createRecords, startPage, runPilotAgent, demoModelRequest };
+globalThis.PilotCore = { definition, validateValues, prepareRecordWrite, runRuleChecks, createRecords, createTasks, taskPolicy, startPage, runPilotAgent, demoModelRequest };
 if (typeof document !== 'undefined') startPage(document, globalThis);

@@ -51,7 +51,7 @@ public final class SharedPilotTest {
             String payload = (String) new JSONTokener(evaluate(first, "JSON.stringify({checks:window.Pilot.runRuleChecks(),before:window.Pilot.count(),record:window.Pilot.append({name:'安卓自动验收记录',status:'想读'}),after:window.Pilot.count()})")).nextValue();
             JSONObject result = new JSONObject(payload);
             JSONArray checks = result.getJSONArray("checks");
-            assertEquals(8, checks.length());
+            assertEquals(10, checks.length());
             for (int i = 0; i < checks.length(); i++) assertTrue(checks.getJSONObject(i).getBoolean("passed"));
             assertEquals(result.getInt("before") + 1, result.getInt("after"));
             JSONObject record = result.getJSONObject("record");
@@ -114,6 +114,21 @@ public final class SharedPilotTest {
             try { store.commitTool(key, "changed-signature", operation.toString()); fail("Changed arguments reused a receipt key"); }
             catch (RecordStore.StoreError error) { assertEquals("conflict", error.code); }
             assertEquals(before + 1, store.list().length());
+        }
+    }
+
+    @Test public void tasksAreSeparateAndPartialUpdatesKeepRequirements() throws Exception {
+        try (RecordStore store = new RecordStore(getInstrumentation().getTargetContext())) {
+            int booksBefore = store.list().length();
+            JSONObject data = new JSONObject().put("title", "安卓任务自动验收").put("detail", "保留原始要求")
+                    .put("category", "其他").put("priority", 2).put("status", "todo").put("owner", JSONObject.NULL).put("dueDate", JSONObject.NULL).put("result", JSONObject.NULL);
+            JSONObject task = store.writeTask(data.toString(), null, 0);
+            JSONObject patch = new JSONObject().put("status", "done");
+            JSONObject updated = store.writeTask(patch.toString(), task.getString("id"), 1);
+            assertEquals("保留原始要求", updated.getString("detail")); assertEquals("done", updated.getString("status"));
+            assertEquals(booksBefore, store.list().length());
+            try { store.writeTask(patch.toString(), task.getString("id"), 1); fail("Stale task update accepted"); }
+            catch (RecordStore.StoreError error) { assertEquals("conflict", error.code); }
         }
     }
 }

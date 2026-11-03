@@ -9,8 +9,26 @@
   <script defer src="pilot.js"></script>
 </head>
 <body>
-  <header><span class="tag">安卓 · 独立试验版 __PILOT_VERSION__</span><h1>我的平板书单</h1><p>记录保存在这台设备，无需打开电脑。</p></header>
+  <header><span class="tag">安卓 · 独立试验版 __PILOT_VERSION__</span><h1>我的平板秘书</h1><p>记录保存在这台设备，无需打开电脑。</p></header>
   <main>
+    <section class="task-panel" aria-labelledby="tasks-title">
+      <h2 id="tasks-title">我的待办</h2>
+      <div class="task-grid">
+        <form id="task-form">
+          <label>要做什么<input id="task-title" required maxlength="200" autocomplete="off" placeholder="例如：预约下周的牙科检查"></label>
+          <label>原始要求<textarea id="task-detail" rows="3" maxlength="2000" placeholder="具体要求会按原文保存"></textarea></label>
+          <label>截止日期<input id="task-due" type="date"></label>
+          <p id="task-message" role="status" aria-live="polite"></p>
+          <button id="task-save" type="submit">保存待办</button>
+        </form>
+        <div>
+          <label>查看范围<select id="task-filter"><option value="">未完成（待办／进行中／卡住了）</option></select></label>
+          <p>本次显示 <span id="task-count">0</span> 条，最多 50 条；默认按优先级、截止日期排序。</p>
+          <p id="tasks-empty">这个范围暂时没有待办。</p><ul id="tasks"></ul>
+          <button id="task-refresh" class="secondary" type="button">重读待办</button>
+        </div>
+      </div>
+    </section>
     <section aria-labelledby="add-title">
       <h2 id="add-title">添加阅读记录</h2>
       <form id="record-form">
@@ -24,16 +42,16 @@
     </section>
     <section aria-labelledby="list-title"><h2 id="list-title">已保存的书单 <span id="count">0</span></h2><p id="empty">还没有阅读记录。</p><ul id="records"></ul><button class="secondary" id="refresh" type="button">重新读取</button></section>
     <section class="ai-panel" aria-labelledby="ai-title">
-      <h2 id="ai-title">书单助手（单轮试点）</h2>
+      <h2 id="ai-title">秘书助手（待办与书单试点）</h2>
       <form id="ai-form">
         <label class="mode-choice"><input type="radio" name="ai-mode" value="demo" checked>离线演练（不调用 AI 模型）</label>
         <label class="mode-choice"><input type="radio" name="ai-mode" value="deepseek">DeepSeek Flash</label>
-        <p id="demo-guide">固定演练：读取栏目定义，再创建一条“Pi离线演练书单”。无需密钥，不产生 API 费用；这不是自然语言 AI 测试。</p>
+        <p id="demo-guide">固定演练：创建一条“安卓待办演练”，再查询确认。无需密钥，不产生 API 费用；这不是自然语言 AI 测试。</p>
         <fieldset id="deepseek-fields" disabled hidden>
-          <p>使用你自己的 DeepSeek API Key，调用会按服务商规则计费。本轮请求、前 25 条书单及调用工具读取的记录会发送到 DeepSeek。模型回复一次性显示。</p>
+          <p>使用你自己的 DeepSeek API Key，调用会按服务商规则计费。本轮请求、前 25 条书单及工具查询的待办／书单会发送到 DeepSeek。模型回复一次性显示。</p>
           <button class="secondary" id="model-key" type="button">设置模型密钥</button><p id="key-state"></p>
-          <label>交代一件事<textarea id="ai-prompt" rows="3" maxlength="1000" placeholder="例如：在书单里添加《小王子》，状态想读"></textarea></label>
-          <p>目前是单轮工具试点，每次请求独立；只操作这台平板的书单，不支持待办或完整秘书对话。</p>
+          <label>交代一件事<textarea id="ai-prompt" rows="3" maxlength="1000" placeholder="例如：帮我建一条待办，周五前预约牙科检查"></textarea></label>
+          <p>每次请求独立，支持这台平板的待办和书单；暂不支持完整持久对话、附件、专题或同步。</p>
         </fieldset>
         <button id="ai-send" type="submit">运行离线演练</button>
         <button class="secondary" id="ai-cancel" type="button" hidden>取消本轮</button>
@@ -42,6 +60,6 @@
       <p id="ai-output" role="status" aria-live="polite"></p>
     </section>
   </main>
-  <footer><p>本版增加 Pi 工具循环与 DeepSeek 单轮试点。没有电脑数据导入、附件或跨设备同步；请只填写测试内容。卸载会删除本地试验记录。</p><details><summary>检查规则是否一致</summary><p>下方检查不会保存记录。</p><button class="secondary" id="verify" type="button">运行规则检查</button><pre id="checks" aria-live="polite"></pre></details></footer>
+  <footer><p>本版接入共用待办业务与 Pi 工具。没有电脑数据导入、附件或跨设备同步；请只填写测试内容。卸载会删除本地试验记录。</p><details><summary>检查规则是否一致</summary><p>下方检查不会保存记录。</p><button class="secondary" id="verify" type="button">运行规则检查</button><pre id="checks" aria-live="polite"></pre></details></footer>
 </body>
 </html>

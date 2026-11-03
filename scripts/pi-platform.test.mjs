@@ -390,3 +390,24 @@ test('backup and restore carry the Pi mapping and session together with the isol
   await db.codexTurn.create({data:{conversationId:conv.id,requestKey:'busy-backup',inputHash:'x',processKey:'test',status:'running'}});
   assert.throws(()=>execFileSync(process.execPath,[path.join(root,'scripts/backup.mjs'),'--plain'],{cwd:root,env,stdio:'pipe'}),/Command failed/);
 });
+
+test('shared general task contracts preserve exact requirements, defaults, query scope and partial updates in the real store',async()=>{
+  const {taskToolContracts}=await import('../src/lib/tasks/contracts.ts');
+  const tools=buildChatTools({incoming:[],conversationId:'task-shared-test',collectionTools:false});
+  assert.equal(tools.createTask.inputSchema,taskToolContracts.createTask.inputSchema);
+  assert.equal(tools.updateTask.inputSchema,taskToolContracts.updateTask.inputSchema);
+  const title='TASK-SHARED- 原始标题 ',detail='保留原文\nDo not translate or rewrite.';
+  const created=await call(tools.createTask,{title,detail,owner:'  测试成员  ',dueDate:'2026-11-09'});
+  const before=await db.task.findUniqueOrThrow({where:{id:created.id}});
+  assert.equal(before.title,title);assert.equal(before.detail,detail);assert.equal(before.owner,'测试成员');
+  assert.equal(before.status,'todo');assert.equal(before.category,'其他');assert.equal(before.priority,2);
+  assert.equal(before.dueDate.toISOString(),'2026-11-09T00:00:00.000Z');
+  assert.equal((await call(tools.listTasks,{keyword:'TASK-SHARED-'})).count,1);
+  await call(tools.updateTask,{id:created.id,status:'done',result:'完成结果',owner:''});
+  const after=await db.task.findUniqueOrThrow({where:{id:created.id}});
+  assert.equal(after.title,title);assert.equal(after.detail,detail);assert.equal(after.owner,null);
+  assert.equal(after.dueDate.toISOString(),before.dueDate.toISOString());assert.equal(after.result,'完成结果');
+  assert.equal((await call(tools.listTasks,{keyword:'TASK-SHARED-'})).count,0);
+  const done=await call(tools.listTasks,{keyword:'TASK-SHARED-',status:'done'});assert.equal(done.count,1);assert.equal(done.tasks[0].dueDate,'2026-11-09');
+  assert.equal((await call(tools.updateTask,{id:'synthetic-missing',status:'done'})).ok,false);
+});

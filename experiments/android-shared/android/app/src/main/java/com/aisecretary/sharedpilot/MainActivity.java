@@ -75,6 +75,23 @@ public final class MainActivity extends Activity {
     }
 
     private final class StorageBridge {
+        @JavascriptInterface public String listTasks(String plan) {
+            try { return new JSONObject().put("ok", true).put("data", store.listTasks(plan)).toString(); }
+            catch (Exception error) { return failure(); }
+        }
+        @JavascriptInterface public String readTask(String id) {
+            try { JSONObject task = store.readTask(id); return new JSONObject().put("ok", true).put("data", task == null ? JSONObject.NULL : task).toString(); }
+            catch (Exception error) { return failure(); }
+        }
+        @JavascriptInterface public String createTask(String data) {
+            try { return new JSONObject().put("ok", true).put("data", store.writeTask(data, null, 0)).toString(); }
+            catch (Exception error) { return failure(); }
+        }
+        @JavascriptInterface public String updateTask(String id, int version, String patch) {
+            try { return new JSONObject().put("ok", true).put("data", store.writeTask(patch, id, version)).toString(); }
+            catch (RecordStore.StoreError error) { return "{\"ok\":false,\"code\":\"conflict\"}"; }
+            catch (Exception error) { return failure(); }
+        }
         @JavascriptInterface public boolean hasApiKey() { return modelClient.hasKey(); }
         @JavascriptInterface public void openModelSettings() { modelClient.showSettings(); }
         @JavascriptInterface public void beginModelRequest(String id, String payload) { modelClient.start(id, payload); }

@@ -47,10 +47,12 @@ const manifest = {
   sharedSourceSha256: hash(await readFile(path.join(root, schema))),
   sharedService: service, sharedServiceSha256: hash(await readFile(path.join(root, service))),
   sharedToolContractsSha256: hash(await readFile(path.join(root, 'src/lib/collections/tool-contracts.ts'))),
+  taskContractsSha256: hash(await readFile(path.join(root, 'src/lib/tasks/contracts.ts'))),
+  taskPolicySha256: hash(await readFile(path.join(root, 'src/lib/tasks/policy.ts'))),
   piAgentCoreVersion: piPackage.version,
   piAgentLoopSha256: hash(await readFile(path.join(root, 'node_modules/@earendil-works/pi-agent-core/dist/agent-loop.js'))),
   bundleSha256: hash(await readFile(path.join(output, 'pilot.js'))),
-  scope: 'Upstream Pi loop, shared collection tools, durable tool receipts; offline rehearsal or native fixed-host DeepSeek Flash; single turn, no session compaction.',
+  scope: 'Shared formal task and collection tools, upstream Pi, durable tool receipts; task UI + fixed-host DeepSeek; single turn, no session compaction.',
 };
 await writeFile(path.join(output, 'build-manifest.json'), JSON.stringify(manifest, null, 2) + '\n');
 const assets = path.join(directory, 'android/app/src/main/assets');
