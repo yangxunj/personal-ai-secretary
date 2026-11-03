@@ -3,6 +3,7 @@ import { mkdir, readFile, writeFile, copyFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { checkSharedCore } from '../../scripts/check-shared-core.mjs';
 
 const require = createRequire(import.meta.url);
 const compiled = require('next/dist/compiled/webpack/webpack');
@@ -10,6 +11,7 @@ compiled.init();
 const webpack = compiled.webpack;
 const directory = fileURLToPath(new URL('.', import.meta.url));
 const root = path.resolve(directory, '../..');
+const sharedBoundary = checkSharedCore(root);
 const output = path.join(directory, 'web-dist');
 const schema = 'src/lib/collections/schema.ts';
 const service = 'src/lib/collections/record-write.ts';
@@ -43,6 +45,7 @@ await writeFile(path.join(output, 'index.html'), (await readFile(path.join(direc
 await copyFile(path.join(directory, 'web/pilot.css'), path.join(output, 'pilot.css'));
 const hash = bytes => createHash('sha256').update(bytes).digest('hex');
 const manifest = {
+  sharedBoundary,
   pilot: config.version, sharedSource: schema,
   sharedSourceSha256: hash(await readFile(path.join(root, schema))),
   sharedService: service, sharedServiceSha256: hash(await readFile(path.join(root, service))),

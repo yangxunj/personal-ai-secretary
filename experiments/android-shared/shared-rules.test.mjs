@@ -19,6 +19,11 @@ const serviceUrl = new URL('../../src/lib/collections/record-write.ts', import.m
 const serviceContext = vm.createContext({ exports: {}, require: specifier => specifier === './schema' ? server : require(specifier) });
 vm.runInContext(ts.transpileModule(readFileSync(serviceUrl, 'utf8'), { compilerOptions: { target: ts.ScriptTarget.ES2020, module: ts.ModuleKind.CommonJS } }).outputText, serviceContext);
 const serverWrite = serviceContext.exports.prepareRecordWrite;
+const taskContractsContext = vm.createContext({ exports: {}, require });
+vm.runInContext(ts.transpileModule(readFileSync(new URL('../../src/lib/tasks/contracts.ts', import.meta.url), 'utf8'), { compilerOptions: { target: ts.ScriptTarget.ES2020, module: ts.ModuleKind.CommonJS } }).outputText, taskContractsContext);
+const taskPolicyContext = vm.createContext({ exports: {}, require: specifier => specifier === './contracts' ? taskContractsContext.exports : require(specifier) });
+vm.runInContext(ts.transpileModule(readFileSync(new URL('../../src/lib/tasks/policy.ts', import.meta.url), 'utf8'), { compilerOptions: { target: ts.ScriptTarget.ES2020, module: ts.ModuleKind.CommonJS } }).outputText, taskPolicyContext);
+const serverTasks = taskPolicyContext.exports;
 const browser = vm.createContext({ console, performance, structuredClone, AbortController, TextEncoder, TextDecoder, URL, URLSearchParams, setTimeout, clearTimeout }, { codeGeneration: { strings: false, wasm: false } });
 vm.runInContext(readFileSync(new URL('web-dist/pilot.js', import.meta.url), 'utf8'), browser);
 const core = browser.PilotCore;
@@ -29,6 +34,11 @@ test('Android bundle contains the exact current shared source and its rules pass
   assert.equal(manifest.sharedSourceSha256, createHash('sha256').update(readFileSync(sourceUrl)).digest('hex'));
   assert.equal(manifest.bundleSha256, createHash('sha256').update(readFileSync(new URL('web-dist/pilot.js', import.meta.url))).digest('hex'));
   assert.equal(manifest.sharedServiceSha256, createHash('sha256').update(readFileSync(serviceUrl)).digest('hex'));
+  for (const [field, source] of [
+    ['sharedToolContractsSha256', 'collections/tool-contracts.ts'],
+    ['taskContractsSha256', 'tasks/contracts.ts'],
+    ['taskPolicySha256', 'tasks/policy.ts'],
+  ]) assert.equal(manifest[field], createHash('sha256').update(readFileSync(new URL('../../src/lib/' + source, import.meta.url))).digest('hex'));
   assert.equal(core.runRuleChecks().length, 10);
   assert.ok(core.runRuleChecks().every(row => row.passed));
 });
@@ -207,6 +217,30 @@ test('shared task policy preserves original text, default values and omitted pat
   assert.deepEqual(plain(core.taskPolicy.prepareTaskQuery({})), { statuses: ['todo','doing','blocked'], category: null, keyword: null, limit: 20 });
   assert.throws(() => core.taskPolicy.prepareTaskCreate({ title: 'bad date', dueDate: 'invalid' }));
   assert.throws(() => core.taskPolicy.prepareTaskQuery({ limit: 51 }));
+});
+
+test('Node and Android bundle execute matching task policies for create, partial updates, queries and public dates', () => {
+  const cases = {
+    prepareTaskCreate: [
+      { title: ' 原始标题 ', detail: '原文\nExact text', dueDate: '2026-11-09', owner: ' 测试成员 ' },
+      { title: '无期限' }, { title: '空日期', dueDate: '' },
+      { title: '无效日期', dueDate: 'invalid' }, { title: '未知类别', category: '未知' },
+    ],
+    prepareTaskUpdate: [
+      { id: 'task', status: 'done' }, { id: 'task', owner: '' },
+      { id: 'task', dueDate: '' }, { id: 'task', detail: '原文' },
+      { id: 'task', dueDate: '2026-11-09' }, { id: 'task', priority: 4 },
+    ],
+    prepareTaskQuery: [{}, { status: 'done' }, { keyword: '', limit: 50 }, { status: 'doing', category: '其他', keyword: '原文' }, { limit: 51 }],
+    taskPublicDto: [{ id: 'task', title: '原文', detail: null, status: 'todo', category: '其他', priority: 2, dueDate: '2026-11-09T00:00:00.000Z', result: null, owner: null }],
+  };
+  const outcome = (policy, method, input) => {
+    try { return { value: plain(policy[method](input)) }; }
+    catch (error) { return { error: error.message }; }
+  };
+  for (const [method, inputs] of Object.entries(cases)) for (const input of inputs) {
+    assert.deepEqual(outcome(serverTasks, method, input), outcome(core.taskPolicy, method, input), `${method}: ${JSON.stringify(input)}`);
+  }
 });
 
 test('upstream Pi creates, queries and completes a task through the same formal task contracts', async () => {

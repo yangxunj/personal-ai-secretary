@@ -59,7 +59,7 @@ node experiments/android-shared/inventory.mjs
 2. 首包本地保存/重开/进程恢复与第二版真实覆盖升级/编辑均获用户通过反馈。
 3. 直接调用 Pi 1.4.0 上游 `runAgentLoop`，窄入口只重导出纯 Pi AI 工具；TypeBox 使用官方解释模式，不开放动态代码执行。没有迁移完整 coding-agent 的持久会话或压缩。
 4. SQLite 版本3新增工具回执，版本4新增独立任务表；任务/书单工具都与回执同事务提交。单轮最多4次模型请求/8次工具操作；第四版默认固定演练创建并查询待办，免费。
-5. 原生密钥由 Android Keystore 加密，网络固定 DeepSeek HTTPS。用户报告第三版模型真实新增书单成功；开发机未读取密钥或调用收费接口，第四版真实任务闭环待验。
+5. 原生密钥由 Android Keystore 加密，网络固定 DeepSeek HTTPS。用户报告第三版模型真实新增书单成功，第四版交付清单全部通过，包括真实待办新增/查询/完成、旧书单与原要求/日期、重开保留。开发机未读取密钥或调用收费接口；未单独反馈的强停/取消/后台与密钥恢复保持待验。
 
 这比先搬全部页面更容易分清运行环境、数据库和业务逻辑各自的问题。候选路线与完整通过条件以首阶段计划为准。
 
@@ -67,7 +67,15 @@ node experiments/android-shared/inventory.mjs
 
 工具链为 Node 24.19.0、JDK 17.0.20.1、Android SDK/build-tools 34、platform-tools 37.0.1、Gradle 8.9、AGP 8.5.2。第四版构建与签名验证通过，证书同第三版。ADB 没有连接设备，开发者设备自动测试尚未运行；需要支持 `structuredClone` 的系统 WebView。
 
-浏览器在独立 Edge/CDP 会话验证任务创建/完成/筛选、原文/日期保留、Pi 固定演练和模型响应替身闭环，横竖屏截图已查看；原生存储/网络为合成替身，日期选择手势待实机。构建有 webpack 资源大小提示（第四版约 1.07 MiB，未压缩），不是正式性能验收。
+浏览器在独立 Edge/CDP 会话验证任务创建/完成/筛选、原文/日期保留、Pi 固定演练和模型响应替身闭环，横竖屏截图已查看；原生存储/网络为合成替身，浏览器日期选择手势未自动化通过。用户的后续设备通过反馈另见第四版验收，不将其写成开发者自动测试。构建有 webpack 资源大小提示（第四版约 1.07 MiB，未压缩），不是正式性能验收。
+
+## 共用代码构建检查
+
+在根目录运行 `npm run check:shared`；依赖现有 TypeScript，不联网。`build-web.mjs` 自动执行同一检查，失败即停止构建。共享入口为栏目 schema、写入策略、工具契约，以及待办契约和策略。检查擦除类型导入后的运行依赖，递归追踪本地 import/export、`@/` 别名、字面量动态 import/require；只允许 `src/` 内源码和已审查的 `zod` 包入口，拒绝平台包、未审查包、无法解析和计算导入。构建清单保存实际文件闭包。
+
+这不是任意 JavaScript 的沙箱或第三方包内容审计：不分析运行时全局变量、别名 require 或包内部依赖；Webpack 的平台依赖拦截仍保留。新增共享入口或允许包必须显式修改检查清单并重新审查。
+
+重跑：`node --test scripts/check-shared-core.test.mjs experiments/android-shared/shared-rules.test.mjs`（先执行 `node experiments/android-shared/build-web.mjs`）。当前 18 项通过，其中包含依赖检查的故障注入，以及 Node/安卓 bundle 的任务创建、默认值、原文、日期、查询范围、局部更新行为对照；旧 bundle 与新任务源码哈希不一致会拒绝通过。只改构建检查和验收文档，不改第四版运行代码，不另发安装包。
 
 APK 包含项目 AGPL、Zod/Pi/TypeBox MIT、AndroidX Apache 许可说明，不包含本机配置、用户资料、签名私钥、浏览器 fixture 或原生 `.so`。完整会话/最终共用 React UI 仍为后续工作。
 
