@@ -1,0 +1,706 @@
+{
+  "scope": "Tracked src/ and desktop/ direct runtime imports; excludes type-only imports.",
+  "limitations": "No transitive analysis, globals, computed imports, package binaries or device compatibility checks. Empty findings do not prove portability.",
+  "scannedFiles": 217,
+  "counts": {
+    "next": 57,
+    "electron": 3,
+    "node": 35,
+    "prisma": 1,
+    "native": 4,
+    "pi": 1
+  },
+  "groups": {
+    "next": [
+      {
+        "file": "src/app/(app)/actions.ts",
+        "dependencies": [
+          "next/cache",
+          "next/navigation"
+        ]
+      },
+      {
+        "file": "src/app/(app)/chat/[[...id]]/page.tsx",
+        "dependencies": [
+          "next/navigation"
+        ]
+      },
+      {
+        "file": "src/app/(app)/chat/actions.ts",
+        "dependencies": [
+          "next/cache"
+        ]
+      },
+      {
+        "file": "src/app/(app)/collections/CollectionDesigner.tsx",
+        "dependencies": [
+          "next/navigation"
+        ]
+      },
+      {
+        "file": "src/app/(app)/collections/RecordForm.tsx",
+        "dependencies": [
+          "next/navigation"
+        ]
+      },
+      {
+        "file": "src/app/(app)/collections/[id]/configure/page.tsx",
+        "dependencies": [
+          "next/navigation"
+        ]
+      },
+      {
+        "file": "src/app/(app)/collections/[id]/new/page.tsx",
+        "dependencies": [
+          "next/navigation"
+        ]
+      },
+      {
+        "file": "src/app/(app)/collections/[id]/page.tsx",
+        "dependencies": [
+          "next/link",
+          "next/navigation"
+        ]
+      },
+      {
+        "file": "src/app/(app)/collections/[id]/records/[recordId]/page.tsx",
+        "dependencies": [
+          "next/navigation"
+        ]
+      },
+      {
+        "file": "src/app/(app)/collections/actions.ts",
+        "dependencies": [
+          "next/cache",
+          "next/navigation"
+        ]
+      },
+      {
+        "file": "src/app/(app)/collections/page.tsx",
+        "dependencies": [
+          "next/link"
+        ]
+      },
+      {
+        "file": "src/app/(app)/docs/[id]/page.tsx",
+        "dependencies": [
+          "next/link",
+          "next/navigation"
+        ]
+      },
+      {
+        "file": "src/app/(app)/docs/page.tsx",
+        "dependencies": [
+          "next/link"
+        ]
+      },
+      {
+        "file": "src/app/(app)/files/page.tsx",
+        "dependencies": [
+          "next/link"
+        ]
+      },
+      {
+        "file": "src/app/(app)/finance/[period]/page.tsx",
+        "dependencies": [
+          "next/link",
+          "next/navigation"
+        ]
+      },
+      {
+        "file": "src/app/(app)/finance/page.tsx",
+        "dependencies": [
+          "next/link"
+        ]
+      },
+      {
+        "file": "src/app/(app)/health/[id]/page.tsx",
+        "dependencies": [
+          "next/link",
+          "next/navigation"
+        ]
+      },
+      {
+        "file": "src/app/(app)/health/page.tsx",
+        "dependencies": [
+          "next/link"
+        ]
+      },
+      {
+        "file": "src/app/(app)/insurance/page.tsx",
+        "dependencies": [
+          "next/link"
+        ]
+      },
+      {
+        "file": "src/app/(app)/layout.tsx",
+        "dependencies": [
+          "next/navigation"
+        ]
+      },
+      {
+        "file": "src/app/(app)/mail/MailPanel.tsx",
+        "dependencies": [
+          "next/link"
+        ]
+      },
+      {
+        "file": "src/app/(app)/more/page.tsx",
+        "dependencies": [
+          "next/link"
+        ]
+      },
+      {
+        "file": "src/app/(app)/page.tsx",
+        "dependencies": [
+          "next/navigation"
+        ]
+      },
+      {
+        "file": "src/app/(app)/pages/[id]/page.tsx",
+        "dependencies": [
+          "next/link",
+          "next/navigation"
+        ]
+      },
+      {
+        "file": "src/app/(app)/pages/[id]/raw/route.ts",
+        "dependencies": [
+          "next/server"
+        ]
+      },
+      {
+        "file": "src/app/(app)/pages/actions.ts",
+        "dependencies": [
+          "next/cache",
+          "next/navigation"
+        ]
+      },
+      {
+        "file": "src/app/(app)/pages/page.tsx",
+        "dependencies": [
+          "next/link"
+        ]
+      },
+      {
+        "file": "src/app/(app)/search/page.tsx",
+        "dependencies": [
+          "next/link"
+        ]
+      },
+      {
+        "file": "src/app/(app)/settings/actions.ts",
+        "dependencies": [
+          "next/cache",
+          "next/headers",
+          "next/navigation"
+        ]
+      },
+      {
+        "file": "src/app/(app)/settings/page.tsx",
+        "dependencies": [
+          "next/link"
+        ]
+      },
+      {
+        "file": "src/app/(app)/tasks/TaskDetail.tsx",
+        "dependencies": [
+          "next/link",
+          "next/navigation"
+        ]
+      },
+      {
+        "file": "src/app/(app)/tasks/TaskList.tsx",
+        "dependencies": [
+          "next/link"
+        ]
+      },
+      {
+        "file": "src/app/(app)/tasks/TaskOverview.tsx",
+        "dependencies": [
+          "next/link"
+        ]
+      },
+      {
+        "file": "src/app/(app)/tasks/[id]/chat/page.tsx",
+        "dependencies": [
+          "next/navigation"
+        ]
+      },
+      {
+        "file": "src/app/(app)/topics/[id]/page.tsx",
+        "dependencies": [
+          "next/link",
+          "next/navigation"
+        ]
+      },
+      {
+        "file": "src/app/(app)/topics/[id]/page/route.ts",
+        "dependencies": [
+          "next/headers",
+          "next/server"
+        ]
+      },
+      {
+        "file": "src/app/(app)/topics/page.tsx",
+        "dependencies": [
+          "next/link"
+        ]
+      },
+      {
+        "file": "src/app/(app)/vault/page.tsx",
+        "dependencies": [
+          "next/link"
+        ]
+      },
+      {
+        "file": "src/app/api/files/[id]/route.ts",
+        "dependencies": [
+          "next/headers",
+          "next/server"
+        ]
+      },
+      {
+        "file": "src/app/api/pages/[id]/data/route.ts",
+        "dependencies": [
+          "next/server"
+        ]
+      },
+      {
+        "file": "src/app/api/realtime/route.ts",
+        "dependencies": [
+          "next/headers"
+        ]
+      },
+      {
+        "file": "src/app/login/actions.ts",
+        "dependencies": [
+          "next/headers",
+          "next/navigation"
+        ]
+      },
+      {
+        "file": "src/app/play/[id]/page.tsx",
+        "dependencies": [
+          "next/navigation"
+        ]
+      },
+      {
+        "file": "src/components/BottomNav.tsx",
+        "dependencies": [
+          "next/link",
+          "next/navigation"
+        ]
+      },
+      {
+        "file": "src/components/Chat.tsx",
+        "dependencies": [
+          "next/link",
+          "next/navigation"
+        ]
+      },
+      {
+        "file": "src/components/PageHeader.tsx",
+        "dependencies": [
+          "next/link"
+        ]
+      },
+      {
+        "file": "src/components/SideNav.tsx",
+        "dependencies": [
+          "next/link",
+          "next/navigation"
+        ]
+      },
+      {
+        "file": "src/components/TaskChatDialog.tsx",
+        "dependencies": [
+          "next/navigation"
+        ]
+      },
+      {
+        "file": "src/components/chat/ChatHeader.tsx",
+        "dependencies": [
+          "next/link",
+          "next/navigation"
+        ]
+      },
+      {
+        "file": "src/components/chat/ConversationList.tsx",
+        "dependencies": [
+          "next/link",
+          "next/navigation"
+        ]
+      },
+      {
+        "file": "src/lib/agent-tools.ts",
+        "dependencies": [
+          "next/cache"
+        ]
+      },
+      {
+        "file": "src/lib/auth.ts",
+        "dependencies": [
+          "next/headers"
+        ]
+      },
+      {
+        "file": "src/lib/collections/tools.ts",
+        "dependencies": [
+          "next/cache"
+        ]
+      },
+      {
+        "file": "src/lib/i18n/server.ts",
+        "dependencies": [
+          "next/headers"
+        ]
+      },
+      {
+        "file": "src/lib/page-tools.ts",
+        "dependencies": [
+          "next/cache"
+        ]
+      },
+      {
+        "file": "src/lib/task-chat-tools.ts",
+        "dependencies": [
+          "next/cache"
+        ]
+      },
+      {
+        "file": "src/middleware.ts",
+        "dependencies": [
+          "next/server"
+        ]
+      }
+    ],
+    "electron": [
+      {
+        "file": "desktop/gmail-preload.js",
+        "dependencies": [
+          "electron"
+        ]
+      },
+      {
+        "file": "desktop/lan-preload.js",
+        "dependencies": [
+          "electron"
+        ]
+      },
+      {
+        "file": "desktop/main.js",
+        "dependencies": [
+          "electron"
+        ]
+      }
+    ],
+    "node": [
+      {
+        "file": "desktop/gmail.js",
+        "dependencies": [
+          "node:child_process",
+          "node:fs",
+          "node:fs/promises",
+          "node:path",
+          "node:util"
+        ]
+      },
+      {
+        "file": "desktop/lan.js",
+        "dependencies": [
+          "node:crypto",
+          "node:fs",
+          "node:http",
+          "node:os"
+        ]
+      },
+      {
+        "file": "desktop/main.js",
+        "dependencies": [
+          "node:child_process",
+          "node:crypto",
+          "node:fs",
+          "node:http",
+          "node:net",
+          "node:path"
+        ]
+      },
+      {
+        "file": "desktop/scripts/audit-package.mjs",
+        "dependencies": [
+          "node:assert/strict",
+          "node:crypto",
+          "node:fs",
+          "node:module",
+          "node:path",
+          "node:sqlite",
+          "node:util"
+        ]
+      },
+      {
+        "file": "desktop/scripts/prepare-gmail.mjs",
+        "dependencies": [
+          "node:fs",
+          "node:module",
+          "node:path"
+        ]
+      },
+      {
+        "file": "desktop/scripts/prepare-gws.mjs",
+        "dependencies": [
+          "node:child_process",
+          "node:crypto",
+          "node:fs",
+          "node:path"
+        ]
+      },
+      {
+        "file": "desktop/scripts/prepare.mjs",
+        "dependencies": [
+          "node:child_process",
+          "node:fs",
+          "node:os",
+          "node:path",
+          "node:sqlite"
+        ]
+      },
+      {
+        "file": "src/app/(app)/actions.ts",
+        "dependencies": [
+          "node:crypto",
+          "node:fs/promises",
+          "node:path"
+        ]
+      },
+      {
+        "file": "src/app/api/desktop/gmail/route.ts",
+        "dependencies": [
+          "node:crypto"
+        ]
+      },
+      {
+        "file": "src/app/api/files/[id]/route.ts",
+        "dependencies": [
+          "node:fs/promises",
+          "node:path"
+        ]
+      },
+      {
+        "file": "src/app/api/realtime/route.ts",
+        "dependencies": [
+          "node:crypto"
+        ]
+      },
+      {
+        "file": "src/lib/agent-files.ts",
+        "dependencies": [
+          "node:crypto"
+        ]
+      },
+      {
+        "file": "src/lib/agent-media.ts",
+        "dependencies": [
+          "node:crypto"
+        ]
+      },
+      {
+        "file": "src/lib/agent-records.ts",
+        "dependencies": [
+          "node:crypto"
+        ]
+      },
+      {
+        "file": "src/lib/agent-text.ts",
+        "dependencies": [
+          "node:crypto"
+        ]
+      },
+      {
+        "file": "src/lib/agent-turns.ts",
+        "dependencies": [
+          "node:crypto"
+        ]
+      },
+      {
+        "file": "src/lib/attachment-access.ts",
+        "dependencies": [
+          "node:crypto",
+          "node:fs/promises",
+          "node:path"
+        ]
+      },
+      {
+        "file": "src/lib/auth.ts",
+        "dependencies": [
+          "node:crypto"
+        ]
+      },
+      {
+        "file": "src/lib/codex/config.ts",
+        "dependencies": [
+          "node:fs/promises",
+          "node:path"
+        ]
+      },
+      {
+        "file": "src/lib/codex/protocol.mjs",
+        "dependencies": [
+          "node:child_process",
+          "node:events",
+          "node:fs",
+          "node:os",
+          "node:path",
+          "node:readline"
+        ]
+      },
+      {
+        "file": "src/lib/conversation-titles.ts",
+        "dependencies": [
+          "node:crypto",
+          "node:fs/promises",
+          "node:path"
+        ]
+      },
+      {
+        "file": "src/lib/conversations.ts",
+        "dependencies": [
+          "node:fs/promises"
+        ]
+      },
+      {
+        "file": "src/lib/db.ts",
+        "dependencies": [
+          "node:async_hooks"
+        ]
+      },
+      {
+        "file": "src/lib/docx-structure.ts",
+        "dependencies": [
+          "node:path"
+        ]
+      },
+      {
+        "file": "src/lib/ingest.ts",
+        "dependencies": [
+          "node:crypto",
+          "node:fs/promises",
+          "node:path"
+        ]
+      },
+      {
+        "file": "src/lib/mail/analysis.ts",
+        "dependencies": [
+          "node:crypto",
+          "node:fs/promises",
+          "node:path"
+        ]
+      },
+      {
+        "file": "src/lib/mail/gws.mjs",
+        "dependencies": [
+          "node:child_process",
+          "node:util"
+        ]
+      },
+      {
+        "file": "src/lib/mail/service.ts",
+        "dependencies": [
+          "node:crypto",
+          "node:path"
+        ]
+      },
+      {
+        "file": "src/lib/mail/store.mjs",
+        "dependencies": [
+          "node:fs/promises",
+          "node:path"
+        ]
+      },
+      {
+        "file": "src/lib/pi/chat.ts",
+        "dependencies": [
+          "node:crypto"
+        ]
+      },
+      {
+        "file": "src/lib/pi/runtime.mjs",
+        "dependencies": [
+          "node:crypto",
+          "node:fs/promises",
+          "node:path"
+        ]
+      },
+      {
+        "file": "src/lib/pi/storage.ts",
+        "dependencies": [
+          "node:path"
+        ]
+      },
+      {
+        "file": "src/lib/realtime/session.ts",
+        "dependencies": [
+          "node:crypto"
+        ]
+      },
+      {
+        "file": "src/lib/storage.ts",
+        "dependencies": [
+          "node:path"
+        ]
+      },
+      {
+        "file": "src/lib/web-search/tools.ts",
+        "dependencies": [
+          "node:crypto"
+        ]
+      }
+    ],
+    "prisma": [
+      {
+        "file": "src/lib/db.ts",
+        "dependencies": [
+          "@prisma/client"
+        ]
+      }
+    ],
+    "native": [
+      {
+        "file": "src/app/api/files/[id]/route.ts",
+        "dependencies": [
+          "sharp"
+        ]
+      },
+      {
+        "file": "src/lib/agent-files.ts",
+        "dependencies": [
+          "unpdf"
+        ]
+      },
+      {
+        "file": "src/lib/attachment-visual.ts",
+        "dependencies": [
+          "@napi-rs/canvas",
+          "sharp",
+          "unpdf"
+        ]
+      },
+      {
+        "file": "src/lib/doc-extract.ts",
+        "dependencies": [
+          "@napi-rs/canvas",
+          "unpdf"
+        ]
+      }
+    ],
+    "pi": [
+      {
+        "file": "src/lib/pi/runtime.mjs",
+        "dependencies": [
+          "@earendil-works/pi-ai",
+          "@earendil-works/pi-coding-agent"
+        ]
+      }
+    ]
+  }
+}
