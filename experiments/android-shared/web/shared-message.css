@@ -1,0 +1,5 @@
+/* Generate the same utility classes used by the actual production component.
+ * Omit Tailwind preflight so the pilot's existing forms are not reset. */
+@import "tailwindcss/theme.css";
+@import "tailwindcss/utilities.css" source(none);
+@source "../../../src/components/MessageBody.tsx";

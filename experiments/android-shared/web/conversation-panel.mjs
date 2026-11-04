@@ -1,14 +1,16 @@
 import { newConversation, parseConversation, recoverConversation, conversationHistory, beginConversationTurn,
   recordConversationMessage, finishConversationTurn, interruptedNotice } from '../../../src/lib/pi/conversation.mjs';
 
-export function attachConversationPanel(document, bridge, nonce) {
+export function attachConversationPanel(document, bridge, nonce, messageUi) {
   const select = document.getElementById('conversation-select'), prompt = document.getElementById('ai-prompt');
   const status = document.getElementById('conversation-status'), list = document.getElementById('conversation-messages');
   const create = document.getElementById('conversation-new');
+  if (!messageUi?.createTranscript) throw new Error('共用消息界面未加载，请重新打开应用。');
+  const transcript = messageUi.createTranscript(list, () => { document.getElementById('message-link-status').textContent = '此试验版暂不打开外部链接。'; });
   let current, mode, busy = false, healthy = true;
   const decode = raw => { const result = JSON.parse(raw); if (!result.ok) throw new Error('会话保存或读取失败，请重新打开应用后检查。'); return result.data; };
   const fail = () => { healthy = false; status.textContent = '会话存储不可用，已停止发送。草稿保留，请重新打开应用后检查。'; document.getElementById('ai-send').disabled = true; };
-  const clearTransient = () => { document.getElementById('ai-output').textContent = ''; document.getElementById('ai-events').replaceChildren(); };
+  const clearTransient = () => { document.getElementById('ai-output').textContent = ''; document.getElementById('ai-events').replaceChildren(); document.getElementById('message-link-status').textContent = ''; };
   function save(snapshot) {
     const next = parseConversation(snapshot);
     const saved = decode(bridge.saveConversation(next.id, current?.version || 0, JSON.stringify(next)));
@@ -16,13 +18,7 @@ export function attachConversationPanel(document, bridge, nonce) {
   }
   function render() {
     const snapshot = current.snapshot;
-    list.replaceChildren();
-    for (const turn of snapshot.turns) {
-      const item = document.createElement('li'), user = document.createElement('p'), assistant = document.createElement('p');
-      user.className = 'chat-user'; user.textContent = '我：' + turn.prompt;
-      assistant.textContent = turn.status === 'complete' ? '秘书：' + turn.reply : turn.status === 'running' ? '正在处理…' : interruptedNotice;
-      item.append(user, assistant); list.append(item);
-    }
+    transcript.render(snapshot.turns, interruptedNotice);
     select.replaceChildren();
     for (const row of decode(bridge.listConversations(mode))) {
       const option = document.createElement('option'); option.value = row.id; option.textContent = row.title; select.append(option);

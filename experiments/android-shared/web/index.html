@@ -6,6 +6,8 @@
   <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'none'; img-src 'none'; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
   <title>秘书共用逻辑试验</title>
   <link rel="stylesheet" href="pilot.css">
+  <link rel="stylesheet" href="shared-message.css">
+  <script defer src="messages.js"></script>
   <script defer src="pilot.js"></script>
 </head>
 <body>
@@ -46,6 +48,7 @@
       <div class="conversation-toolbar"><label>本机对话<select id="conversation-select"></select></label><button class="secondary" id="conversation-new" type="button">新建对话</button></div>
       <p id="conversation-status" role="status"></p>
       <ol id="conversation-messages" aria-label="对话记录"></ol>
+      <p id="message-link-status" role="status" aria-live="polite"></p>
       <form id="ai-form">
         <label class="mode-choice"><input type="radio" name="ai-mode" value="demo" checked>离线演练（不调用 AI 模型）</label>
         <label class="mode-choice"><input type="radio" name="ai-mode" value="deepseek">DeepSeek Flash</label>

@@ -13,7 +13,7 @@ export function attachAiPanel(document, host, records, definition, refresh, task
   const bridge = host.SecretaryStorage;
   const pending = new Map();
   let active;
-  const conversations = attachConversationPanel(document, bridge, nonce);
+  const conversations = attachConversationPanel(document, bridge, nonce, host.PilotMessageUI);
   const mode = () => document.querySelector('input[name="ai-mode"]:checked').value;
   const settingsChanged = () => { document.getElementById('key-state').textContent = bridge.hasApiKey?.() ? '已保存密钥；是否有效需实际请求确认。' : '尚未配置密钥。'; };
   host.SecretaryAI = {
@@ -85,7 +85,7 @@ export function attachAiPanel(document, host, records, definition, refresh, task
         },
       });
       conversations.finish(result.reply, true); started = false;
-      output.textContent = result.reply;
+      output.textContent = '本轮已完成，回复已保存在上方对话中。';
     } catch (error) {
       if (started) try { conversations.finish('本轮未完整结束。', false); } catch { conversations.fail(); }
       output.textContent = (active.signal.aborted ? '本轮已取消。' : error.message || '本轮未完成。') + ' 已保存的工具结果保留，请先查看待办和书单；请求草稿仍保留。';

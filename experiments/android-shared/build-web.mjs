@@ -4,6 +4,9 @@ import { createHash } from 'node:crypto';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { checkSharedCore } from '../../scripts/check-shared-core.mjs';
+import postcss from 'postcss';
+import tailwindcss from '@tailwindcss/postcss';
+import { bundleLicenses } from './bundle-licenses.mjs';
 
 const require = createRequire(import.meta.url);
 const compiled = require('next/dist/compiled/webpack/webpack');
@@ -12,6 +15,8 @@ const webpack = compiled.webpack;
 const directory = fileURLToPath(new URL('.', import.meta.url));
 const root = path.resolve(directory, '../..');
 const sharedBoundary = checkSharedCore(root);
+const messageSource = 'src/components/MessageBody.tsx';
+const sharedUiBoundary = checkSharedCore(root, [messageSource], ['react', 'react/jsx-runtime', 'react-markdown', 'remark-gfm']);
 const output = path.join(directory, 'web-dist');
 const schema = 'src/lib/collections/schema.ts';
 const service = 'src/lib/collections/record-write.ts';
@@ -19,14 +24,15 @@ const config = JSON.parse(await readFile(path.join(directory, 'pilot-config.json
 const piPackage = JSON.parse(await readFile(path.join(root, 'node_modules/@earendil-works/pi-agent-core/package.json'), 'utf8'));
 if (piPackage.version !== '1.4.0') throw new Error('Revalidate the browser Pi adapter before upgrading pi-agent-core. Expected 1.4.0.');
 await mkdir(output, { recursive: true });
+let licenses;
 await new Promise((resolve, reject) => webpack({
   mode: 'production', target: ['web', 'es2020'], context: root,
-  entry: path.join(directory, 'web/pilot.mjs'),
-  output: { path: output, filename: 'pilot.js' },
+  entry: { pilot: path.join(directory, 'web/pilot.mjs'), messages: path.join(directory, 'web/message-ui.mjs') },
+  output: { path: output, filename: '[name].js' },
   devtool: false,
   optimization: { minimize: false },
-  resolve: { extensions: ['.ts', '.js', '.mjs', '.json'], alias: { '@earendil-works/pi-ai$': path.join(directory, 'pi-ai-browser.mjs') } },
-  module: { rules: [{ test: /\.ts$/, use: path.join(directory, 'typescript-loader.cjs') }] },
+  resolve: { extensions: ['.tsx', '.ts', '.js', '.mjs', '.json'], alias: { '@earendil-works/pi-ai$': path.join(directory, 'pi-ai-browser.mjs') } },
+  module: { rules: [{ test: /\.tsx?$/, use: path.join(directory, 'typescript-loader.cjs') }] },
   plugins: [{ apply(compiler) {
     compiler.hooks.normalModuleFactory.tap('SharedBoundary', factory => {
       factory.hooks.beforeResolve.tap('SharedBoundary', request => {
@@ -36,16 +42,26 @@ await new Promise((resolve, reject) => webpack({
       });
     });
   } }],
-}, (error, stats) => {
+}, async (error, stats) => {
   if (error || stats.hasErrors()) return reject(error || new Error(stats.toString({ all: false, errors: true })));
   console.log(stats.toString({ all: false, assets: true, errors: true, warnings: true }));
+  try { licenses = await bundleLicenses(stats.compilation.modules, directory); }
+  catch (error) { reject(error); return; }
   resolve();
 }));
 await writeFile(path.join(output, 'index.html'), (await readFile(path.join(directory, 'web/index.html'), 'utf8')).replaceAll('__PILOT_VERSION__', config.version));
 await copyFile(path.join(directory, 'web/pilot.css'), path.join(output, 'pilot.css'));
+const stylesSource = path.join(directory, 'web/shared-message.css');
+const styles = await postcss([tailwindcss({ base: root, optimize: false })]).process(await readFile(stylesSource, 'utf8'), { from: stylesSource, to: path.join(output, 'shared-message.css'), map: false });
+await writeFile(path.join(output, 'shared-message.css'), styles.css);
 const hash = bytes => createHash('sha256').update(bytes).digest('hex');
 const manifest = {
+  bundledPackages: licenses.packages,
   sharedBoundary,
+  sharedUiBoundary,
+  messageSource, messageSourceSha256: hash(await readFile(path.join(root, messageSource))),
+  messageBundleSha256: hash(await readFile(path.join(output, 'messages.js'))),
+  messageStylesSha256: hash(await readFile(path.join(output, 'shared-message.css'))),
   pilot: config.version, sharedSource: schema,
   sharedSourceSha256: hash(await readFile(path.join(root, schema))),
   sharedService: service, sharedServiceSha256: hash(await readFile(path.join(root, service))),
@@ -57,12 +73,13 @@ const manifest = {
   piAgentCoreVersion: piPackage.version,
   piAgentLoopSha256: hash(await readFile(path.join(root, 'node_modules/@earendil-works/pi-agent-core/dist/agent-loop.js'))),
   bundleSha256: hash(await readFile(path.join(output, 'pilot.js'))),
-  scope: 'Shared task/collection policies and context estimate; upstream Pi messages with versioned SQLite conversations; fixed DeepSeek, no automatic compaction.',
+  scope: 'Production MessageBody React component and generated utilities; shared policies/Pi snapshots; fixed DeepSeek, no automatic compaction.',
 };
 await writeFile(path.join(output, 'build-manifest.json'), JSON.stringify(manifest, null, 2) + '\n');
 const assets = path.join(directory, 'android/app/src/main/assets');
 await mkdir(assets, { recursive: true });
-for (const file of ['index.html', 'pilot.css', 'pilot.js', 'build-manifest.json']) await copyFile(path.join(output, file), path.join(assets, file));
+await writeFile(path.join(assets, 'bundled-js-licenses.txt'), licenses.text);
+for (const file of ['index.html', 'pilot.css', 'pilot.js', 'messages.js', 'shared-message.css', 'build-manifest.json']) await copyFile(path.join(output, file), path.join(assets, file));
 // Preserve notices for code shipped inside the APK (build tools are not shipped).
 await copyFile(path.join(root, 'node_modules/zod/LICENSE'), path.join(assets, 'zod-license.txt'));
 await copyFile(path.join(root, 'node_modules/typescript/LICENSE.txt'), path.join(assets, 'apache-2.0.txt'));
@@ -75,6 +92,8 @@ await writeFile(path.join(assets, 'third-party-notices.txt'), [
   'Zod: MIT, Copyright (c) 2025 Colin McDonnell; see zod-license.txt.',
   'Pi agent-core / pi-ai 1.4.0: MIT, Copyright (c) 2025 Mario Zechner; see pi-license.txt.',
   'TypeBox: MIT, Copyright (c) 2017-2026 Haydn Paterson; see typebox-license.txt.',
+  'React, React DOM, react-markdown, remark-gfm and bundled transitive JavaScript dependencies: see bundled-js-licenses.txt.',
+  'Tailwind CSS utility output: MIT; generated from the existing shared MessageBody source.',
   'AndroidX WebKit, Annotation, Core and related AndroidX runtime code: Apache-2.0; see apache-2.0.txt.',
   'The Android system WebView is provided by the device, not bundled here.',
 ].join('\n') + '\n');

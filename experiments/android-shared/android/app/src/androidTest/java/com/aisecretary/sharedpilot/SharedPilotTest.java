@@ -154,4 +154,15 @@ public final class SharedPilotTest {
             }
         }
     }
+
+    @Test public void sharedReactMessageBodyRendersInsideWebView() throws Exception {
+        Activity activity = start();
+        try {
+            String markdown = "**共用正文**\n\n| 一 | 二 |\n|---|---|\n| A | B |\n\n<script>window.unexpectedScript=true</script>";
+            String script = "(function(){const list=document.createElement('ol');const ui=window.PilotMessageUI.createTranscript(list,function(){});ui.render([{id:'render-test',prompt:'test',status:'complete',reply:"
+                    + JSONObject.quote(markdown) + "}], 'interrupted');return JSON.stringify({strong:list.querySelectorAll('strong').length,table:list.querySelectorAll('table').length,scripts:list.querySelectorAll('script').length});})()";
+            JSONObject result = new JSONObject((String) new JSONTokener(evaluate(activity, script)).nextValue());
+            assertEquals(1, result.getInt("strong")); assertEquals(1, result.getInt("table")); assertEquals(0, result.getInt("scripts"));
+        } finally { getInstrumentation().runOnMainSync(activity::finish); }
+    }
 }

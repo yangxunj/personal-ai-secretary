@@ -11,6 +11,12 @@ test('current shared runtime closure uses only source modules and reviewed Zod',
   assert.deepEqual(result.packages, ['zod']);
 });
 
+test('production message component stays within the reviewed shared UI dependency boundary', () => {
+  const result = checkSharedCore(undefined, ['src/components/MessageBody.tsx'], ['react', 'react/jsx-runtime', 'react-markdown', 'remark-gfm']);
+  assert.deepEqual(result.files, ['src/components/MessageBody.tsx']);
+  assert.deepEqual(result.packages, ['react', 'react-markdown', 'react/jsx-runtime', 'remark-gfm']);
+});
+
 test('dependency guard follows aliases and transitive exports, erases types and rejects platform imports', t => {
   const root = mkdtempSync(path.join(tmpdir(), 'secretary-shared-boundary-'));
   t.after(() => rmSync(root, { recursive: true, force: true }));

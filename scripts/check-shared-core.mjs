@@ -17,13 +17,13 @@ const repository = fileURLToPath(new URL('../', import.meta.url));
 /** Check the runtime closure of shared source. Type-only imports are erased by
  * TypeScript. Third-party code is not audited here; only reviewed package entry
  * points are allowed. This is a dependency check, not proof of device support. */
-export function checkSharedCore(root = repository, entries = sharedEntries) {
+export function checkSharedCore(root = repository, entries = sharedEntries, allowedPackages = ['zod']) {
   const sourceRoot = realpathSync(path.join(root, 'src'));
   const visited = new Set();
   const external = new Set();
   function resolveLocal(from, specifier) {
     const base = specifier.startsWith('@/') ? path.join(root, 'src', specifier.slice(2)) : path.resolve(path.dirname(from), specifier);
-    const candidate = [base, ...['.ts', '.mjs', '.js', '/index.ts', '/index.mjs', '/index.js'].map(suffix => base + suffix)]
+    const candidate = [base, ...['.tsx', '.ts', '.mjs', '.js', '/index.tsx', '/index.ts', '/index.mjs', '/index.js'].map(suffix => base + suffix)]
       .find(file => existsSync(file) && statSync(file).isFile());
     if (!candidate) throw new Error(`Unresolved shared import: ${specifier} in ${path.relative(root, from)}`);
     const resolved = realpathSync(candidate);
@@ -38,12 +38,13 @@ export function checkSharedCore(root = repository, entries = sharedEntries) {
     const original = readFileSync(file, 'utf8');
     const output = ts.transpileModule(original, { fileName: file, compilerOptions: {
       target: ts.ScriptTarget.ES2020, module: ts.ModuleKind.ESNext,
+      jsx: ts.JsxEmit.ReactJSX,
     } }).outputText;
     const parsed = ts.createSourceFile(file + '.js', output, ts.ScriptTarget.Latest, true, ts.ScriptKind.JS);
     function dependency(expression) {
       if (!expression || !ts.isStringLiteralLike(expression)) throw new Error(`Computed import is forbidden in shared source: ${path.relative(root, file)}`);
       const specifier = expression.text;
-      if (specifier === 'zod') { external.add(specifier); return; }
+      if (allowedPackages.includes(specifier)) { external.add(specifier); return; }
       if (specifier.startsWith('.') || specifier.startsWith('@/')) visit(resolveLocal(file, specifier));
       else throw new Error(`Platform or unreviewed dependency in shared source: ${specifier} in ${path.relative(root, file)}`);
     }

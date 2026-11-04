@@ -4,6 +4,8 @@
 
 M0/M1完成；前五版分别获用户通过反馈。当前 `0.5.0-pilot` 的多轮上下文、会话/草稿重开、新建/切换及取消后保留/不重发，已于2026-11-04获用户按交付清单全部通过反馈。正式数据库、根目录依赖锁和用户资料未改动。
 
+最新为 `0.6.0-pilot`，直接复用正式 `src/components/MessageBody.tsx`，加入Markdown/列表/表格/代码展示，并从同一源码生成Tailwind工具类样式；[第六版下载与验收](../../docs/安卓第六版共用消息界面验收.md)待平板反馈。第五版仍作为已验收基线。数据库仍为版本5。
+
 设备未连接开发机，继续由用户手工验收。[首包](../../docs/安卓首个试验包验收.md)、[第二版](../../docs/安卓第二版覆盖升级验收.md)、[第三版](../../docs/安卓第三版Pi与模型连接验收.md)、[第四版](../../docs/安卓第四版待办验收.md)、[第五版下载与验收](../../docs/安卓第五版多轮会话验收.md)。M2进行中，后续接共用产品界面；强停/后台/密钥跨升级保留仍没有单独回执，设备自动测试未执行。
 
 ## 构建与验证
@@ -16,7 +18,7 @@ M0/M1完成；前五版分别获用户通过反馈。当前 `0.5.0-pilot` 的多
 
 脚本默认使用工程的 Gradle 8.9 Wrapper；需要时可显式传入 `-NodePath`、`-GradlePath`。首次构建会从官方仓库下载依赖；依赖齐备后可加 `-Offline`。本轮已用 Gradle 8.9 补齐在线依赖，并使用 Wrapper 完成最终离线构建。
 
-脚本执行共享网页构建、20项共用/Pi检查，生成应用APK与设备测试APK。本轮另通过共享依赖检查2项、正式Node Pi SDK回归6项与TypeScript，共28项相关检查。交付APK在被忽略的 `artifacts/`，版本来自 `pilot-config.json`；调试密钥、缓存、应用数据和本机SDK路径不加入Git。
+脚本执行核心/UI双入口构建及25项检查（共用/Pi20、共享依赖3、组件SSR/清单2），生成应用APK与设备测试APK；TypeScript与Lint另行检查通过。交付APK在被忽略的 `artifacts/`，版本来自 `pilot-config.json`；调试密钥、缓存、数据和本机SDK路径不加入Git。
 
 设备自动验收（尚未运行）：
 
@@ -75,7 +77,11 @@ node experiments/android-shared/inventory.mjs
 
 这不是任意 JavaScript 的沙箱或第三方包内容审计：不分析运行时全局变量、别名 require 或包内部依赖；Webpack 的平台依赖拦截仍保留。新增共享入口或允许包必须显式修改检查清单并重新审查。
 
-重跑：`node --test scripts/check-shared-core.test.mjs experiments/android-shared/shared-rules.test.mjs`（先执行 `node experiments/android-shared/build-web.mjs`）。当前22项通过，覆盖依赖故障注入、两端任务策略对照、历史工具配对、多轮与中断恢复；清单包含任务/会话协议/上下文估算哈希，旧bundle与新源码不一致会拒绝通过。正式Node SDK另跑 `node --test scripts/pi-runtime.test.mjs`（6项）。
+重跑：先执行 `node experiments/android-shared/build-web.mjs`，再执行 `node --test scripts/check-shared-core.test.mjs experiments/android-shared/shared-rules.test.mjs experiments/android-shared/message-render.test.mjs`，当前25项通过。覆盖依赖故障注入、两端任务策略、Pi历史/恢复和共用正文。正式Node SDK可另跑 `node --test scripts/pi-runtime.test.mjs`，本轮未改其运行逻辑。
+
+`build.ps1`已包含这三个测试文件。UI依赖检查使用单独的React/Markdown允许列表，不扩大领域核心的Zod边界；清单记录组件源码、UI bundle和CSS哈希。`message-render.test.mjs`在忽略目录生成Node渲染对照样例，不打入APK。
+
+`bundle-licenses.mjs`从实际Webpack模块资源收集许可证，包含生成CSS使用的Tailwind，完整文本写入APK的 `bundled-js-licenses.txt`；本版81个包条目。未复制第三方源码包，不读用户配置。生成CSS不含Tailwind preflight，避免重置试验表单；窄屏网格显式允许收缩，代码/表格在内部滚动。链接由UI适配层拦截，不开放外部导航。
 
 APK 包含项目 AGPL、Zod/Pi/TypeBox MIT、AndroidX Apache 许可说明，不包含本机配置、用户资料、签名私钥、浏览器 fixture 或原生 `.so`。完整会话/最终共用 React UI 仍为后续工作。
 
