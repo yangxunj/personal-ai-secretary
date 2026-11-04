@@ -8,7 +8,7 @@ import { buildPageTools } from '@/lib/page-tools';
 import type { PageBuilder } from '@/lib/page-builder';
 import { makeT, type T } from '@/lib/i18n/core';
 import { taskToolContracts } from '@/lib/tasks/contracts';
-import { createTaskService } from '@/lib/tasks/service';
+import { taskService as tasks } from '@/lib/tasks/prisma';
 
 /**
  * 网页里那个 AI 能调用的全部动作。
@@ -70,20 +70,6 @@ export function buildAgentTools({ incoming, conversationId, t = makeT(null), pag
     const existing=await db.attachment.findFirst({where:{storedPath:data.storedPath}});
     return existing?db.attachment.update({where:{id:existing.id},data}):db.attachment.create({data});
   };
-  const tasks = createTaskService({
-    create: data => db.task.create({ data }),
-    read: id => db.task.findUnique({ where: { id } }),
-    update: (id, _before, data) => db.task.update({ where: { id }, data }),
-    list: plan => db.task.findMany({
-      where: {
-        status: { in: plan.statuses },
-        ...(plan.category ? { category: plan.category } : {}),
-        ...(plan.keyword ? { title: { contains: plan.keyword } } : {}),
-      },
-      orderBy: [{ priority: 'asc' }, { dueDate: 'asc' }, { createdAt: 'desc' }],
-      take: plan.limit,
-    }),
-  });
   return {
     // ---------- 任务 ----------
 

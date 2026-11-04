@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL, fileURLToPath } from 'node:url';
 import { registerHooks } from 'node:module';
@@ -17,13 +17,14 @@ process.env.UPLOAD_DIR=path.join(directory,'uploads');await fs.mkdir(process.env
 execFileSync(process.execPath,[path.join(root,'node_modules/prisma/build/index.js'),'db','push','--skip-generate'],{env:process.env,stdio:'pipe'});
 const hooks=registerHooks({
   resolve(specifier,context,next){
-    if(specifier==='next/cache')return{url:'data:text/javascript,export const revalidatePath=()=>{};',shortCircuit:true};
+    if(specifier==='next/cache')return{url:'data:text/javascript,export const paths=[];export const revalidatePath=path=>paths.push(path);',shortCircuit:true};
+    if(specifier==='next/headers'||specifier==='next/navigation')return next(specifier+'.js',context);
     if(specifier.startsWith('.')&&context.parentURL?.startsWith('file:')){
       const base=fileURLToPath(new URL(specifier,context.parentURL)),file=['.ts','/index.ts'].map(e=>base+e).find(existsSync);
       if(file)return{url:pathToFileURL(file).href,shortCircuit:true};
     }
     if(specifier.startsWith('@/')){
-      const base=path.join(root,'src',specifier.slice(2)),file=['','.ts','.tsx','/index.ts'].map(e=>base+e).find(existsSync);
+      const base=path.join(root,'src',specifier.slice(2)),file=['','.ts','.tsx','/index.ts'].map(e=>base+e).find(file=>existsSync(file)&&statSync(file).isFile());
       if(!file)throw new Error('Unknown app module '+specifier);return{url:pathToFileURL(file).href,shortCircuit:true};
     }return next(specifier,context);
   },
@@ -455,4 +456,49 @@ test('formal web/Windows tools and Android bundle share task workflows and tool 
     assert.throws(() => android.toolWrite('bad', 'createTask', bad));
     await assert.rejects(call(formal.createTask, bad));
   }
+});
+
+test('real task form actions share validation and storage with AI tools while preserving form behavior', async () => {
+  const actions = await import('../src/app/(app)/actions.ts');
+  const { paths } = await import('next/cache');
+  const tools = buildChatTools({ incoming: [], conversationId: 'task-form-service', collectionTools: false });
+  const form = values => { const data = new FormData(); for (const [key, value] of Object.entries(values)) data.set(key, value); return data; };
+  const prefix = 'TASK-FORM-SERVICE';
+  const before = await db.task.count();
+  paths.length = 0;
+  await actions.createTask(form({ title: '   ' }));
+  assert.equal(await db.task.count(), before); assert.deepEqual(paths, []);
+  await actions.createTask(form({ title: '  ' + prefix + '  ', detail: '  Exact requirement\n  ', owner: '  Alice  ', dueDate: '2026-11-09' }));
+  assert.deepEqual(paths, ['/tasks']);
+  const task = await db.task.findFirstOrThrow({ where: { title: prefix } });
+  assert.equal(task.detail, 'Exact requirement'); assert.equal(task.owner, 'Alice');
+  assert.equal(task.category, '其他'); assert.equal(task.priority, 2); assert.equal(task.status, 'todo');
+  assert.equal(task.dueDate.toISOString(), '2026-11-09T00:00:00.000Z');
+  const listed = await call(tools.listTasks, { keyword: prefix });
+  assert.equal(listed.count, 1); assert.equal(listed.tasks[0].id, task.id);
+  await actions.updateTaskOwner(task.id, '  Bob  ');
+  await actions.updateTaskOwner(task.id, null);
+  await actions.updateTaskStatus(task.id, 'done');
+  const done = await db.task.findUniqueOrThrow({ where: { id: task.id } });
+  assert.equal(done.status, 'done'); assert.equal(done.owner, null);
+  assert.equal(done.detail, task.detail); assert.equal(done.title, task.title);
+  assert.equal(done.dueDate.toISOString(), task.dueDate.toISOString());
+  assert.equal((await call(tools.listTasks, { keyword: prefix })).count, 0);
+  assert.equal((await call(tools.listTasks, { keyword: prefix, status: 'done' })).count, 1);
+  paths.length = 0;
+  await assert.rejects(actions.updateTaskStatus(task.id, 'unknown'));
+  await assert.rejects(actions.updateTaskOwner('synthetic-missing-form-task', 'Alice'));
+  for (const bad of [{ priority: '4' }, { category: 'unknown' }, { dueDate: 'invalid' }]) {
+    await assert.rejects(actions.createTask(form({ title: prefix + '-invalid', ...bad })));
+  }
+  assert.deepEqual(paths, []); assert.equal(await db.task.count(), before + 1);
+  assert.equal((await db.task.findUniqueOrThrow({ where: { id: task.id } })).status, 'done');
+  const { withDatabaseTransaction } = await import('../src/lib/db.ts');
+  await assert.rejects(withDatabaseTransaction(async () => {
+    await actions.updateTaskStatus(task.id, 'doing');
+    await call(tools.createTask, { title: prefix + '-rollback' });
+    throw new Error('synthetic rollback');
+  }), /synthetic rollback/);
+  assert.equal(await db.task.count(), before + 1);
+  assert.equal((await db.task.findUniqueOrThrow({ where: { id: task.id } })).status, 'done');
 });

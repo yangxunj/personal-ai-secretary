@@ -2,6 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 import { db } from '@/lib/db';
+import { taskService } from '@/lib/tasks/prisma';
 import { destroySession } from '@/lib/auth';
 import { redirect } from 'next/navigation';
 import { getT } from '@/lib/i18n/server';
@@ -31,21 +32,19 @@ export async function markRead() {
 export async function createTask(formData: FormData) {
   const title = String(formData.get('title') ?? '').trim();
   if (!title) return;
-  await db.task.create({
-    data: {
-      title,
-      detail: String(formData.get('detail') ?? '').trim() || null,
-      category: String(formData.get('category') ?? '其他'), // i18n-ignore：存库的分类值
-      priority: Number(formData.get('priority') ?? 2),
-      owner: String(formData.get('owner') ?? '').trim() || null,
-      dueDate: formData.get('dueDate') ? new Date(String(formData.get('dueDate'))) : null,
-    },
+  await taskService.create({
+    title,
+    detail: String(formData.get('detail') ?? '').trim() || undefined,
+    category: String(formData.get('category') ?? '其他'), // i18n-ignore：存库的分类值
+    priority: Number(formData.get('priority') ?? 2),
+    owner: String(formData.get('owner') ?? ''),
+    dueDate: formData.get('dueDate') ? String(formData.get('dueDate')) : undefined,
   });
   revalidatePath('/tasks');
 }
 
 export async function updateTaskStatus(id: string, status: string) {
-  await db.task.update({ where: { id }, data: { status } });
+  await taskService.update({ id, status });
   revalidatePath('/tasks');
 }
 
@@ -55,7 +54,7 @@ export async function updateTaskStatus(id: string, status: string) {
  * 跟状态切换一个道理，所以做成一样的小按钮。
  */
 export async function updateTaskOwner(id: string, owner: string | null) {
-  await db.task.update({ where: { id }, data: { owner } });
+  await taskService.update({ id, owner: owner ?? '' });
   revalidatePath('/tasks');
 }
 
