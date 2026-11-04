@@ -6,6 +6,8 @@ M0/M1完成；前五版分别获用户通过反馈。当前 `0.5.0-pilot` 的多
 
 最新为 `0.6.0-pilot`，直接复用正式 `src/components/MessageBody.tsx` 及同源码生成的样式；用户已确认[第六版交付清单全部通过](../../docs/安卓第六版共用消息界面验收.md)，包括旧数据、Markdown、表格/代码滑动、横竖屏和重开后连续追问。第六版成为已验收基线，数据库仍为版本5。
 
+当前待验收版本为 `0.7.0-pilot`：[第七版下载与验收](../../docs/安卓第七版共用会话与输入验收.md)。新增共享ConversationListView、日期分组与ChatTextInput，正式网页/Windows入口和安卓均接入；原路由/附件/语音与安卓传输保留平台包装器。数据库仍为版本5，原生列表仅增加返回更新时间。
+
 设备未连接开发机，继续由用户手工验收。[首包](../../docs/安卓首个试验包验收.md)、[第二版](../../docs/安卓第二版覆盖升级验收.md)、[第三版](../../docs/安卓第三版Pi与模型连接验收.md)、[第四版](../../docs/安卓第四版待办验收.md)、[第五版下载与验收](../../docs/安卓第五版多轮会话验收.md)。M2进行中，后续接共用产品界面；强停/后台/密钥跨升级保留仍没有单独回执，设备自动测试未执行。
 
 ## 构建与验证
@@ -18,7 +20,7 @@ M0/M1完成；前五版分别获用户通过反馈。当前 `0.5.0-pilot` 的多
 
 脚本默认使用工程的 Gradle 8.9 Wrapper；需要时可显式传入 `-NodePath`、`-GradlePath`。首次构建会从官方仓库下载依赖；依赖齐备后可加 `-Offline`。本轮已用 Gradle 8.9 补齐在线依赖，并使用 Wrapper 完成最终离线构建。
 
-脚本执行核心/UI双入口构建及25项检查（共用/Pi20、共享依赖3、组件SSR/清单2），生成应用APK与设备测试APK；TypeScript与Lint另行检查通过。交付APK在被忽略的 `artifacts/`，版本来自 `pilot-config.json`；调试密钥、缓存、数据和本机SDK路径不加入Git。
+脚本执行核心/UI双入口构建及28项检查（共用/Pi20、共享依赖3、正文SSR/清单2、会话控件3），生成应用APK与设备测试APK；本轮另通过正式聊天历史/展示回归9项、TypeScript、隔离Next生产构建及Lint，共37项相关检查。交付APK在忽略的 `artifacts/`，版本来自 `pilot-config.json`；密钥、缓存、数据和本机SDK路径不加入Git。
 
 设备自动验收（尚未运行）：
 
@@ -80,6 +82,8 @@ node experiments/android-shared/inventory.mjs
 重跑：先执行 `node experiments/android-shared/build-web.mjs`，再执行 `node --test scripts/check-shared-core.test.mjs experiments/android-shared/shared-rules.test.mjs experiments/android-shared/message-render.test.mjs`，当前25项通过。覆盖依赖故障注入、两端任务策略、Pi历史/恢复和共用正文。正式Node SDK可另跑 `node --test scripts/pi-runtime.test.mjs`，本轮未改其运行逻辑。
 
 `build.ps1`已包含这三个测试文件。UI依赖检查使用单独的React/Markdown允许列表，不扩大领域核心的Zod边界；清单记录组件源码、UI bundle和CSS哈希。`message-render.test.mjs`在忽略目录生成Node渲染对照样例，不打入APK。
+
+第七版增加 `chat-controls.test.mjs`，构建脚本现含四个测试文件、28项检查；正式历史/展示回归另跑 `node --test scripts/chat-history.test.mjs scripts/chat-display.test.mjs`。UI边界新增共用列表/文本输入与分组模块，清单的 `sharedUiSources`记录各源码哈希。真实网页的导航、附件粘贴、桌面提交及本地合成模型往返已验；安卓IME/触屏事件为合成分支测试，真实平板仍待验收。
 
 `bundle-licenses.mjs`从实际Webpack模块资源收集许可证，包含生成CSS使用的Tailwind，完整文本写入APK的 `bundled-js-licenses.txt`；本版81个包条目。未复制第三方源码包，不读用户配置。生成CSS不含Tailwind preflight，避免重置试验表单；窄屏网格显式允许收缩，代码/表格在内部滚动。链接由UI适配层拦截，不开放外部导航。
 

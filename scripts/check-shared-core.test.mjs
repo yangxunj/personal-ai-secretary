@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { checkSharedCore, sharedEntries } from './check-shared-core.mjs';
+import { checkSharedCore, sharedEntries, sharedUiEntries } from './check-shared-core.mjs';
 
 test('current shared runtime closure uses only source modules and reviewed Zod', () => {
   const result = checkSharedCore();
@@ -11,9 +11,10 @@ test('current shared runtime closure uses only source modules and reviewed Zod',
   assert.deepEqual(result.packages, ['zod']);
 });
 
-test('production message component stays within the reviewed shared UI dependency boundary', () => {
-  const result = checkSharedCore(undefined, ['src/components/MessageBody.tsx'], ['react', 'react/jsx-runtime', 'react-markdown', 'remark-gfm']);
-  assert.deepEqual(result.files, ['src/components/MessageBody.tsx']);
+test('production message, conversation and input components stay inside the reviewed shared UI boundary', () => {
+  const result = checkSharedCore(undefined, sharedUiEntries, ['react', 'react/jsx-runtime', 'react-markdown', 'remark-gfm']);
+  for (const file of sharedUiEntries) assert.ok(result.files.includes(file));
+  assert.ok(result.files.includes('src/components/chat/shared/conversation-list.ts'));
   assert.deepEqual(result.packages, ['react', 'react-markdown', 'react/jsx-runtime', 'remark-gfm']);
 });
 

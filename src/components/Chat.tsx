@@ -6,6 +6,7 @@ import { DefaultChatTransport } from 'ai';
 import { memo, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import MessageBody from '@/components/MessageBody';
+import ChatTextInput from '@/components/chat/shared/ChatTextInput';
 import { isModelImage, unreadableReason } from '@/lib/file-support';
 import { formatTime, dayLabel, sameDay, humanSize } from '@/lib/format';
 import { titleConversation } from '@/app/(app)/chat/actions';
@@ -719,24 +720,19 @@ export function Chat({
           >
             +
           </button>
-          <textarea
+          <ChatTextInput
             ref={inputRef}
             readOnly={autoVoice}
             value={input}
-            onChange={(e) => setInput(e.target.value)}
+            onDraftChange={setInput}
+            canSend={!busy && !voiceBusy && !autoVoice && active && (!!input.trim() || !!files.length)}
+            onSend={() => void send()}
             onPaste={(e) => {
               // 截图直接 Ctrl+V 贴进来 —— 桌面上这是最顺手的传图方式
               const pasted = Array.from(e.clipboardData.files);
               if (pasted.length) {
                 e.preventDefault();
                 addFiles(pasted);
-              }
-            }}
-            onKeyDown={(e) => {
-              // 手机上回车就是换行，别抢；桌面上 Enter 发送、Shift+Enter 换行
-              if (e.key === 'Enter' && !e.shiftKey && !('ontouchstart' in window)) {
-                e.preventDefault();
-                send();
               }
             }}
             rows={1}

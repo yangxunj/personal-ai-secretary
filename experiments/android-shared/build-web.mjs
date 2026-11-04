@@ -3,7 +3,7 @@ import { mkdir, readFile, writeFile, copyFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { checkSharedCore } from '../../scripts/check-shared-core.mjs';
+import { checkSharedCore, sharedUiEntries } from '../../scripts/check-shared-core.mjs';
 import postcss from 'postcss';
 import tailwindcss from '@tailwindcss/postcss';
 import { bundleLicenses } from './bundle-licenses.mjs';
@@ -16,7 +16,7 @@ const directory = fileURLToPath(new URL('.', import.meta.url));
 const root = path.resolve(directory, '../..');
 const sharedBoundary = checkSharedCore(root);
 const messageSource = 'src/components/MessageBody.tsx';
-const sharedUiBoundary = checkSharedCore(root, [messageSource], ['react', 'react/jsx-runtime', 'react-markdown', 'remark-gfm']);
+const sharedUiBoundary = checkSharedCore(root, sharedUiEntries, ['react', 'react/jsx-runtime', 'react-markdown', 'remark-gfm']);
 const output = path.join(directory, 'web-dist');
 const schema = 'src/lib/collections/schema.ts';
 const service = 'src/lib/collections/record-write.ts';
@@ -59,6 +59,7 @@ const manifest = {
   bundledPackages: licenses.packages,
   sharedBoundary,
   sharedUiBoundary,
+  sharedUiSources: await Promise.all(sharedUiBoundary.files.map(async file => ({ file, sha256: hash(await readFile(path.join(root, file))) }))),
   messageSource, messageSourceSha256: hash(await readFile(path.join(root, messageSource))),
   messageBundleSha256: hash(await readFile(path.join(output, 'messages.js'))),
   messageStylesSha256: hash(await readFile(path.join(output, 'shared-message.css'))),

@@ -12,6 +12,11 @@ export const sharedEntries = [
   'src/lib/pi/conversation.mjs',
   'src/lib/pi/context-budget.mjs',
 ];
+export const sharedUiEntries = [
+  'src/components/MessageBody.tsx',
+  'src/components/chat/shared/ConversationListView.tsx',
+  'src/components/chat/shared/ChatTextInput.tsx',
+];
 const repository = fileURLToPath(new URL('../', import.meta.url));
 
 /** Check the runtime closure of shared source. Type-only imports are erased by

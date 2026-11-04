@@ -1,0 +1,59 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { readFileSync, existsSync } from 'node:fs';
+import { registerHooks } from 'node:module';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import path from 'node:path';
+import { createElement } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
+import { createHash } from 'node:crypto';
+import ts from 'typescript';
+
+const root = fileURLToPath(new URL('../../', import.meta.url));
+const hooks = registerHooks({
+  resolve(specifier, context, next) {
+    if (specifier.startsWith('.') && context.parentURL?.startsWith('file:') && !context.parentURL.includes('/node_modules/')) {
+      const base = fileURLToPath(new URL(specifier, context.parentURL));
+      const file = ['.ts', '.tsx'].map(extension => base + extension).find(existsSync);
+      if (file) return { url: pathToFileURL(file).href, shortCircuit: true };
+    }
+    return next(specifier, context);
+  },
+  load(url, context, next) {
+    if (url.startsWith('file:') && /\.tsx?$/.test(url) && !url.includes('/node_modules/')) return { format: 'module', shortCircuit: true,
+      source: ts.transpileModule(readFileSync(fileURLToPath(url), 'utf8'), { fileName: fileURLToPath(url), compilerOptions: { target: ts.ScriptTarget.ES2020, module: ts.ModuleKind.ESNext, jsx: ts.JsxEmit.ReactJSX } }).outputText };
+    return next(url, context);
+  },
+});
+test.after(() => hooks.deregister());
+const { groupConversationItems } = await import('../../src/components/chat/shared/conversation-list.ts');
+const { default: ConversationListView } = await import('../../src/components/chat/shared/ConversationListView.tsx');
+const now = new Date(2026, 10, 4, 12), t = value => value;
+
+test('shared conversation date buckets preserve incoming order and existing local-day semantics', () => {
+  const rows = [0, 1, 4, 15, 40].map((days, index) => ({ id: String(index), title: 'row-' + index, updatedAt: new Date(2026, 10, 4 - days, 10).toISOString() }));
+  const groups = groupConversationItems(rows, t, now);
+  assert.deepEqual(groups.map(([label]) => label), ['今天', '昨天', '7 天内', '30 天内', '更早']);
+  assert.deepEqual(groups.flatMap(([, values]) => values.map(row => row.id)), rows.map(row => row.id));
+  assert.deepEqual(groupConversationItems([], t, now), []);
+});
+
+test('one conversation view supports disabled native buttons and caller-owned web navigation without injecting titles', () => {
+  const items = [{ id: 'a', title: '<script>title</script>', updatedAt: now.toISOString(), provisional: false }];
+  const native = renderToStaticMarkup(createElement(ConversationListView, { items, activeId: 'a', t, disabled: true }));
+  assert.equal((native.match(/disabled=""/g) || []).length, 2);
+  assert.match(native, /aria-current="page"/); assert.doesNotMatch(native, /<script>/);
+  const web = renderToStaticMarkup(createElement(ConversationListView, { items, activeId: 'a', t,
+    renderNavigation: ({ id, className, children }) => createElement('a', { href: id === null ? '/chat' : '/chat/' + id, className }, children) }));
+  assert.match(web, /href="\/chat"/); assert.match(web, /href="\/chat\/a"/);
+  assert.doesNotMatch(web, /<button/);
+});
+
+test('all shared conversation and text input source files match the Android build manifest', () => {
+  const manifest = JSON.parse(readFileSync(new URL('web-dist/build-manifest.json', import.meta.url), 'utf8'));
+  for (const file of ['src/components/chat/shared/ConversationListView.tsx', 'src/components/chat/shared/ChatTextInput.tsx', 'src/components/chat/shared/conversation-list.ts']) {
+    const entry = manifest.sharedUiSources.find(entry => entry.file === file);
+    assert.ok(entry, file);
+    assert.equal(entry.sha256, createHash('sha256').update(readFileSync(path.join(root, file))).digest('hex'));
+  }
+});

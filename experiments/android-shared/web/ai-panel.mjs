@@ -13,7 +13,7 @@ export function attachAiPanel(document, host, records, definition, refresh, task
   const bridge = host.SecretaryStorage;
   const pending = new Map();
   let active;
-  const conversations = attachConversationPanel(document, bridge, nonce, host.PilotMessageUI);
+  const conversations = attachConversationPanel(document, bridge, nonce, host.PilotMessageUI, () => form.requestSubmit(send));
   const mode = () => document.querySelector('input[name="ai-mode"]:checked').value;
   const settingsChanged = () => { document.getElementById('key-state').textContent = bridge.hasApiKey?.() ? '已保存密钥；是否有效需实际请求确认。' : '尚未配置密钥。'; };
   host.SecretaryAI = {
@@ -56,7 +56,7 @@ export function attachAiPanel(document, host, records, definition, refresh, task
   form.addEventListener('submit', async event => {
     event.preventDefault(); if (active) return;
     const real = mode() === 'deepseek';
-    const prompt = real ? document.getElementById('ai-prompt').value.trim() : '创建一条固定的离线演练待办。';
+    const prompt = real ? conversations.draft.trim() : '创建一条固定的离线演练待办。';
     if (real && !bridge.hasApiKey?.()) { output.textContent = '请先设置你自己的 DeepSeek 密钥。'; return; }
     if (!prompt) { output.textContent = '请填写请求。'; return; }
     if (typeof structuredClone !== 'function') { output.textContent = '当前 WebView 版本过旧，请先更新 Android System WebView。'; return; }

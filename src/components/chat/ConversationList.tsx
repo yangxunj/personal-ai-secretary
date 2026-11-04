@@ -7,7 +7,7 @@ import { listConversations } from '@/app/(app)/chat/actions';
 import type { ConversationItem } from '@/lib/conversations';
 import { CONV_EVENT, type ConvEventDetail } from './events';
 import { useT } from '@/lib/i18n/client';
-import type { T } from '@/lib/i18n/core';
+import ConversationListView from './shared/ConversationListView';
 
 /**
  * 对话列表：按最后说话的时间分组（今天 / 昨天 / 7 天内 / 30 天内 / 更早），
@@ -79,68 +79,9 @@ export default function ConversationList({
     return () => window.removeEventListener(CONV_EVENT, on);
   }, []);
 
-  const groups = group(items, t);
-
-  return (
-    <div className="flex flex-col h-full">
-      <div className="px-3 pt-3 pb-2 shrink-0">
-        <Link
-          href="/chat"
-          onClick={onNavigate}
-          className="flex items-center justify-center gap-2 w-full rounded-xl border px-3 py-2.5 text-[14px] font-medium hover:border-brand-500 hover:text-brand-600 dark:hover:text-brand-300 transition"
-          style={{ borderColor: 'var(--border)' }}
-        >
-          <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-            <path d="M12 5v14M5 12h14" />
-          </svg>
-          {t('新对话')}
-        </Link>
-      </div>
-
-      <div className="flex-1 overflow-y-auto px-2 pb-4">
-        {items.length === 0 && <p className="muted text-[12px] text-center py-8">{t('还没有对话')}</p>}
-        {groups.map(([label, xs]) => (
-          <div key={label} className="mt-3 first:mt-1">
-            <p className="muted text-[11px] font-medium px-2.5 mb-1">{label}</p>
-            {xs.map((c) => {
-              const active = c.id === activeId;
-              return (
-                <Link
-                  key={c.id}
-                  href={`/chat/${c.id}`}
-                  onClick={onNavigate}
-                  title={c.title}
-                  className={`block truncate rounded-lg px-2.5 py-2 text-[13.5px] transition ${
-                    active ? 'bg-brand-500/10 text-brand-600 dark:text-brand-300 font-medium' : 'hover:bg-brand-500/5'
-                  } ${c.provisional && !active ? 'muted' : ''}`}
-                >
-                  {c.title}
-                </Link>
-              );
-            })}
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function group(items: ConversationItem[], t: T): [string, ConversationItem[]][] {
-  const now = new Date();
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
-  const DAY = 86_400_000;
-  const buckets: [string, (t: number) => boolean][] = [
-    [t('今天'), (ts) => ts >= today],
-    [t('昨天'), (ts) => ts >= today - DAY],
-    [t('7 天内'), (ts) => ts >= today - 6 * DAY],
-    [t('30 天内'), (ts) => ts >= today - 29 * DAY],
-    [t('更早'), () => true],
-  ];
-  const out = new Map<string, ConversationItem[]>();
-  for (const c of items) {
-    const ts = new Date(c.updatedAt).getTime();
-    const label = buckets.find(([, f]) => f(ts))![0];
-    out.set(label, [...(out.get(label) ?? []), c]);
-  }
-  return buckets.map(([l]) => l).filter((l) => out.has(l)).map((l) => [l, out.get(l)!]);
+  return <ConversationListView items={items} activeId={activeId} t={t}
+    renderNavigation={({ id, title, current, className, style, children }) => (
+      <Link href={id === null ? '/chat' : '/chat/' + id} onClick={onNavigate} title={title}
+        aria-current={current ? 'page' : undefined} className={className} style={style}>{children}</Link>
+    )} />;
 }

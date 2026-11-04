@@ -17,8 +17,8 @@ final class ConversationStore {
     }
     static JSONArray list(SQLiteDatabase db, String mode) throws Exception {
         mode(mode); JSONArray result = new JSONArray();
-        try (Cursor cursor = db.query("conversations", new String[]{"id", "title"}, "mode = ?", new String[]{mode}, null, null, "updated_at DESC, id ASC", "20")) {
-            while (cursor.moveToNext()) result.put(new JSONObject().put("id", cursor.getString(0)).put("title", cursor.getString(1)));
+        try (Cursor cursor = db.query("conversations", new String[]{"id", "title", "updated_at"}, "mode = ?", new String[]{mode}, null, null, "updated_at DESC, id ASC", "20")) {
+            while (cursor.moveToNext()) result.put(new JSONObject().put("id", cursor.getString(0)).put("title", cursor.getString(1)).put("updatedAt", cursor.getLong(2)));
         }
         return result;
     }

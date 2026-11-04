@@ -45,7 +45,7 @@
     <section aria-labelledby="list-title"><h2 id="list-title">已保存的书单 <span id="count">0</span></h2><p id="empty">还没有阅读记录。</p><ul id="records"></ul><button class="secondary" id="refresh" type="button">重新读取</button></section>
     <section class="ai-panel" aria-labelledby="ai-title">
       <h2 id="ai-title">秘书助手（待办与书单试点）</h2>
-      <div class="conversation-toolbar"><label>本机对话<select id="conversation-select"></select></label><button class="secondary" id="conversation-new" type="button">新建对话</button></div>
+      <h3>本机对话</h3><div id="shared-conversation-list" class="shared-conversation-list" aria-label="本机对话"></div>
       <p id="conversation-status" role="status"></p>
       <ol id="conversation-messages" aria-label="对话记录"></ol>
       <p id="message-link-status" role="status" aria-live="polite"></p>
@@ -56,7 +56,7 @@
         <fieldset id="deepseek-fields" disabled hidden>
           <p>使用你自己的 DeepSeek API Key，调用会按服务商规则计费。本次对话历史、本轮请求、前 25 条书单及工具查询的待办／书单会发送到 DeepSeek。模型回复一次性显示。</p>
           <button class="secondary" id="model-key" type="button">设置模型密钥</button><p id="key-state"></p>
-          <label>交代一件事<textarea id="ai-prompt" rows="3" maxlength="1000" placeholder="例如：帮我建一条待办，周五前预约牙科检查"></textarea></label>
+          <label for="ai-prompt">交代一件事</label><div id="shared-composer"></div>
           <p>同一对话可以连续追问，重开后保留；切换对话可继续。中断不自动重发，请先查询已保存结果。每个对话最多 40 轮，上下文过长时请新建；暂不自动压缩，不支持附件、专题或同步。</p>
         </fieldset>
         <button id="ai-send" type="submit">运行离线演练</button>
