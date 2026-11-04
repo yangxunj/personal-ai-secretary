@@ -411,3 +411,48 @@ test('shared general task contracts preserve exact requirements, defaults, query
   const done=await call(tools.listTasks,{keyword:'TASK-SHARED-',status:'done'});assert.equal(done.count,1);assert.equal(done.tasks[0].dueDate,'2026-11-09');
   assert.equal((await call(tools.updateTask,{id:'synthetic-missing',status:'done'})).ok,false);
 });
+
+test('formal web/Windows tools and Android bundle share task workflows and tool results', async () => {
+  const vm = await import('node:vm');
+  // web-dist is ignored: build from current source so a clean checkout works
+  // and parity cannot accidentally be checked against a previous pilot bundle.
+  execFileSync(process.execPath, [path.join(root, 'experiments/android-shared/build-web.mjs')], { cwd: root, stdio: 'pipe', windowsHide: true });
+  const browser = vm.createContext({ console, performance, structuredClone, AbortController, TextEncoder, TextDecoder, URL, URLSearchParams, setTimeout, clearTimeout }, { codeGeneration: { strings: false, wasm: false } });
+  vm.runInContext(readFileSync(path.join(root, 'experiments/android-shared/web-dist/pilot.js'), 'utf8'), browser);
+  const rows = [], receipts = new Map(); let writes = 0;
+  const plain = value => JSON.parse(JSON.stringify(value));
+  const storage = {
+    list: plan => rows.filter(row => plan.statuses.includes(row.status) && (!plan.category || row.category === plan.category) && (!plan.keyword || row.title.includes(plan.keyword))).slice(0, plan.limit),
+    read: id => rows.find(row => row.id === id),
+    create(values) { writes++; const row = { ...plain(values), id: 'android-' + rows.length, version: 1 }; rows.push(row); return row; },
+    update(id, version, values) { const row = this.read(id); if (row.version !== version) throw new Error('conflict'); writes++; Object.assign(row, plain(values), { version: version + 1 }); return row; },
+    readReceipt(key, signature) { const prior = receipts.get(key); if (prior && prior.signature !== signature) throw new Error('receipt mismatch'); return prior?.row; },
+    commitTool(key, signature, op) { const row = op.kind === 'task-create' ? this.create(op.values) : this.update(op.id, op.expectedVersion, op.values); receipts.set(key, { signature, row: plain(row) }); return row; },
+  };
+  const android = browser.PilotCore.createTasks(storage);
+  const formal = buildChatTools({ incoming: [], conversationId: 'task-service-parity', collectionTools: false });
+  const normalize = value => JSON.parse(JSON.stringify(value, (key, item) => key === 'id' ? 'same-id' : item));
+  const title = 'TASK-SERVICE-PARITY original', detail = 'Original requirement';
+  const args = { title, detail, owner: '  owner  ', dueDate: '2026-11-09' };
+  const a = android.toolWrite('create', 'createTask', args), b = await call(formal.createTask, args);
+  assert.deepEqual(normalize(a), normalize(b));
+  const compareList = async input => assert.deepEqual(normalize(android.listTasks(input)), normalize(await call(formal.listTasks, input)));
+  await compareList({ keyword: title });
+  const patch = { status: 'done', result: 'finished', owner: '', dueDate: '' };
+  const done = android.toolWrite('done', 'updateTask', { ...patch, id: a.id });
+  assert.deepEqual(normalize(done), normalize(await call(formal.updateTask, { ...patch, id: b.id })));
+  await compareList({ keyword: title }); await compareList({ keyword: title, status: 'done' });
+  const missing = { id: 'synthetic-service-missing', status: 'done' };
+  assert.deepEqual(plain(android.toolWrite('missing', 'updateTask', missing)), plain(await call(formal.updateTask, missing)));
+  // Receipt replay must return the original result even if the current row changed.
+  android.update({ id: a.id, status: 'doing' });
+  const count = writes;
+  assert.deepEqual(plain(android.toolWrite('done', 'updateTask', { ...patch, id: a.id })), plain(done));
+  assert.equal(writes, count);
+  assert.equal(rows[0].status, 'doing'); assert.equal(rows[0].detail, detail);
+  assert.throws(() => android.toolWrite('create', 'createTask', { title: 'changed' }), /mismatch/);
+  for (const bad of [{ title: 'bad', dueDate: 'invalid' }, { title: 'bad', priority: 4 }]) {
+    assert.throws(() => android.toolWrite('bad', 'createTask', bad));
+    await assert.rejects(call(formal.createTask, bad));
+  }
+});

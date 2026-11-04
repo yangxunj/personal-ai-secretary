@@ -1,20 +1,30 @@
+import { createTaskService } from '../../../src/lib/tasks/service.ts';
 import { prepareTaskCreate, prepareTaskUpdate, prepareTaskQuery, taskPublicDto } from '../../../src/lib/tasks/policy.ts';
 import { TASK_STATUSES } from '../../../src/lib/tasks/contracts.ts';
 export const taskPolicy = { prepareTaskCreate, prepareTaskUpdate, prepareTaskQuery, taskPublicDto };
 
 export function createTasks(storage) {
-  const current = id => { const task = storage.read(id); if (!task) throw new Error('任务不存在，请重新查询。'); return task; };
+  const adapter = {
+    ...storage,
+    update: (id, before, values) => storage.update(id, before.version, values),
+  };
+  const service = createTaskService(adapter);
   return {
-    list: input => storage.list(prepareTaskQuery(input || {})),
-    create: input => storage.create(prepareTaskCreate(input)),
-    update(input) { const before = current(input.id); return storage.update(input.id, before.version, prepareTaskUpdate(input)); },
+    ...service,
     toolWrite(key, name, args) {
+      if (name !== 'createTask' && name !== 'updateTask') throw new Error('Unknown task write: ' + name);
       const signature = name + ':' + JSON.stringify(args);
-      const prior = storage.readReceipt(key, signature); if (prior) return prior;
-      let operation;
-      if (name === 'createTask') operation = { kind: 'task-create', values: prepareTaskCreate(args) };
-      else { const before = current(args.id); operation = { kind: 'task-update', id: args.id, expectedVersion: before.version, values: prepareTaskUpdate(args) }; }
-      return storage.commitTool(key, signature, operation);
+      // Native commitTool retains atomic task/receipt writes and version checks.
+      // Replays pass through the same shared tool-result projection.
+      const prior = storage.readReceipt(key, signature);
+      const write = operation => prior || storage.commitTool(key, signature, operation);
+      const toolService = createTaskService({
+        ...adapter,
+        read: id => prior || storage.read(id),
+        create: values => write({ kind: 'task-create', values }),
+        update: (id, before, values) => write({ kind: 'task-update', id, expectedVersion: before.version, values }),
+      });
+      return toolService[name](args);
     },
   };
 }

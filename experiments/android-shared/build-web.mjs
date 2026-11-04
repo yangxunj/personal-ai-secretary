@@ -68,6 +68,7 @@ const manifest = {
   sharedService: service, sharedServiceSha256: hash(await readFile(path.join(root, service))),
   sharedToolContractsSha256: hash(await readFile(path.join(root, 'src/lib/collections/tool-contracts.ts'))),
   taskContractsSha256: hash(await readFile(path.join(root, 'src/lib/tasks/contracts.ts'))),
+  taskServiceSha256: hash(await readFile(path.join(root, 'src/lib/tasks/service.ts'))),
   taskPolicySha256: hash(await readFile(path.join(root, 'src/lib/tasks/policy.ts'))),
   conversationSha256: hash(await readFile(path.join(root, 'src/lib/pi/conversation.mjs'))),
   contextBudgetSha256: hash(await readFile(path.join(root, 'src/lib/pi/context-budget.mjs'))),

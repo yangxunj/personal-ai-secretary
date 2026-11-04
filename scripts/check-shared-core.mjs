@@ -9,6 +9,7 @@ export const sharedEntries = [
   'src/lib/collections/tool-contracts.ts',
   'src/lib/tasks/contracts.ts',
   'src/lib/tasks/policy.ts',
+  'src/lib/tasks/service.ts',
   'src/lib/pi/conversation.mjs',
   'src/lib/pi/context-budget.mjs',
 ];

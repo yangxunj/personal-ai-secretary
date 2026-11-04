@@ -8,7 +8,7 @@ import { buildPageTools } from '@/lib/page-tools';
 import type { PageBuilder } from '@/lib/page-builder';
 import { makeT, type T } from '@/lib/i18n/core';
 import { taskToolContracts } from '@/lib/tasks/contracts';
-import { prepareTaskCreate, prepareTaskUpdate, prepareTaskQuery, taskPublicDto } from '@/lib/tasks/policy';
+import { createTaskService } from '@/lib/tasks/service';
 
 /**
  * 网页里那个 AI 能调用的全部动作。
@@ -70,56 +70,45 @@ export function buildAgentTools({ incoming, conversationId, t = makeT(null), pag
     const existing=await db.attachment.findFirst({where:{storedPath:data.storedPath}});
     return existing?db.attachment.update({where:{id:existing.id},data}):db.attachment.create({data});
   };
+  const tasks = createTaskService({
+    create: data => db.task.create({ data }),
+    read: id => db.task.findUnique({ where: { id } }),
+    update: (id, _before, data) => db.task.update({ where: { id }, data }),
+    list: plan => db.task.findMany({
+      where: {
+        status: { in: plan.statuses },
+        ...(plan.category ? { category: plan.category } : {}),
+        ...(plan.keyword ? { title: { contains: plan.keyword } } : {}),
+      },
+      orderBy: [{ priority: 'asc' }, { dueDate: 'asc' }, { createdAt: 'desc' }],
+      take: plan.limit,
+    }),
+  });
   return {
     // ---------- 任务 ----------
 
     createTask: tool({
       ...taskToolContracts.createTask,
       async execute(args) {
-        const t = await db.task.create({
-          data: prepareTaskCreate(args),
-        });
+        const result = await tasks.createTask(args);
         refresh('/tasks', '/chat');
-        return { ok: true, id: t.id, title: t.title, dueDate: args.dueDate ?? null, owner: t.owner };
+        return result;
       },
     }),
 
     listTasks: tool({
       ...taskToolContracts.listTasks,
       async execute(input) {
-        const plan = prepareTaskQuery(input);
-        const tasks = await db.task.findMany({
-          where: {
-            status: { in: plan.statuses },
-            ...(plan.category ? { category: plan.category } : {}),
-            ...(plan.keyword ? { title: { contains: plan.keyword } } : {}),
-          },
-          orderBy: [{ priority: 'asc' }, { dueDate: 'asc' }, { createdAt: 'desc' }],
-          take: plan.limit,
-          select: {
-            id: true, title: true, detail: true, status: true,
-            category: true, priority: true, dueDate: true, result: true, owner: true,
-          },
-        });
-        return {
-          count: tasks.length,
-          tasks: tasks.map(taskPublicDto),
-        };
+        return tasks.listTasks(input);
       },
     }),
 
     updateTask: tool({
       ...taskToolContracts.updateTask,
       async execute(args) {
-        const { id } = args;
-        const exists = await db.task.findUnique({ where: { id }, select: { id: true } });
-        if (!exists) return { ok: false, error: `没有 id 为 ${id} 的任务，先用 listTasks 查一下` };
-        const t = await db.task.update({
-          where: { id },
-          data: prepareTaskUpdate(args),
-        });
-        refresh('/tasks', `/tasks/${id}`, '/chat');
-        return { ok: true, id: t.id, title: t.title, status: t.status };
+        const result = await tasks.updateTask(args);
+        if (result.ok) refresh('/tasks', '/tasks/' + args.id, '/chat');
+        return result;
       },
     }),
 

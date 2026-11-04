@@ -38,6 +38,7 @@ test('Android bundle contains the exact current shared source and its rules pass
     ['sharedToolContractsSha256', 'collections/tool-contracts.ts'],
     ['taskContractsSha256', 'tasks/contracts.ts'],
     ['taskPolicySha256', 'tasks/policy.ts'],
+    ['taskServiceSha256', 'tasks/service.ts'],
     ['conversationSha256', 'pi/conversation.mjs'],
     ['contextBudgetSha256', 'pi/context-budget.mjs'],
   ]) assert.equal(manifest[field], createHash('sha256').update(readFileSync(new URL('../../src/lib/' + source, import.meta.url))).digest('hex'));
@@ -209,8 +210,27 @@ function taskFixture() {
     readReceipt(key, signature) { const prior = receipts.get(key); if (prior && prior.signature !== signature) throw new Error('receipt mismatch'); return prior?.row; },
     commitTool(key, signature, operation) { const row = operation.kind === 'task-create' ? this.create(operation.values) : this.update(operation.id, operation.expectedVersion, operation.values); receipts.set(key, { signature, row: plain(row) }); return row; },
   };
-  return { rows, receipts, tasks: core.createTasks(storage) };
+  return { rows, receipts, storage, tasks: core.createTasks(storage) };
 }
+
+test('shared task workflows propagate storage failures and never turn missing tasks into successful writes', async () => {
+  const fixture = taskFixture();
+  assert.equal(fixture.tasks.toolWrite('missing', 'updateTask', { id: 'missing', status: 'done' }).ok, false);
+  assert.equal(fixture.receipts.size, 0);
+  assert.throws(() => fixture.tasks.update({ id: 'missing', status: 'done' }), /missing/);
+  const row = fixture.tasks.create({ title: 'Keep original' });
+  fixture.storage.commitTool = () => { throw new Error('synthetic disk full'); };
+  assert.throws(() => fixture.tasks.toolWrite('failed', 'updateTask', { id: row.id, status: 'done' }), /disk full/);
+  assert.equal(row.status, 'todo'); assert.equal(fixture.receipts.size, 0);
+  const asyncTasks = core.createTasks({ ...fixture.storage,
+    list: async () => { throw new Error('synthetic read failure'); },
+    read: async () => row,
+    update: async () => { throw new Error('synthetic version conflict'); },
+  });
+  await assert.rejects(asyncTasks.listTasks({}), /read failure/);
+  await assert.rejects(asyncTasks.updateTask({ id: row.id, status: 'done' }), /version conflict/);
+  assert.equal(row.status, 'todo');
+});
 
 test('shared task policy preserves original text, default values and omitted patch fields', () => {
   const created = plain(core.taskPolicy.prepareTaskCreate({ title: ' 原始标题 ', detail: '原始要求\nExact text', owner: '  测试成员  ', dueDate: '2026-11-09' }));

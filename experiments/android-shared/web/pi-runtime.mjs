@@ -4,7 +4,6 @@ import { Settings } from 'typebox/system';
 import { z } from 'zod';
 import { collectionRecordContracts } from '../../../src/lib/collections/tool-contracts.ts';
 import { taskToolContracts } from '../../../src/lib/tasks/contracts.ts';
-import { taskPublicDto } from '../../../src/lib/tasks/policy.ts';
 import { estimateContextTokens } from '../../../src/lib/pi/context-budget.mjs';
 
 // Use TypeBox's supported interpreter under CSP, with no unsafe-eval exception.
@@ -67,12 +66,8 @@ export async function runPilotAgent({ prompt, records, definition, tasks, histor
       // Pi's validation may coerce arguments; always run the authoritative Zod contract too.
       const args = contract.inputSchema.parse(input);
       if (name in taskToolContracts) {
-        let result;
-        if (name === 'listTasks') { const rows = tasks.list(args).map(taskPublicDto); result = { count: rows.length, tasks: rows }; }
-        else {
-          const row = tasks.toolWrite(turnId + ':' + callId, name, args);
-          result = name === 'createTask' ? { ok: true, id: row.id, title: row.title, dueDate: args.dueDate ?? null, owner: row.owner } : { ok: true, id: row.id, title: row.title, status: row.status };
-        }
+        const result = name === 'listTasks' ? await tasks.listTasks(args)
+          : await tasks.toolWrite(turnId + ':' + callId, name, args);
         return { content: [{ type: 'text', text: JSON.stringify(result) }], details: {} };
       }
       if (args.collectionId !== collectionId) throw new Error('本试验只能操作平板书单。');
