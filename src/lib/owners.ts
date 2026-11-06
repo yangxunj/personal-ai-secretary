@@ -1,6 +1,6 @@
 import { db } from './db';
 import { getT } from './i18n/server';
-import { makeT, type T } from './i18n/core';
+export { parseOwners } from './tasks/owners-policy';
 
 /**
  * 家里的人 —— 任务能派给谁、留言能以谁的名义说。存在 Setting 表里，设置页改。
@@ -21,13 +21,6 @@ const defaultOwners = async () => {
   const t = await getT();
   return [t('我')];
 };
-/**
- * 「待定」「未指派」是 owner = null 的显示名，不能再当一个人名。
- * 两种界面语言的都拦 —— 换了语言，库里那个名字照样会跟显示名撞上。
- */
-const RESERVED = ['待定', '未指派', 'unassigned']; // i18n-ignore：保留名，中英都得拦
-const MAX = 12;
-
 export async function getOwners(): Promise<string[]> {
   const row = await db.setting.findUnique({ where: { key: KEY } });
   if (!row) return defaultOwners();
@@ -36,24 +29,6 @@ export async function getOwners(): Promise<string[]> {
     if (Array.isArray(v) && v.length && v.every((x) => typeof x === 'string')) return v;
   } catch {}
   return defaultOwners();
-}
-
-/**
- * 逗号（中英文）、顿号、换行都当分隔符。空格不算 —— 英文名里有空格。
- * t 是报错用的翻译函数，server action 里传 `await getT()`。
- */
-export function parseOwners(
-  raw: string,
-  t: T = makeT(null),
-): { ok: true; owners: string[] } | { ok: false; error: string } {
-  const owners = [...new Set(raw.split(/[,，、\n]+/).map((s) => s.trim()).filter(Boolean))];
-  if (!owners.length) return { ok: false, error: t('至少留一个人') };
-  if (owners.length > MAX) return { ok: false, error: t('最多 {n} 个人', { n: MAX }) };
-  const bad = owners.find((n) => RESERVED.includes(n.toLowerCase()));
-  if (bad) return { ok: false, error: t('「{name}」是没人认领时的显示，换个名字', { name: bad }) };
-  const long = owners.find((n) => n.length > 12);
-  if (long) return { ok: false, error: t('「{name}」太长了，写个称呼就行', { name: long }) };
-  return { ok: true, owners };
 }
 
 export async function setOwners(owners: string[]) {

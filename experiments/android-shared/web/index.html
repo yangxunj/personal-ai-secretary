@@ -15,10 +15,15 @@
   <main>
     <section class="task-panel" aria-labelledby="tasks-title">
       <h2 id="tasks-title">我的待办</h2>
+        <details><summary>设置负责人名单</summary><form id="owners-form">
+          <label>负责人（用逗号或换行分开）<textarea id="owners-input" rows="2"></textarea></label>
+          <button type="submit" class="secondary">保存负责人</button><p id="owners-message" role="status" aria-live="polite"></p>
+        </form></details>
       <div class="task-grid">
         <form id="task-form">
           <label>要做什么<input id="task-title" required maxlength="200" autocomplete="off" placeholder="例如：预约下周的牙科检查"></label>
           <label>原始要求<textarea id="task-detail" rows="3" maxlength="2000" placeholder="具体要求会按原文保存"></textarea></label>
+            <label>负责人<select id="task-create-owner"><option value="">未指派</option></select></label>
           <label>截止日期<input id="task-due" type="date"></label>
           <p id="task-message" role="status" aria-live="polite"></p>
           <button id="task-save" type="submit">保存待办</button>

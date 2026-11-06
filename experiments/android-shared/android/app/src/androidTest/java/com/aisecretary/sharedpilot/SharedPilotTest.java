@@ -147,6 +147,21 @@ public final class SharedPilotTest {
         }
     }
 
+    @Test public void ownerPreferencesSurviveReopenAndRejectInvalidReplacement() throws Exception {
+        android.content.Context context = getInstrumentation().getTargetContext();
+        String testName = "pilot-owner-test-" + java.util.UUID.randomUUID();
+        try {
+            OwnerStore owners = new OwnerStore(context.getSharedPreferences(testName, android.content.Context.MODE_PRIVATE));
+            assertNull(owners.read());
+            owners.write(new JSONArray().put("Alice").put("Bob").toString());
+            OwnerStore reopened = new OwnerStore(context.getSharedPreferences(testName, android.content.Context.MODE_PRIVATE));
+            assertEquals("Alice", reopened.read().getString(0));
+            try { reopened.write(new JSONArray().put("unassigned").toString()); fail("Invalid owner accepted"); }
+            catch (IllegalArgumentException expected) { }
+            assertEquals(2, reopened.read().length());
+        } finally { context.deleteSharedPreferences(testName); }
+    }
+
     @Test public void fourthVersionMigrationAndConversationConflictPreserveBusinessData() throws Exception {
         try (SQLiteDatabase db = SQLiteDatabase.create(null)) {
             db.execSQL("CREATE TABLE records (id TEXT PRIMARY KEY, data TEXT NOT NULL, created_at INTEGER NOT NULL, version INTEGER NOT NULL DEFAULT 1)");

@@ -75,6 +75,17 @@ public final class MainActivity extends Activity {
     }
 
     private final class StorageBridge {
+        @JavascriptInterface public String readOwners() {
+            try {
+                org.json.JSONArray names = new OwnerStore(getSharedPreferences("pilot-settings", MODE_PRIVATE)).read();
+                return new JSONObject().put("ok", true).put("data", names == null ? JSONObject.NULL : names).toString();
+            } catch (Exception error) { return failure(); }
+        }
+        @JavascriptInterface public String writeOwners(String serialized) {
+            try {
+                return new JSONObject().put("ok", true).put("data", new OwnerStore(getSharedPreferences("pilot-settings", MODE_PRIVATE)).write(serialized)).toString();
+            } catch (Exception error) { return failure(); }
+        }
         @JavascriptInterface public String listConversations(String mode) {
             try { return new JSONObject().put("ok", true).put("data", store.listConversations(mode)).toString(); }
             catch (Exception error) { return failure(); }

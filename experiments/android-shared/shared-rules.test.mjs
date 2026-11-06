@@ -24,6 +24,10 @@ vm.runInContext(ts.transpileModule(readFileSync(new URL('../../src/lib/tasks/con
 const taskPolicyContext = vm.createContext({ exports: {}, require: specifier => specifier === './contracts' ? taskContractsContext.exports : require(specifier) });
 vm.runInContext(ts.transpileModule(readFileSync(new URL('../../src/lib/tasks/policy.ts', import.meta.url), 'utf8'), { compilerOptions: { target: ts.ScriptTarget.ES2020, module: ts.ModuleKind.CommonJS } }).outputText, taskPolicyContext);
 const serverTasks = taskPolicyContext.exports;
+const i18nContext = vm.createContext({ exports: {}, require });
+vm.runInContext(ts.transpileModule(readFileSync(new URL('../../src/lib/i18n/core.ts', import.meta.url), 'utf8'), { compilerOptions: { target: ts.ScriptTarget.ES2020, module: ts.ModuleKind.CommonJS } }).outputText, i18nContext);
+const ownersContext = vm.createContext({ exports: {}, require: specifier => specifier === '../i18n/core' ? i18nContext.exports : require(specifier) });
+vm.runInContext(ts.transpileModule(readFileSync(new URL('../../src/lib/tasks/owners-policy.ts', import.meta.url), 'utf8'), { compilerOptions: { target: ts.ScriptTarget.ES2020, module: ts.ModuleKind.CommonJS } }).outputText, ownersContext);
 const taskListContext = vm.createContext({ exports: {}, require: specifier => specifier === './contracts' ? taskContractsContext.exports : require(specifier) });
 vm.runInContext(ts.transpileModule(readFileSync(new URL('../../src/lib/tasks/list-view.ts', import.meta.url), 'utf8'), { compilerOptions: { target: ts.ScriptTarget.ES2020, module: ts.ModuleKind.CommonJS } }).outputText, taskListContext);
 const browser = vm.createContext({ console, performance, structuredClone, AbortController, TextEncoder, TextDecoder, URL, URLSearchParams, setTimeout, clearTimeout }, { codeGeneration: { strings: false, wasm: false } });
@@ -42,6 +46,7 @@ test('Android bundle contains the exact current shared source and its rules pass
     ['taskPolicySha256', 'tasks/policy.ts'],
     ['taskServiceSha256', 'tasks/service.ts'],
     ['taskListViewSha256', 'tasks/list-view.ts'],
+    ['ownersPolicySha256', 'tasks/owners-policy.ts'],
     ['conversationSha256', 'pi/conversation.mjs'],
     ['contextBudgetSha256', 'pi/context-budget.mjs'],
   ]) assert.equal(manifest[field], createHash('sha256').update(readFileSync(new URL('../../src/lib/' + source, import.meta.url))).digest('hex'));
@@ -257,6 +262,13 @@ test('web and Android bundle share full list filtering, cross counts and stable 
   const crossed = core.projectTaskList(rows, { status: 'done', category: '旧分类', owner: 'none' }, [], new Date(now));
   assert.equal(crossed.tasks.length, 1); assert.equal(crossed.statusCounts.get('all'), 11);
   assert.equal(crossed.ownerCounts.get('none'), 1); assert.equal(crossed.counts.get('旧分类'), 1);
+});
+
+test('web and Android bundle share owner-list validation and retain exact validation errors', () => {
+  const cases = ['', 'Alice, Bob，Alice、Charlie\nDana', '待定', 'UNASSIGNED', '1234567890123', Array.from({ length: 13 }, (_, i) => 'n' + i).join(',')];
+  for (const input of cases) assert.deepEqual(plain(core.parseOwners(input)), plain(ownersContext.exports.parseOwners(input)));
+  assert.deepEqual(plain(core.parseOwners(' Alice，Bob,Alice ')), { ok: true, owners: ['Alice', 'Bob'] });
+  assert.equal(core.parseOwners('待定').ok, false);
 });
 
 test('shared task policy preserves original text, default values and omitted patch fields', () => {

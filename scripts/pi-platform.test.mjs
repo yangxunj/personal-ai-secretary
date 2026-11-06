@@ -502,3 +502,11 @@ test('real task form actions share validation and storage with AI tools while pr
   assert.equal(await db.task.count(), before + 1);
   assert.equal((await db.task.findUniqueOrThrow({ where: { id: task.id } })).status, 'done');
 });
+
+test('formal owner settings expose the shared parser with existing validation and translations', async () => {
+  const { parseOwners } = await import('../src/lib/owners.ts');
+  assert.deepEqual(parseOwners(' Alice，Bob,Alice '), { ok: true, owners: ['Alice', 'Bob'] });
+  assert.equal(parseOwners('unassigned').ok, false);
+  assert.equal(parseOwners('1234567890123').ok, false);
+  assert.deepEqual(parseOwners('', key => 'translated:' + key), { ok: false, error: 'translated:至少留一个人' });
+});

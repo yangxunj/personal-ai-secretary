@@ -3,7 +3,7 @@ import { parseDefinition, validateValues, collectionError, CollectionError, MAX_
 import { prepareRecordWrite } from '../../../src/lib/collections/record-write.ts';
 import { runPilotAgent, demoModelRequest } from './pi-runtime.mjs';
 import { attachAiPanel } from './ai-panel.mjs';
-import { createTasks, attachTaskPanel, taskPolicy, projectTaskList } from './tasks.mjs';
+import { createTasks, attachTaskPanel, taskPolicy, projectTaskList, parseOwners } from './tasks.mjs';
 import * as conversation from '../../../src/lib/pi/conversation.mjs';
 
 export const definition = parseDefinition({
@@ -162,10 +162,13 @@ export function startPage(document, host) {
     readReceipt: (key, signature) => decode(bridge.readToolReceipt(key, signature)),
     commitTool: (key, signature, operation) => decode(bridge.commitTool(key, signature, JSON.stringify(operation))),
   });
-  const refreshTasks = attachTaskPanel(document, tasks);
+  const refreshTasks = attachTaskPanel(document, tasks, {
+    read: () => decode(bridge.readOwners()),
+    write: names => decode(bridge.writeOwners(JSON.stringify(names))),
+  });
   host.Pilot.tasks = tasks;
   attachAiPanel(document, host, records, definition, () => { refresh(); refreshTasks(); }, tasks);
 }
 
-globalThis.PilotCore = { definition, validateValues, prepareRecordWrite, runRuleChecks, createRecords, createTasks, taskPolicy, projectTaskList, conversation, startPage, runPilotAgent, demoModelRequest };
+globalThis.PilotCore = { definition, validateValues, prepareRecordWrite, runRuleChecks, createRecords, createTasks, taskPolicy, projectTaskList, parseOwners, conversation, startPage, runPilotAgent, demoModelRequest };
 if (typeof document !== 'undefined') startPage(document, globalThis);

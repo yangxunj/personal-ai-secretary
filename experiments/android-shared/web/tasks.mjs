@@ -1,8 +1,10 @@
 import { createTaskService } from '../../../src/lib/tasks/service.ts';
 import { prepareTaskCreate, prepareTaskUpdate, prepareTaskQuery, taskPublicDto } from '../../../src/lib/tasks/policy.ts';
 import { projectTaskList } from '../../../src/lib/tasks/list-view.ts';
+import { parseOwners } from '../../../src/lib/tasks/owners-policy.ts';
 export const taskPolicy = { prepareTaskCreate, prepareTaskUpdate, prepareTaskQuery, taskPublicDto };
 export { projectTaskList };
+export { parseOwners };
 
 export function createTasks(storage) {
   const adapter = {
@@ -12,7 +14,7 @@ export function createTasks(storage) {
   const service = createTaskService(adapter);
   return {
     ...service,
-    listForView: filters => projectTaskList(storage.listForView(), filters),
+    listForView: (filters, members) => projectTaskList(storage.listForView(), filters, members),
     toolWrite(key, name, args) {
       if (name !== 'createTask' && name !== 'updateTask') throw new Error('Unknown task write: ' + name);
       const signature = name + ':' + JSON.stringify(args);
@@ -32,9 +34,14 @@ export function createTasks(storage) {
 }
 
 const labels = { todo: '待办', doing: '进行中', blocked: '卡住了', done: '已完成', cancelled: '已取消' };
-export function attachTaskPanel(document, tasks) {
+export function attachTaskPanel(document, tasks, ownerStore) {
   const form = document.getElementById('task-form'), message = document.getElementById('task-message'), filter = document.getElementById('task-filter');
   const category = document.getElementById('task-category'), owner = document.getElementById('task-owner');
+  const ownersForm = document.getElementById('owners-form'), ownersInput = document.getElementById('owners-input');
+  const ownersMessage = document.getElementById('owners-message'), createOwner = document.getElementById('task-create-owner');
+  let members = ['我'];
+  try { members = ownerStore.read() ?? members; ownersInput.value = members.join('，'); }
+  catch { ownersInput.disabled = true; ownersForm.querySelector('button').disabled = true; ownersMessage.textContent = '负责人名单读取失败，请重启后重试。'; }
   const cards = globalThis.PilotMessageUI.createTaskCards(document.getElementById('tasks'), (id, patch) => {
     try { tasks.update({ id, ...patch }); }
     catch { message.textContent = '更新失败，请重读后再试。'; return; }
@@ -42,7 +49,7 @@ export function attachTaskPanel(document, tasks) {
     catch { message.textContent = '待办已更新，但列表重读失败；请重读。'; }
   });
   function refresh() {
-    const view = tasks.listForView({ status: filter.value || 'open', category: category.value, owner: owner.value });
+    const view = tasks.listForView({ status: filter.value || 'open', category: category.value, owner: owner.value }, members);
     const rows = view.groups.flatMap(group => group.items);
     const setOptions = (select, entries, selected) => {
       select.replaceChildren();
@@ -54,19 +61,29 @@ export function attachTaskPanel(document, tasks) {
     setOptions(filter, statusOptions.map(([value, label, key]) => [value, `${label} (${view.statusCounts.get(key)})`]), view.status === 'open' ? '' : view.status);
     setOptions(category, [['', `全部分类 (${view.byStatus.length})`], ...view.cats.map(name => [name, `${name} (${view.counts.get(name)})`])], view.cat);
     setOptions(owner, [['', `全部负责人 (${view.byOwnerRow.length})`], ['none', `未指派 (${view.ownerCounts.get('none')})`], ...view.owners.map(name => [name, `${name} (${view.ownerCounts.get(name)})`])], view.own);
-    cards.render(view.groups.map(group => ({ ...group, items: group.items.map(taskPublicDto) })), [...new Set(['我', ...view.owners])]);
+    setOptions(createOwner, [['', '未指派'], ...members.map(name => [name, name])], createOwner.value);
+    cards.render(view.groups.map(group => ({ ...group, items: group.items.map(taskPublicDto) })), members);
     document.getElementById('task-count').textContent = String(rows.length);
     document.getElementById('tasks-empty').hidden = rows.length > 0;
   }
   filter.addEventListener('change', () => { try { refresh(); } catch { message.textContent = '任务读取失败。'; } });
   category.addEventListener('change', () => { try { refresh(); } catch { message.textContent = '任务读取失败。'; } });
   owner.addEventListener('change', () => { try { refresh(); } catch { message.textContent = '任务读取失败。'; } });
+  ownersForm.addEventListener('submit', event => {
+    event.preventDefault();
+    const result = parseOwners(ownersInput.value);
+    if (!result.ok) { ownersMessage.textContent = result.error; return; }
+    try { members = ownerStore.write(result.owners); ownersInput.value = members.join('，'); }
+    catch { ownersMessage.textContent = '负责人名单保存失败，输入仍保留。'; return; }
+    try { refresh(); ownersMessage.textContent = '负责人名单已保存。'; }
+    catch { ownersMessage.textContent = '名单已保存，但任务列表重读失败；请重读。'; }
+  });
   document.getElementById('task-refresh').addEventListener('click', () => { try { refresh(); } catch { message.textContent = '任务读取失败。'; } });
   form.addEventListener('submit', event => {
     event.preventDefault(); const save = document.getElementById('task-save'); save.disabled = true;
     try {
       const title = document.getElementById('task-title').value.trim(); if (!title) throw new Error('请填写标题');
-      tasks.create({ title, detail: document.getElementById('task-detail').value || undefined, dueDate: document.getElementById('task-due').value || undefined });
+      tasks.create({ title, detail: document.getElementById('task-detail').value || undefined, dueDate: document.getElementById('task-due').value || undefined, owner: createOwner.value || undefined });
       form.reset(); message.textContent = '已保存待办。';
       try { refresh(); } catch { message.textContent = '待办已保存，但列表重读失败；请重读，不要重复保存。'; }
     } catch { message.textContent = '保存失败，请检查输入；草稿仍保留。'; }

@@ -11,6 +11,7 @@ export const sharedEntries = [
   'src/lib/tasks/policy.ts',
   'src/lib/tasks/service.ts',
   'src/lib/tasks/list-view.ts',
+  'src/lib/tasks/owners-policy.ts',
   'src/lib/pi/conversation.mjs',
   'src/lib/pi/context-budget.mjs',
 ];
