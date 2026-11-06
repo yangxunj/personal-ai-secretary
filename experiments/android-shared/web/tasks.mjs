@@ -35,9 +35,11 @@ const labels = { todo: '待办', doing: '进行中', blocked: '卡住了', done:
 export function attachTaskPanel(document, tasks) {
   const form = document.getElementById('task-form'), message = document.getElementById('task-message'), filter = document.getElementById('task-filter');
   const category = document.getElementById('task-category'), owner = document.getElementById('task-owner');
-  const cards = globalThis.PilotMessageUI.createTaskCards(document.getElementById('tasks'), id => {
-    try { tasks.update({ id, status: 'done' }); refresh(); message.textContent = '已完成；可切换到“已完成”查看。'; }
-    catch { message.textContent = '更新失败，请重读后再试。'; }
+  const cards = globalThis.PilotMessageUI.createTaskCards(document.getElementById('tasks'), (id, patch) => {
+    try { tasks.update({ id, ...patch }); }
+    catch { message.textContent = '更新失败，请重读后再试。'; return; }
+    try { refresh(); message.textContent = '已更新待办。'; }
+    catch { message.textContent = '待办已更新，但列表重读失败；请重读。'; }
   });
   function refresh() {
     const view = tasks.listForView({ status: filter.value || 'open', category: category.value, owner: owner.value });
@@ -52,7 +54,7 @@ export function attachTaskPanel(document, tasks) {
     setOptions(filter, statusOptions.map(([value, label, key]) => [value, `${label} (${view.statusCounts.get(key)})`]), view.status === 'open' ? '' : view.status);
     setOptions(category, [['', `全部分类 (${view.byStatus.length})`], ...view.cats.map(name => [name, `${name} (${view.counts.get(name)})`])], view.cat);
     setOptions(owner, [['', `全部负责人 (${view.byOwnerRow.length})`], ['none', `未指派 (${view.ownerCounts.get('none')})`], ...view.owners.map(name => [name, `${name} (${view.ownerCounts.get(name)})`])], view.own);
-    cards.render(view.groups.map(group => ({ ...group, items: group.items.map(taskPublicDto) })));
+    cards.render(view.groups.map(group => ({ ...group, items: group.items.map(taskPublicDto) })), [...new Set(['我', ...view.owners])]);
     document.getElementById('task-count').textContent = String(rows.length);
     document.getElementById('tasks-empty').hidden = rows.length > 0;
   }

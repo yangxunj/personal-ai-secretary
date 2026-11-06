@@ -29,6 +29,8 @@ test.after(() => hooks.deregister());
 const { groupConversationItems } = await import('../../src/components/chat/shared/conversation-list.ts');
 const { default: ConversationListView } = await import('../../src/components/chat/shared/ConversationListView.tsx');
 const { default: TaskCard } = await import('../../src/components/tasks/shared/TaskCard.tsx');
+const { default: TaskStatusSelect } = await import('../../src/components/tasks/shared/TaskStatusSelect.tsx');
+const { default: TaskOwnerSelect } = await import('../../src/components/tasks/shared/TaskOwnerSelect.tsx');
 const now = new Date(2026, 10, 4, 12), t = value => value;
 
 test('shared conversation date buckets preserve incoming order and existing local-day semantics', () => {
@@ -71,4 +73,17 @@ test('shared task card keeps platform navigation and actions, escapes titles and
   const file = 'src/components/tasks/shared/TaskCard.tsx';
   const entry = manifest.sharedUiSources.find(row => row.file === file);
   assert.ok(entry); assert.equal(entry.sha256, createHash('sha256').update(readFileSync(path.join(root, file))).digest('hex'));
+});
+
+test('shared task controls retain uncommon status and existing owner, and honor pending state', () => {
+  const status = renderToStaticMarkup(createElement(TaskStatusSelect, { status: 'blocked', disabled: true, t, onChange() {} }));
+  assert.match(status, /disabled=""/); assert.match(status, /value="blocked" selected/);
+  assert.match(status, /value="done"/); assert.match(status, /value="todo"/);
+  const owner = renderToStaticMarkup(createElement(TaskOwnerSelect, { owner: 'Old member', members: ['Alice'], t, onChange() {} }));
+  assert.match(owner, /value="Old member" selected/); assert.match(owner, /value="Alice"/); assert.match(owner, /value=""/);
+  const manifest = JSON.parse(readFileSync(new URL('web-dist/build-manifest.json', import.meta.url), 'utf8'));
+  for (const file of ['src/components/tasks/shared/TaskStatusSelect.tsx', 'src/components/tasks/shared/TaskOwnerSelect.tsx']) {
+    const entry = manifest.sharedUiSources.find(row => row.file === file);
+    assert.ok(entry); assert.equal(entry.sha256, createHash('sha256').update(readFileSync(path.join(root, file))).digest('hex'));
+  }
 });

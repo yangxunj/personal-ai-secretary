@@ -5,6 +5,8 @@ import MessageBody from '../../../src/components/MessageBody.tsx';
 import ConversationListView from '../../../src/components/chat/shared/ConversationListView.tsx';
 import ChatTextInput from '../../../src/components/chat/shared/ChatTextInput.tsx';
 import TaskCard from '../../../src/components/tasks/shared/TaskCard.tsx';
+import TaskStatusSelect from '../../../src/components/tasks/shared/TaskStatusSelect.tsx';
+import TaskOwnerSelect from '../../../src/components/tasks/shared/TaskOwnerSelect.tsx';
 
 // Only the platform mount and navigation policy live here. Markdown rendering
 // remains the existing production component, imported without a fork.
@@ -38,11 +40,11 @@ function createConversationControls(listElement, inputElement, callbacks) {
     },
   };
 }
-function createTaskCards(element, onDone) {
+function createTaskCards(element, onChange) {
   const root = createRoot(element);
   const labels = { todo: '待办', doing: '进行中', blocked: '卡住了', done: '已完成', cancelled: '已取消' };
   return {
-    render(groups) {
+    render(groups, members) {
       const sections = groups.map(group => {
         const cards = group.items.map(task => createElement(TaskCard, {
           key: task.id, title: task.title, completed: ['done', 'cancelled'].includes(task.status),
@@ -53,10 +55,11 @@ function createTaskCards(element, onDone) {
           task.dueDate ? '截止 ' + task.dueDate : '未设截止日', task.owner || '未指派'].join(' · ')),
         task.detail && createElement('p', null, task.detail),
         task.result && createElement('p', null, '处理结果：' + task.result),
-        !['done', 'cancelled'].includes(task.status) && createElement('button', {
-          type: 'button', className: 'secondary shared-task-done', 'aria-label': '完成 ' + task.title,
-          onClick: () => onDone(task.id),
-        }, '标记完成')));
+        createElement('div', { className: 'shared-task-actions' },
+          createElement(TaskOwnerSelect, { owner: task.owner, members, t: text => text,
+            onChange: value => onChange(task.id, { owner: value ?? '' }) }),
+          createElement(TaskStatusSelect, { status: task.status, t: text => text,
+            onChange: value => onChange(task.id, { status: value }) }))));
         return createElement('div', { key: group.status, className: 'shared-task-group' },
           createElement('h4', { className: 'shared-task-group-title' }, `${labels[group.status]} · ${group.items.length}`), cards);
       });

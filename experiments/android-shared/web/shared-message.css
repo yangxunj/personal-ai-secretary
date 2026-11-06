@@ -5,4 +5,6 @@
 @source "../../../src/components/MessageBody.tsx";
 @source "../../../src/components/chat/shared/ConversationListView.tsx";
 @source "../../../src/components/tasks/shared/TaskCard.tsx";
+@source "../../../src/components/tasks/shared/TaskStatusSelect.tsx";
+@source "../../../src/components/tasks/shared/TaskOwnerSelect.tsx";
 @source "./message-ui.mjs";
