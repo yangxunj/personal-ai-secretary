@@ -11,6 +11,7 @@ import { TASK_STATUS, CATEGORIES, formatDate } from '@/lib/format';
 import { getOwners } from '@/lib/owners';
 import { getLocale, getT } from '@/lib/i18n/server';
 import type { T } from '@/lib/i18n/core';
+import { projectTaskList, overdueDays } from '@/lib/tasks/list-view';
 
 /**
  * 任务列表 —— 页头、三行筛选、分组卡片，整块。
@@ -23,7 +24,6 @@ import type { T } from '@/lib/i18n/core';
  * searchParams 拿，详情页从 `?from=` 里解析 —— 那串本来就带着「从哪一屏点进来的」。
  */
 
-const ORDER = ['doing', 'blocked', 'todo', 'done', 'cancelled'];
 const OPEN = ['todo', 'doing', 'blocked'];
 
 /**
@@ -72,56 +72,18 @@ function statusTabLabel(t: T, key: StatusKey) {
   }
 }
 
-/** 今天零点。跟截止日比大小要按天算，不能按毫秒 —— 否则今天到期的当场就算过期。 */
-function startOfToday() {
-  const d = new Date();
-  d.setHours(0, 0, 0, 0);
-  return d;
-}
-
-/** 过期几天。用来显示「已过期 8 天」，也用来排序。 */
-function overdueDays(due: Date | null, today: Date) {
-  if (!due) return 0;
-  const diff = today.getTime() - new Date(due).setHours(0, 0, 0, 0);
-  return diff > 0 ? Math.floor(diff / 86_400_000) : 0;
-}
-
-/** 一条任务算不算落在某个状态标签下。 */
-function matchStatus(task: { status: string; dueDate: Date | null }, key: StatusKey, today: Date) {
-  if (key === 'all') return true;
-  if (key === 'open') return OPEN.includes(task.status);
-  if (key === 'overdue') return OPEN.includes(task.status) && overdueDays(task.dueDate, today) > 0;
-  return task.status === key;
-}
-
 /**
  * 当前筛选下，列表里**排在最上面的那一条**。宽屏 `/tasks` 默认把它的详情摆在右边。
  *
- * ⚠ 规则必须跟下面 TaskList 的渲染一模一样（默认状态、分类/负责人的合法性判断、
- * 按 createdAt 倒序、再按 ORDER 分组），否则右边开的那条不是左边高亮的第一张。
- * 改了 TaskList 的筛选或排序，这里要跟着改。
+ * 使用与 TaskList 相同的筛选和分组规则，让右侧详情对应左侧第一张卡片。
  */
 export async function firstVisibleTaskId({ c, s, o }: { c?: string; s?: string; o?: string }) {
-  const today = startOfToday();
   const all = await db.task.findMany({
     orderBy: [{ createdAt: 'desc' }],
-    select: { id: true, status: true, dueDate: true, category: true, owner: true },
+    select: { id: true, status: true, dueDate: true, category: true, owner: true, createdAt: true },
   });
-  const status = (STATUS_TABS.find((x) => x.key === s)?.key ?? 'open') as StatusKey;
-  const cat = c && all.some((task) => task.category === c) ? c : undefined;
-  const owners = new Set<string>([...(await getOwners()), ...(all.map((task) => task.owner).filter(Boolean) as string[])]);
-  const own = o === 'none' || (o && owners.has(o)) ? o : undefined;
-  const visible = all.filter(
-    (task) =>
-      matchStatus(task, status, today) &&
-      (!cat || task.category === cat) &&
-      (!own || (own === 'none' ? !task.owner : task.owner === own)),
-  );
-  for (const st of ORDER) {
-    const hit = visible.find((task) => task.status === st);
-    if (hit) return hit.id;
-  }
-  return null;
+  const status = STATUS_TABS.find(x => x.key === s)?.key;
+  return projectTaskList(all, { status, category: c, owner: o }, await getOwners()).groups[0]?.items[0]?.id ?? null;
 }
 
 export default async function TaskList({
@@ -139,7 +101,6 @@ export default async function TaskList({
   /** 宽屏两栏时，右边正开着的那条 —— 列表里把它标出来 */
   activeId?: string;
 }) {
-  const today = startOfToday();
   const t = await getT();
   const locale = await getLocale();
 
@@ -168,62 +129,12 @@ export default async function TaskList({
     },
   });
 
-  // 状态默认「未完成」—— 已完成/已取消的默认不占版面。以前它们排在 22 张
-  // 待办卡片后面，主人标完成后就再也翻不到，还以为被删了。现在藏是可以的，
-  // 因为状态行上那个带数字的胶囊明摆着告诉你它们还在。
-  const status = (STATUS_TABS.find((x) => x.key === s)?.key ?? 'open') as StatusKey;
-
-  // 分类取库里真实有的，不是 CATEGORIES 常量：开发/系统/身份这些是我建任务时
-  // 随手写的，不在新建表单的下拉里，写死常量就会让它们筛不出来。
-  // 认定分类时看的是全部任务，不是当前状态下的 —— 否则切一下状态，
-  // 正选着的分类就会失效跳回全部。
-  const cat = c && all.some((task) => task.category === c) ? c : undefined;
-
-  // 负责人是第三个维度。家里两个人在办事，「这件事归谁」现在是最先要问的一句，
-  // 所以这一行摆在最上面。'none' 是「未指派」—— 它不是没意义的空档，
-  // 恰恰是最该被看见的一格：没人认领的事最容易两个人都以为对方在办。
+  // 默认「未完成」；详情选择和列表使用同一份交叉筛选规则。
+  const requestedStatus = STATUS_TABS.find(x => x.key === s)?.key;
   const members = await getOwners();
-  const owners = [...new Set([...members, ...all.map((task) => task.owner).filter(Boolean) as string[]])];
-  const own = o === 'none' || (o && owners.includes(o)) ? o : undefined;
-  const matchOwner = (task: (typeof all)[number]) =>
-    !own || (own === 'none' ? !task.owner : task.owner === own);
-  const matchCat = (task: (typeof all)[number]) => !cat || task.category === cat;
-
-  // 两行是两个维度，数字要交叉算：分类行的数字 =「在当前状态下这一类有几条」，
-  // 状态行的数字 =「在当前分类下这个状态有几条」。各自只算另一维已选的那部分，
-  // 点下去才不会出现「写着 3 条，进去空的」。
-  // 三个维度，每一行的数字都只算「另外两维已选的那部分」，
-  // 点下去才不会出现「写着 3 条，进去空的」。
-  const byStatus = all.filter((task) => matchStatus(task, status, today) && matchOwner(task));
-  const byCat = all.filter((task) => matchCat(task) && matchOwner(task));
-  const byOwnerRow = all.filter((task) => matchStatus(task, status, today) && matchCat(task));
-  const tasks = byStatus.filter(matchCat);
-  // 总览按钮上的红点：不管当前筛的是什么，逾期都是全局的
-  const overdueCount = all.filter((task) => matchStatus(task, 'overdue', today)).length;
-
-  // 分类行**永远列全部 10 个**，哪怕当前状态下是 0。
-  // 第一版只列「当前状态下有货」的，于是每点一下状态，这一行就换个形状
-  // （未完成 7 个、已完成 4 个），横滑到一半位置全变了；而且要看「健康的已完成」
-  // 得先切回全部、找到健康、再切状态 —— 一个本该一步的事绕成三步。
-  // 「健康 · 已完成 0」本身就是个答案，不是错误。
-  const counts = new Map<string, number>();
-  for (const task of all) counts.set(task.category, 0);
-  for (const task of byStatus) counts.set(task.category, (counts.get(task.category) ?? 0) + 1);
-  const cats = [...counts.keys()].sort((a, b) => {
-    const ia = CATEGORIES.indexOf(a as (typeof CATEGORIES)[number]);
-    const ib = CATEGORIES.indexOf(b as (typeof CATEGORIES)[number]);
-    return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib) || a.localeCompare(b);
-  });
-
-  const statusCounts = new Map(
-    STATUS_TABS.map((x) => [x.key, byCat.filter((task) => matchStatus(task, x.key, today)).length])
-  );
-
-  /** 改一维，另一维原样带着走 —— 筛完「财务」再点「已完成」，不该把财务丢了。 */
-  const ownerCounts = new Map<string, number>([
-    ['none', byOwnerRow.filter((task) => !task.owner).length],
-    ...owners.map((n) => [n, byOwnerRow.filter((task) => task.owner === n).length] as [string, number]),
-  ]);
+  const view = projectTaskList(all, { status: requestedStatus, category: c, owner: o }, members);
+  const { today, cat, own, owners, tasks, byStatus, byOwnerRow, counts, cats, statusCounts, ownerCounts, groups, overdueCount } = view;
+  const status = view.status as StatusKey;
 
   /**
    * 改一维，另外两维原样带着走 —— 筛完「代办人」再点「已完成」，不该把代办人丢了。
@@ -276,12 +187,6 @@ export default async function TaskList({
   //
   // isBlocked / dateClash 保留，它们管的是卡片上怎么显示（压暗、提示），
   // 跟排序无关了。
-  const sorted = [...tasks].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
-
-  const groups = ORDER.map((s) => ({ status: s, items: sorted.filter((task) => task.status === s) })).filter(
-    (g) => g.items.length > 0
-  );
-
   // empty = 这一格是 0。**照样画出来，只是压暗** —— 位置比省地方要紧，
   // 而且「这一格没有」本身就是想知道的答案。
   const chip = (active: boolean, tone: 'brand' | 'red' = 'brand', empty = false) =>

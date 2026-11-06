@@ -24,6 +24,8 @@ vm.runInContext(ts.transpileModule(readFileSync(new URL('../../src/lib/tasks/con
 const taskPolicyContext = vm.createContext({ exports: {}, require: specifier => specifier === './contracts' ? taskContractsContext.exports : require(specifier) });
 vm.runInContext(ts.transpileModule(readFileSync(new URL('../../src/lib/tasks/policy.ts', import.meta.url), 'utf8'), { compilerOptions: { target: ts.ScriptTarget.ES2020, module: ts.ModuleKind.CommonJS } }).outputText, taskPolicyContext);
 const serverTasks = taskPolicyContext.exports;
+const taskListContext = vm.createContext({ exports: {}, require: specifier => specifier === './contracts' ? taskContractsContext.exports : require(specifier) });
+vm.runInContext(ts.transpileModule(readFileSync(new URL('../../src/lib/tasks/list-view.ts', import.meta.url), 'utf8'), { compilerOptions: { target: ts.ScriptTarget.ES2020, module: ts.ModuleKind.CommonJS } }).outputText, taskListContext);
 const browser = vm.createContext({ console, performance, structuredClone, AbortController, TextEncoder, TextDecoder, URL, URLSearchParams, setTimeout, clearTimeout }, { codeGeneration: { strings: false, wasm: false } });
 vm.runInContext(readFileSync(new URL('web-dist/pilot.js', import.meta.url), 'utf8'), browser);
 const core = browser.PilotCore;
@@ -39,6 +41,7 @@ test('Android bundle contains the exact current shared source and its rules pass
     ['taskContractsSha256', 'tasks/contracts.ts'],
     ['taskPolicySha256', 'tasks/policy.ts'],
     ['taskServiceSha256', 'tasks/service.ts'],
+    ['taskListViewSha256', 'tasks/list-view.ts'],
     ['conversationSha256', 'pi/conversation.mjs'],
     ['contextBudgetSha256', 'pi/context-budget.mjs'],
   ]) assert.equal(manifest[field], createHash('sha256').update(readFileSync(new URL('../../src/lib/' + source, import.meta.url))).digest('hex'));
@@ -230,6 +233,30 @@ test('shared task workflows propagate storage failures and never turn missing ta
   await assert.rejects(asyncTasks.listTasks({}), /read failure/);
   await assert.rejects(asyncTasks.updateTask({ id: row.id, status: 'done' }), /version conflict/);
   assert.equal(row.status, 'todo');
+});
+
+test('web and Android bundle share full list filtering, cross counts and stable groups beyond 50 tasks', () => {
+  const now = '2026-11-06T12:00:00', rows = Array.from({ length: 65 }, (_, i) => ({
+    id: 't' + i, title: 'task ' + i, status: i === 0 ? 'done' : i === 1 ? 'doing' : i === 2 ? 'blocked' : 'todo',
+    category: i % 2 ? '健康' : '旧分类', owner: i % 3 ? 'Alice' : null,
+    dueDate: i === 1 ? '2026-11-01T00:00:00.000Z' : null, createdAt: new Date(2026, 10, 1, 0, 0, i).toISOString(),
+  }));
+  const normalize = view => ({ status: view.status, cat: view.cat ?? null, own: view.own ?? null,
+    groups: view.groups.map(group => ({ status: group.status, ids: group.items.map(row => row.id) })),
+    categories: [...view.counts], statusCounts: [...view.statusCounts], owners: [...view.ownerCounts], overdue: view.overdueCount });
+  const storage = { listForView: () => rows };
+  for (const filters of [{}, { status: 'all' }, { status: 'overdue' }, { status: 'done', category: '旧分类' }, { status: 'open', category: '健康', owner: 'Alice' }, { owner: 'none' }, { status: 'invalid', category: 'missing', owner: 'missing' }]) {
+    const formal = taskListContext.exports.projectTaskList(rows, filters, [], new Date(now));
+    const bundled = core.projectTaskList(rows, filters, [], new Date(now));
+    assert.deepEqual(plain(normalize(bundled)), plain(normalize(formal)));
+  }
+  const view = core.createTasks(storage).listForView({ status: 'all' });
+  assert.equal(view.tasks.length, 65); assert.equal(view.groups[0].status, 'doing');
+  assert.equal(view.groups.find(group => group.status === 'todo').items[0].id, 't64');
+  assert.equal(view.counts.get('旧分类'), 33);
+  const crossed = core.projectTaskList(rows, { status: 'done', category: '旧分类', owner: 'none' }, [], new Date(now));
+  assert.equal(crossed.tasks.length, 1); assert.equal(crossed.statusCounts.get('all'), 11);
+  assert.equal(crossed.ownerCounts.get('none'), 1); assert.equal(crossed.counts.get('旧分类'), 1);
 });
 
 test('shared task policy preserves original text, default values and omitted patch fields', () => {

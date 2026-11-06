@@ -92,6 +92,10 @@ public final class MainActivity extends Activity {
             try { return new JSONObject().put("ok", true).put("data", store.listTasks(plan)).toString(); }
             catch (Exception error) { return failure(); }
         }
+        @JavascriptInterface public String listTasksForView() {
+            try { return new JSONObject().put("ok", true).put("data", store.listTasksForView()).toString(); }
+            catch (Exception error) { return failure(); }
+        }
         @JavascriptInterface public String readTask(String id) {
             try { JSONObject task = store.readTask(id); return new JSONObject().put("ok", true).put("data", task == null ? JSONObject.NULL : task).toString(); }
             catch (Exception error) { return failure(); }

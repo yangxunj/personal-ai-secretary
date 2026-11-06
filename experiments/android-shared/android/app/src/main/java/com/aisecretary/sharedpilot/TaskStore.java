@@ -63,4 +63,13 @@ final class TaskStore {
         }
         return result;
     }
+    // A full snapshot is bounded by the existing 2000-record pilot limit. It is
+    // separate from the AI tool query, which intentionally remains capped at 50.
+    static JSONArray listForView(SQLiteDatabase db) throws Exception {
+        JSONArray result = new JSONArray();
+        try (Cursor cursor = db.query("tasks", null, null, null, null, null, "created_at DESC", null)) {
+            while (cursor.moveToNext()) result.put(dto(cursor).put("createdAt", cursor.getLong(cursor.getColumnIndexOrThrow("created_at"))));
+        }
+        return result;
+    }
 }

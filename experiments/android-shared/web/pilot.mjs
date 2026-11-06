@@ -3,7 +3,7 @@ import { parseDefinition, validateValues, collectionError, CollectionError, MAX_
 import { prepareRecordWrite } from '../../../src/lib/collections/record-write.ts';
 import { runPilotAgent, demoModelRequest } from './pi-runtime.mjs';
 import { attachAiPanel } from './ai-panel.mjs';
-import { createTasks, attachTaskPanel, taskPolicy } from './tasks.mjs';
+import { createTasks, attachTaskPanel, taskPolicy, projectTaskList } from './tasks.mjs';
 import * as conversation from '../../../src/lib/pi/conversation.mjs';
 
 export const definition = parseDefinition({
@@ -156,6 +156,7 @@ export function startPage(document, host) {
   host.Pilot = { runRuleChecks, count: () => records.list().length, list: () => records.list(), append: values => records.append(values), update: (id, version, values) => records.update(id, version, values) };
   const tasks = createTasks({
     list: plan => decode(bridge.listTasks(JSON.stringify(plan))), read: id => decode(bridge.readTask(id)),
+    listForView: () => decode(bridge.listTasksForView()),
     create: data => decode(bridge.createTask(JSON.stringify(data))),
     update: (id, version, patch) => decode(bridge.updateTask(id, version, JSON.stringify(patch))),
     readReceipt: (key, signature) => decode(bridge.readToolReceipt(key, signature)),
@@ -166,5 +167,5 @@ export function startPage(document, host) {
   attachAiPanel(document, host, records, definition, () => { refresh(); refreshTasks(); }, tasks);
 }
 
-globalThis.PilotCore = { definition, validateValues, prepareRecordWrite, runRuleChecks, createRecords, createTasks, taskPolicy, conversation, startPage, runPilotAgent, demoModelRequest };
+globalThis.PilotCore = { definition, validateValues, prepareRecordWrite, runRuleChecks, createRecords, createTasks, taskPolicy, projectTaskList, conversation, startPage, runPilotAgent, demoModelRequest };
 if (typeof document !== 'undefined') startPage(document, globalThis);

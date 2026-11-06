@@ -132,6 +132,21 @@ public final class SharedPilotTest {
         }
     }
 
+    @Test public void fullTaskListExceedsToolLimitAndRetainsCreationTime() throws Exception {
+        try (SQLiteDatabase db = SQLiteDatabase.create(null)) {
+            TaskStore.createTable(db);
+            JSONObject data = new JSONObject().put("title", "synthetic task").put("detail", JSONObject.NULL)
+                    .put("category", "其他").put("priority", 2).put("status", "todo").put("owner", JSONObject.NULL)
+                    .put("dueDate", JSONObject.NULL).put("result", JSONObject.NULL);
+            for (int i = 0; i < 65; i++) TaskStore.create(db, data.toString());
+            JSONArray all = TaskStore.listForView(db);
+            assertEquals(65, all.length()); assertTrue(all.getJSONObject(0).has("createdAt"));
+            JSONObject plan = new JSONObject().put("statuses", new JSONArray().put("todo"))
+                    .put("limit", 50).put("category", JSONObject.NULL).put("keyword", JSONObject.NULL);
+            assertEquals(50, TaskStore.list(db, plan.toString()).length());
+        }
+    }
+
     @Test public void fourthVersionMigrationAndConversationConflictPreserveBusinessData() throws Exception {
         try (SQLiteDatabase db = SQLiteDatabase.create(null)) {
             db.execSQL("CREATE TABLE records (id TEXT PRIMARY KEY, data TEXT NOT NULL, created_at INTEGER NOT NULL, version INTEGER NOT NULL DEFAULT 1)");

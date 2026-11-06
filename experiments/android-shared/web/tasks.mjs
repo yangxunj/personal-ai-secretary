@@ -1,7 +1,8 @@
 import { createTaskService } from '../../../src/lib/tasks/service.ts';
 import { prepareTaskCreate, prepareTaskUpdate, prepareTaskQuery, taskPublicDto } from '../../../src/lib/tasks/policy.ts';
-import { TASK_STATUSES } from '../../../src/lib/tasks/contracts.ts';
+import { projectTaskList } from '../../../src/lib/tasks/list-view.ts';
 export const taskPolicy = { prepareTaskCreate, prepareTaskUpdate, prepareTaskQuery, taskPublicDto };
+export { projectTaskList };
 
 export function createTasks(storage) {
   const adapter = {
@@ -11,6 +12,7 @@ export function createTasks(storage) {
   const service = createTaskService(adapter);
   return {
     ...service,
+    listForView: filters => projectTaskList(storage.listForView(), filters),
     toolWrite(key, name, args) {
       if (name !== 'createTask' && name !== 'updateTask') throw new Error('Unknown task write: ' + name);
       const signature = name + ':' + JSON.stringify(args);
@@ -32,28 +34,44 @@ export function createTasks(storage) {
 const labels = { todo: '待办', doing: '进行中', blocked: '卡住了', done: '已完成', cancelled: '已取消' };
 export function attachTaskPanel(document, tasks) {
   const form = document.getElementById('task-form'), message = document.getElementById('task-message'), filter = document.getElementById('task-filter');
-  for (const status of TASK_STATUSES) { const option = document.createElement('option'); option.value = status; option.textContent = labels[status]; filter.append(option); }
+  const category = document.getElementById('task-category'), owner = document.getElementById('task-owner');
   function refresh() {
-    const rows = tasks.list({ ...(filter.value ? { status: filter.value } : {}), limit: 50 });
+    const view = tasks.listForView({ status: filter.value || 'open', category: category.value, owner: owner.value });
+    const rows = view.groups.flatMap(group => group.items);
+    const setOptions = (select, entries, selected) => {
+      select.replaceChildren();
+      for (const [value, label] of entries) { const option = document.createElement('option'); option.value = value; option.textContent = label; select.append(option); }
+      select.value = selected || '';
+    };
+    const statusOptions = [['', '未完成', 'open'], ['all', '全部状态', 'all'], ['overdue', '已逾期', 'overdue'],
+      ...['todo', 'doing', 'blocked', 'done', 'cancelled'].map(key => [key, labels[key], key])];
+    setOptions(filter, statusOptions.map(([value, label, key]) => [value, `${label} (${view.statusCounts.get(key)})`]), view.status === 'open' ? '' : view.status);
+    setOptions(category, [['', `全部分类 (${view.byStatus.length})`], ...view.cats.map(name => [name, `${name} (${view.counts.get(name)})`])], view.cat);
+    setOptions(owner, [['', `全部负责人 (${view.byOwnerRow.length})`], ['none', `未指派 (${view.ownerCounts.get('none')})`], ...view.owners.map(name => [name, `${name} (${view.ownerCounts.get(name)})`])], view.own);
     const list = document.getElementById('tasks'); list.replaceChildren();
-    for (const row of rows) {
-      const task = taskPublicDto(row), item = document.createElement('li'), title = document.createElement('strong'), detail = document.createElement('small');
-      title.textContent = task.title;
-      detail.textContent = [labels[task.status] || task.status, task.category, '优先级' + ({ 1: '高', 2: '中', 3: '低' }[task.priority] || task.priority), task.dueDate ? '截止 ' + task.dueDate : '未设截止日', task.owner || '未指派'].join(' · ');
-      item.append(title, detail);
-      if (task.detail) { const requirement = document.createElement('p'); requirement.textContent = task.detail; item.append(requirement); }
-      if (task.result) { const result = document.createElement('p'); result.textContent = '处理结果：' + task.result; item.append(result); }
-      if (task.status !== 'done' && task.status !== 'cancelled') {
-        const done = document.createElement('button'); done.type = 'button'; done.className = 'secondary'; done.textContent = '标记完成'; done.setAttribute('aria-label', '完成 ' + task.title);
-        done.addEventListener('click', () => { try { tasks.update({ id: task.id, status: 'done' }); refresh(); message.textContent = '已完成；可切换到“已完成”查看。'; } catch { message.textContent = '更新失败，请重读后再试。'; } });
-        item.append(done);
+    for (const group of view.groups) {
+      const heading = document.createElement('li'); heading.textContent = `${labels[group.status]} · ${group.items.length}`; list.append(heading);
+      for (const row of group.items) {
+        const task = taskPublicDto(row), item = document.createElement('li'), title = document.createElement('strong'), detail = document.createElement('small');
+        title.textContent = task.title;
+        detail.textContent = [labels[task.status] || task.status, task.category, '优先级' + ({ 1: '高', 2: '中', 3: '低' }[task.priority] || task.priority), task.dueDate ? '截止 ' + task.dueDate : '未设截止日', task.owner || '未指派'].join(' · ');
+        item.append(title, detail);
+        if (task.detail) { const requirement = document.createElement('p'); requirement.textContent = task.detail; item.append(requirement); }
+        if (task.result) { const result = document.createElement('p'); result.textContent = '处理结果：' + task.result; item.append(result); }
+        if (task.status !== 'done' && task.status !== 'cancelled') {
+          const done = document.createElement('button'); done.type = 'button'; done.className = 'secondary'; done.textContent = '标记完成'; done.setAttribute('aria-label', '完成 ' + task.title);
+          done.addEventListener('click', () => { try { tasks.update({ id: task.id, status: 'done' }); refresh(); message.textContent = '已完成；可切换到“已完成”查看。'; } catch { message.textContent = '更新失败，请重读后再试。'; } });
+          item.append(done);
+        }
+        list.append(item);
       }
-      list.append(item);
     }
     document.getElementById('task-count').textContent = String(rows.length);
     document.getElementById('tasks-empty').hidden = rows.length > 0;
   }
   filter.addEventListener('change', () => { try { refresh(); } catch { message.textContent = '任务读取失败。'; } });
+  category.addEventListener('change', () => { try { refresh(); } catch { message.textContent = '任务读取失败。'; } });
+  owner.addEventListener('change', () => { try { refresh(); } catch { message.textContent = '任务读取失败。'; } });
   document.getElementById('task-refresh').addEventListener('click', () => { try { refresh(); } catch { message.textContent = '任务读取失败。'; } });
   form.addEventListener('submit', event => {
     event.preventDefault(); const save = document.getElementById('task-save'); save.disabled = true;
