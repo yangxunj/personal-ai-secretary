@@ -6,6 +6,7 @@ import OverviewDialog from './OverviewDialog';
 import TaskOverview from './TaskOverview';
 import OwnerSelect from '@/components/OwnerSelect';
 import StatusSelect from '@/components/StatusSelect';
+import TaskCard from '@/components/tasks/shared/TaskCard';
 import Link from 'next/link';
 import { TASK_STATUS, CATEGORIES, formatDate } from '@/lib/format';
 import { getOwners } from '@/lib/owners';
@@ -361,38 +362,14 @@ export default async function TaskList({
               {g.items.map((task) => {
                 const late = OPEN.includes(task.status) ? overdueDays(task.dueDate, today) : 0;
                 return (
-                <div
-                  key={task.id}
-                  // 宽屏两栏时右边正开着的那条要标出来 —— 否则在 30 张一样的卡片里
-                  // 根本看不出详情是哪一条的。窄屏上 activeId 永远是空的。
-                  className={`surface border rounded-2xl px-4 py-3.5 relative ${
-                    isBlocked(task) && OPEN.includes(task.status) ? 'opacity-60' : ''
-                  } ${task.id === activeId ? 'ring-2 ring-brand-500' : ''}`}
-                  style={{ borderColor: late ? 'rgb(248 113 113 / 0.5)' : 'var(--border)' }}
-                >
-                  {/* 整张卡片就是详情页的入口。盖一层透明链接在卡面上，
-                      下面要点的控件各自抬到它上层（z-[2]）。
-                      ?from= 带的是**筛选后的那一屏**，退回来还在代办人那一栏。 */}
-                  <Link
+                <TaskCard key={task.id} title={task.title} completed={['done', 'cancelled'].includes(task.status)}
+                  highPriority={task.priority === 1 && OPEN.includes(task.status)} highPriorityLabel={t('高优先级')}
+                  blocked={isBlocked(task) && OPEN.includes(task.status)} active={task.id === activeId} overdue={late > 0}
+                  navigation={<Link
                     href={`/tasks/${task.id}?from=${encodeURIComponent(linkTo(cat, status))}`}
                     className="absolute inset-0 z-[1] rounded-2xl"
                     aria-label={t('打开任务「{title}」', { title: task.title })}
-                  />
-
-                  {/* 卡片上只有标题。摘要那一行也删了 —— 数了一遍 60 条未完成任务，
-                      标题平均 24 个字，绝大多数本来就把「做什么、为什么」说全了
-                      （「某某医保 12/03 自动续保 —— 确认扣费账户有钱，别丢了保证续保权」），
-                      再跟一句摘要基本是换个说法重说一遍。
-                      ★ 代价是**标题从此扛全部扫读负担**，写任务时标题必须独立成立。
-                      状态胶囊也删了：分组标题已经写着「进行中 · 12」。
-                      P1 用一个红点代替「优先级 高」四个字，中低不显示 —— 大多数都是中，
-                      写出来只是噪音。 */}
-                  <h3 className={`font-medium leading-snug flex items-baseline gap-1.5 ${['done', 'cancelled'].includes(task.status) ? 'line-through muted' : ''}`}>
-                    {task.priority === 1 && OPEN.includes(task.status) && (
-                      <span className="shrink-0 h-1.5 w-1.5 rounded-full bg-red-500 translate-y-[-2px]" aria-label={t('高优先级')} />
-                    )}
-                    <span className="min-w-0">{task.title}</span>
-                  </h3>
+                  />}>
 
                   {/* 依赖只在**还挡着**的时候说话。★「前置已完成」那条删了 ——
                       前置做完 = 可以开工 = 正常状态，不需要一个标签来宣布正常。
@@ -476,7 +453,7 @@ export default async function TaskList({
                       <StatusSelect taskId={task.id} status={task.status} />
                     </div>
                   </div>
-                </div>
+                </TaskCard>
                 );
               })}
             </div>

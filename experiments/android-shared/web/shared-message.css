@@ -4,4 +4,5 @@
 @import "tailwindcss/utilities.css" source(none);
 @source "../../../src/components/MessageBody.tsx";
 @source "../../../src/components/chat/shared/ConversationListView.tsx";
+@source "../../../src/components/tasks/shared/TaskCard.tsx";
 @source "./message-ui.mjs";

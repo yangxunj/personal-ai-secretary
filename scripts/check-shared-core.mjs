@@ -18,6 +18,7 @@ export const sharedUiEntries = [
   'src/components/MessageBody.tsx',
   'src/components/chat/shared/ConversationListView.tsx',
   'src/components/chat/shared/ChatTextInput.tsx',
+  'src/components/tasks/shared/TaskCard.tsx',
 ];
 const repository = fileURLToPath(new URL('../', import.meta.url));
 

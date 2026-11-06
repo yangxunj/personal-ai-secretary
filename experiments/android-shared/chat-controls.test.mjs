@@ -28,6 +28,7 @@ const hooks = registerHooks({
 test.after(() => hooks.deregister());
 const { groupConversationItems } = await import('../../src/components/chat/shared/conversation-list.ts');
 const { default: ConversationListView } = await import('../../src/components/chat/shared/ConversationListView.tsx');
+const { default: TaskCard } = await import('../../src/components/tasks/shared/TaskCard.tsx');
 const now = new Date(2026, 10, 4, 12), t = value => value;
 
 test('shared conversation date buckets preserve incoming order and existing local-day semantics', () => {
@@ -56,4 +57,18 @@ test('all shared conversation and text input source files match the Android buil
     assert.ok(entry, file);
     assert.equal(entry.sha256, createHash('sha256').update(readFileSync(path.join(root, file))).digest('hex'));
   }
+});
+
+test('shared task card keeps platform navigation and actions, escapes titles and shows high priority', () => {
+  const markup = renderToStaticMarkup(createElement(TaskCard, { title: '<script>unsafe</script>', completed: false,
+    highPriority: true, highPriorityLabel: '高优先级', active: true,
+    navigation: createElement('a', { href: '/tasks/test' }, 'open'),
+  }, createElement('button', { type: 'button' }, 'done')));
+  assert.doesNotMatch(markup, /<script>/); assert.match(markup, /&lt;script&gt;unsafe/);
+  assert.match(markup, /href="\/tasks\/test"/); assert.match(markup, /<button/);
+  assert.match(markup, /aria-label="高优先级"/); assert.match(markup, /ring-2/);
+  const manifest = JSON.parse(readFileSync(new URL('web-dist/build-manifest.json', import.meta.url), 'utf8'));
+  const file = 'src/components/tasks/shared/TaskCard.tsx';
+  const entry = manifest.sharedUiSources.find(row => row.file === file);
+  assert.ok(entry); assert.equal(entry.sha256, createHash('sha256').update(readFileSync(path.join(root, file))).digest('hex'));
 });

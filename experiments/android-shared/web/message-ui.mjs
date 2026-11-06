@@ -4,6 +4,7 @@ import { flushSync } from 'react-dom';
 import MessageBody from '../../../src/components/MessageBody.tsx';
 import ConversationListView from '../../../src/components/chat/shared/ConversationListView.tsx';
 import ChatTextInput from '../../../src/components/chat/shared/ChatTextInput.tsx';
+import TaskCard from '../../../src/components/tasks/shared/TaskCard.tsx';
 
 // Only the platform mount and navigation policy live here. Markdown rendering
 // remains the existing production component, imported without a fork.
@@ -37,4 +38,30 @@ function createConversationControls(listElement, inputElement, callbacks) {
     },
   };
 }
-globalThis.PilotMessageUI = { createTranscript, createConversationControls };
+function createTaskCards(element, onDone) {
+  const root = createRoot(element);
+  const labels = { todo: '待办', doing: '进行中', blocked: '卡住了', done: '已完成', cancelled: '已取消' };
+  return {
+    render(groups) {
+      const sections = groups.map(group => {
+        const cards = group.items.map(task => createElement(TaskCard, {
+          key: task.id, title: task.title, completed: ['done', 'cancelled'].includes(task.status),
+          highPriority: task.priority === 1 && !['done', 'cancelled'].includes(task.status), highPriorityLabel: '高优先级',
+        },
+        createElement('small', null, [labels[task.status] || task.status, task.category,
+          '优先级' + ({ 1: '高', 2: '中', 3: '低' }[task.priority] || task.priority),
+          task.dueDate ? '截止 ' + task.dueDate : '未设截止日', task.owner || '未指派'].join(' · ')),
+        task.detail && createElement('p', null, task.detail),
+        task.result && createElement('p', null, '处理结果：' + task.result),
+        !['done', 'cancelled'].includes(task.status) && createElement('button', {
+          type: 'button', className: 'secondary shared-task-done', 'aria-label': '完成 ' + task.title,
+          onClick: () => onDone(task.id),
+        }, '标记完成')));
+        return createElement('div', { key: group.status, className: 'shared-task-group' },
+          createElement('h4', { className: 'shared-task-group-title' }, `${labels[group.status]} · ${group.items.length}`), cards);
+      });
+      flushSync(() => root.render(sections));
+    },
+  };
+}
+globalThis.PilotMessageUI = { createTranscript, createConversationControls, createTaskCards };
