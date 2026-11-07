@@ -71,6 +71,7 @@ test('Android bundle records the same shell, navigation, header and chat bubble 
     'src/components/navigation/shared/PageHeaderView.tsx',
     'src/components/navigation/shared/MoreNavigationView.tsx',
     'src/components/chat/shared/ChatBubble.tsx',
+    'src/components/chat/shared/ConversationDrawer.tsx',
   ]) {
     const entry = manifest.sharedUiSources.find(row => row.file === file);
     assert.ok(entry, file);

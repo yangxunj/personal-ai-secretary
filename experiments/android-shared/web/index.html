@@ -13,6 +13,7 @@
 </head>
 <body class="pilot-body">
   <div id="pilot-shell"></div>
+  <div id="pilot-conversation-drawer"></div>
   <div id="pilot-content-root">
   <div id="pilot-page-header" class="pilot-page-header"></div>
   <main>
@@ -55,7 +56,6 @@
     <section data-screen="/collections" hidden aria-labelledby="list-title"><h2 id="list-title">已保存的书单 <span id="count">0</span></h2><p id="empty">还没有阅读记录。</p><ul id="records"></ul><button class="secondary" id="refresh" type="button">重新读取</button></section>
     <section class="ai-panel" data-screen="/chat" aria-labelledby="ai-title">
       <h2 id="ai-title" class="pilot-section-title">对话</h2>
-      <details class="conversation-drawer"><summary>对话列表</summary><div id="shared-conversation-list" class="shared-conversation-list" aria-label="本机对话"></div></details>
       <p id="conversation-status" role="status"></p>
       <ol id="conversation-messages" aria-label="对话记录"></ol>
       <p id="message-link-status" role="status" aria-live="polite"></p>

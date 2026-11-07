@@ -63,6 +63,22 @@ public final class SharedPilotTest {
         } finally { getInstrumentation().runOnMainSync(activity::finish); }
     }
 
+    @Test public void conversationDrawerOpensClosesAndCreatesConversation() throws Exception {
+        Activity activity = start();
+        try {
+            for (int attempts = 0; attempts < 40; attempts++) {
+                if ("true".equals(evaluate(activity, "Boolean(document.querySelector('#pilot-page-header button[aria-label=对话列表]'))"))) break;
+                Thread.sleep(100);
+            }
+            evaluate(activity, "document.querySelector('#pilot-page-header button[aria-label=对话列表]').click()");
+            assertEquals("false", evaluate(activity, "document.querySelector('#pilot-conversation-drawer [aria-modal]').parentElement.getAttribute('aria-hidden') === 'true'"));
+            evaluate(activity, "document.querySelector('#pilot-conversation-drawer [data-drawer-backdrop]').click()");
+            assertEquals("true", evaluate(activity, "document.querySelector('#pilot-conversation-drawer [aria-modal]').parentElement.getAttribute('aria-hidden') === 'true'"));
+            evaluate(activity, "document.querySelector('#pilot-page-header button[aria-label=对话列表]').click();document.querySelector('#shared-conversation-list button').click()");
+            assertEquals("true", evaluate(activity, "document.querySelector('#pilot-conversation-drawer [aria-modal]').parentElement.getAttribute('aria-hidden') === 'true'"));
+        } finally { getInstrumentation().runOnMainSync(activity::finish); }
+    }
+
     @Test public void sharedRulesAndSQLiteSurviveActivityRestart() throws Exception {
         Activity first = start();
         try {

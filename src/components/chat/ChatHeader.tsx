@@ -9,6 +9,7 @@ import { SearchLink, SettingsLink } from '@/components/PageHeader';
 import { deleteConversation, renameConversation } from '@/app/(app)/chat/actions';
 import type { ConversationItem } from '@/lib/conversations';
 import ConversationList from './ConversationList';
+import ConversationDrawer from './shared/ConversationDrawer';
 import { CONV_EVENT, emitConversations, type ConvEventDetail } from './events';
 import { useT } from '@/lib/i18n/client';
 
@@ -143,16 +144,9 @@ export default function ChatHeader({
 
       {/* 抽屉挂到 body 上：留在 header 里的话会被它的 z-20 困住，底栏压在抽屉上面 */}
       {drawer && createPortal(
-        <div className="lg:hidden fixed inset-0 z-50" onClick={() => setDrawer(false)}>
-          <div className="absolute inset-0 bg-black/40" />
-          <div
-            className="absolute inset-y-0 left-0 w-[82%] max-w-xs surface border-r pt-safe shadow-xl"
-            style={{ borderColor: 'var(--border)' }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <ConversationList initial={list} onNavigate={() => setDrawer(false)} />
-          </div>
-        </div>,
+        <ConversationDrawer open onClose={() => setDrawer(false)} mobileOnly label={t('对话列表')} closeLabel={t('关闭对话列表')}>
+          <ConversationList initial={list} onNavigate={() => setDrawer(false)} />
+        </ConversationDrawer>,
         document.body,
       )}
     </header>

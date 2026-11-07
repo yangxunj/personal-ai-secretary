@@ -25,3 +25,6 @@ body.pilot-body{max-width:none;margin:0;padding:0;background:var(--bg);color:var
 #pilot-content-root footer{padding:16px;margin:0}.pilot-unavailable p{color:var(--muted)}
 #conversation-messages>li{border:0;padding:8px 0;display:flex;flex-direction:column;gap:12px}.pilot-input-label{position:absolute;clip:rect(0,0,0,0);width:1px;height:1px;overflow:hidden}
 #pilot-content-root .ai-panel:not([hidden]){min-height:calc(100dvh - 56px - 72px);display:flex;flex-direction:column}#ai-form{margin-top:auto}.pilot-composer{display:flex;align-items:end;gap:8px;position:sticky;bottom:calc(4.4rem + env(safe-area-inset-bottom,0px));padding:10px 0;background:var(--bg)}#shared-composer:not([hidden]){flex:1;min-width:0}#ai-form[data-mode=deepseek] #ai-send{flex:none;min-height:40px;width:40px;height:40px;padding:0;border-radius:999px}#shared-composer textarea{min-height:44px;margin:0}@media(min-width:1024px){.pilot-composer{bottom:0}}
+#pilot-conversation-drawer .shared-conversation-list{height:100%;max-height:none;overflow:hidden}
+#pilot-conversation-drawer button{background:transparent;color:var(--text);min-height:40px}
+#pilot-conversation-drawer button[aria-current=page]{background:color-mix(in srgb,var(--color-brand-500) 16%,transparent);color:var(--color-brand-500)}

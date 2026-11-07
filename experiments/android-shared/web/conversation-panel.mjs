@@ -1,20 +1,21 @@
 import { newConversation, parseConversation, recoverConversation, conversationHistory, beginConversationTurn,
   recordConversationMessage, finishConversationTurn, interruptedNotice } from '../../../src/lib/pi/conversation.mjs';
 
-export function attachConversationPanel(document, bridge, nonce, messageUi, onSend) {
+export function attachConversationPanel(document, bridge, nonce, messageUi, onSend, closeDrawer) {
   const status = document.getElementById('conversation-status');
   if (!messageUi?.createConversationControls) throw new Error('共用会话界面未加载，请重新打开应用。');
   const transcript = messageUi.createTranscript(document.getElementById('conversation-messages'), () => { document.getElementById('message-link-status').textContent = '此试验版暂不打开外部链接。'; });
   let current, mode = 'demo', busy = false, healthy = true, draft = '', items = [];
   const decode = raw => { const result = JSON.parse(raw); if (!result.ok) throw new Error('会话保存或读取失败，请重新打开应用后检查。'); return result.data; };
   const controls = messageUi.createConversationControls(document.getElementById('shared-conversation-list'), document.getElementById('shared-composer'), {
-    onSelect(id) { if (!busy && healthy) try { load(mode, id); } catch { fail(); } },
+    onSelect(id) { if (busy || !healthy) return false; try { load(mode, id); return true; } catch { fail(); return false; } },
     onNew() {
-      if (busy || !healthy) return;
+      if (busy || !healthy) return false;
       try {
-        if (decode(bridge.listConversations(mode)).length >= 20) { status.textContent = '本试验每种模式最多 20 个对话；已有记录保留。'; return; }
+        if (decode(bridge.listConversations(mode)).length >= 20) { status.textContent = '本试验每种模式最多 20 个对话；已有记录保留。'; return false; }
         current = null; save(newConversation(nonce(), mode)); clearTransient(); render();
-      } catch { fail(); }
+        return true;
+      } catch { fail(); return false; }
     },
     onDraftChange(value) {
       draft = value;
@@ -22,7 +23,7 @@ export function attachConversationPanel(document, bridge, nonce, messageUi, onSe
       renderControls();
     },
     onSend() { if (!busy && healthy && mode === 'deepseek' && draft.trim()) onSend(); },
-  });
+  }, closeDrawer);
   function renderControls() {
       document.getElementById('ai-send').disabled = busy || !healthy || (mode === 'deepseek' && !draft.trim());
     controls.render({ items, activeId: current?.snapshot.id ?? null, disabled: busy || !healthy, busy, draft,

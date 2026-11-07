@@ -3,7 +3,7 @@ import { attachConversationPanel } from './conversation-panel.mjs';
 
 const nonce = () => Array.from(crypto.getRandomValues(new Uint8Array(12)), byte => byte.toString(16).padStart(2, '0')).join('');
 
-export function attachAiPanel(document, host, records, definition, refresh, tasks) {
+export function attachAiPanel(document, host, records, definition, refresh, tasks, closeDrawer) {
   const form = document.getElementById('ai-form');
   const output = document.getElementById('ai-output');
   const events = document.getElementById('ai-events');
@@ -13,7 +13,7 @@ export function attachAiPanel(document, host, records, definition, refresh, task
   const bridge = host.SecretaryStorage;
   const pending = new Map();
   let active;
-  const conversations = attachConversationPanel(document, bridge, nonce, host.PilotMessageUI, () => form.requestSubmit(send));
+  const conversations = attachConversationPanel(document, bridge, nonce, host.PilotMessageUI, () => form.requestSubmit(send), closeDrawer);
   const mode = () => document.querySelector('input[name="ai-mode"]:checked').value;
   const settingsChanged = () => { document.getElementById('key-state').textContent = bridge.hasApiKey?.() ? '已保存密钥；是否有效需实际请求确认。' : '尚未配置密钥。'; };
   host.SecretaryAI = {

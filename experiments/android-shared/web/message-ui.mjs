@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { flushSync } from 'react-dom';
 import MessageBody from '../../../src/components/MessageBody.tsx';
 import ConversationListView from '../../../src/components/chat/shared/ConversationListView.tsx';
+import ConversationDrawer from '../../../src/components/chat/shared/ConversationDrawer.tsx';
 import ChatTextInput from '../../../src/components/chat/shared/ChatTextInput.tsx';
 import ChatBubble from '../../../src/components/chat/shared/ChatBubble.tsx';
 import TaskCard from '../../../src/components/tasks/shared/TaskCard.tsx';
@@ -35,12 +36,14 @@ function createTranscript(element, onLinkBlocked) {
     },
   };
 }
-function createConversationControls(listElement, inputElement, callbacks) {
+function createConversationControls(listElement, inputElement, callbacks, closeDrawer) {
   const listRoot = createRoot(listElement), inputRoot = createRoot(inputElement);
   return {
     render({ items, activeId, disabled, busy, draft, canSend }) {
       flushSync(() => {
-        listRoot.render(createElement(ConversationListView, { items, activeId, disabled, t: text => text === '新对话' ? '新建对话' : text, onSelect: callbacks.onSelect, onNew: callbacks.onNew }));
+        listRoot.render(createElement(ConversationListView, { items, activeId, disabled, t: text => text === '新对话' ? '新建对话' : text,
+          onSelect: id => { if (callbacks.onSelect(id) !== false) closeDrawer(); },
+          onNew: () => { if (callbacks.onNew() !== false) closeDrawer(); } }));
         inputRoot.render(createElement(ChatTextInput, { id: 'ai-prompt', value: draft, onDraftChange: callbacks.onDraftChange, onSend: callbacks.onSend,
           canSend, disabled: busy, maxLength: 1000, rows: 1, placeholder: '跟我说点什么…',
           className: 'w-full min-w-0 resize-none rounded-2xl border px-3.5 py-2.5 text-[15px] bg-transparent outline-none transition max-h-32' }));
@@ -90,6 +93,25 @@ function createAppShell(element, content, onSelect) {
   const side = createRoot(document.getElementById('pilot-side-navigation'));
   const header = createRoot(document.getElementById('pilot-page-header'));
   const more = createRoot(document.getElementById('pilot-more-navigation'));
+  const drawer = createRoot(document.getElementById('pilot-conversation-drawer'));
+  let drawerOpen = false, currentPath = '/chat';
+  function setDrawer(open) {
+    drawerOpen = open;
+    flushSync(() => drawer.render(createElement(ConversationDrawer, { open, onClose: closeDrawer, label: '对话列表', closeLabel: '关闭对话列表' },
+      createElement('div', { id: 'shared-conversation-list', className: 'shared-conversation-list', 'aria-label': '本机对话' }))));
+    renderHeader();
+  }
+  function closeDrawer() { setDrawer(false); }
+  function renderHeader() {
+    const titles = { '/chat': '对话', '/tasks': '任务', '/collections': '栏目', '/more': '更多', '/settings': '设置', '/search': '搜索',
+      '/vault': '资料', '/finance': '财务', '/health': '健康', '/topics': '专题', '/files': '文件', '/pages': '页面', '/mail': '邮件' };
+    flushSync(() => header.render(createElement(PageHeaderView, { title: titles[currentPath] || '栏目',
+      back: currentPath === '/chat' ? createElement('button', { type: 'button', 'aria-label': '对话列表', 'aria-expanded': drawerOpen,
+        'aria-controls': 'pilot-conversation-drawer', className: 'h-9 w-9 shrink-0 flex items-center justify-center rounded-lg muted',
+        onClick: () => setDrawer(!drawerOpen) }, createElement('svg', { viewBox: '0 0 24 24', className: 'h-5 w-5', fill: 'none', stroke: 'currentColor', strokeWidth: 1.8, strokeLinecap: 'round' }, createElement('path', { d: 'M4 6h16M4 12h16M4 18h10' }))) : undefined,
+      actions: createElement('span', { className: 'contents lg:hidden' }, createElement(ThemeToggle),
+        currentPath !== '/search' && iconButton('搜索', SearchIcon, '/search'), currentPath !== '/settings' && iconButton('设置', SettingsIcon, '/settings')) })));
+  }
   const navItem = ({ href, label, active, className, style, children }) => createElement('button', {
     key: href, type: 'button', className, style, 'aria-label': label,
     'aria-current': active ? 'page' : undefined, onClick: () => onSelect(href, label),
@@ -99,21 +121,19 @@ function createAppShell(element, content, onSelect) {
     onClick: () => onSelect(href, label),
   }, createElement(Icon));
   return { render(pathname) {
-    const titles = { '/chat': '对话', '/tasks': '任务', '/collections': '栏目', '/more': '更多', '/settings': '设置', '/search': '搜索',
-      '/vault': '资料', '/finance': '财务', '/health': '健康', '/topics': '专题', '/files': '文件', '/pages': '页面', '/mail': '邮件' };
+    currentPath = pathname;
+    if (drawerOpen && pathname !== '/chat') closeDrawer();
     flushSync(() => {
       bottom.render(createElement(BottomNavView, { pathname, t: text => text, renderItem: navItem }));
       side.render(createElement(SideNavView, { pathname, t: text => text, renderItem: navItem,
         trailing: createElement('div', { className: 'shrink-0 border-t px-2 py-3 space-y-0.5', style: { borderColor: 'var(--border)' } },
           iconButton('搜索', SearchIcon, '/search'), iconButton('设置', SettingsIcon, '/settings'), createElement(ThemeToggle, { withLabel: true })) }));
-      header.render(createElement(PageHeaderView, { title: titles[pathname] || '栏目',
-        actions: createElement('span', { className: 'contents lg:hidden' }, createElement(ThemeToggle),
-          pathname !== '/search' && iconButton('搜索', SearchIcon, '/search'), pathname !== '/settings' && iconButton('设置', SettingsIcon, '/settings')) }));
       more.render(createElement(MoreNavigationView, { t: text => text,
         renderItem: ({ href, label, children }) => createElement('button', { key: href, type: 'button',
           className: 'surface flex items-center gap-3 rounded-xl border p-4', style: { borderColor: 'var(--border)' },
           onClick: () => onSelect(href, label) }, children) }));
     });
-  } };
+    renderHeader();
+  }, initDrawer() { setDrawer(false); }, closeDrawer };
 }
 globalThis.PilotMessageUI = { createTranscript, createConversationControls, createTaskCards, createAppShell };
