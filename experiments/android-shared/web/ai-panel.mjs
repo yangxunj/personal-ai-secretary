@@ -9,7 +9,6 @@ export function attachAiPanel(document, host, records, definition, refresh, task
   const events = document.getElementById('ai-events');
   const send = document.getElementById('ai-send');
   const cancel = document.getElementById('ai-cancel');
-  const fields = document.getElementById('deepseek-fields');
   const bridge = host.SecretaryStorage;
   const pending = new Map();
   let active;
@@ -44,7 +43,6 @@ export function attachAiPanel(document, host, records, definition, refresh, task
   function showMode() {
     const real = mode() === 'deepseek';
     form.dataset.mode = real ? 'deepseek' : 'demo';
-    fields.hidden = !real; fields.disabled = !real;
     document.getElementById('shared-composer').hidden = !real;
     document.getElementById('demo-guide').hidden = real;
     send.textContent = real ? '↑' : '运行离线演练';

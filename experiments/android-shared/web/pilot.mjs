@@ -177,8 +177,18 @@ export function startPage(document, host) {
     host.scrollTo(0, 0);
   }
   for (const button of document.querySelectorAll('[data-open-screen]')) button.addEventListener('click', () => showScreen(button.dataset.openScreen));
-  document.getElementById('pilot-settings-key').addEventListener('click', () => bridge.openModelSettings());
   showScreen('/chat');
+  // The bottom bar and composer can change height with safe areas, text size or
+  // a multi-line draft. Reserve exactly their rendered height for scrolling.
+  const nav = document.querySelector('#pilot-navigation nav');
+  const composer = document.getElementById('ai-form');
+  if (host.ResizeObserver && nav && composer) {
+    const observer = new host.ResizeObserver(() => {
+      document.documentElement.style.setProperty('--pilot-nav-height', `${nav.getBoundingClientRect().height}px`);
+      document.documentElement.style.setProperty('--pilot-composer-height', `${composer.getBoundingClientRect().height}px`);
+    });
+    observer.observe(nav); observer.observe(composer);
+  }
 }
 
 globalThis.PilotCore = { definition, validateValues, prepareRecordWrite, runRuleChecks, createRecords, createTasks, taskPolicy, projectTaskList, parseOwners, conversation, startPage, runPilotAgent, demoModelRequest };

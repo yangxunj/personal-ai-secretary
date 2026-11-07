@@ -79,6 +79,24 @@ public final class SharedPilotTest {
         } finally { getInstrumentation().runOnMainSync(activity::finish); }
     }
 
+    @Test public void composerSitsAboveNavigationAndModelSettingsAreOnSettingsPage() throws Exception {
+        Activity activity = start();
+        try {
+            for (int attempts = 0; attempts < 40; attempts++) {
+                if ("true".equals(evaluate(activity, "Boolean(document.querySelector('#pilot-page-header button[aria-label=设置]') && document.documentElement.style.getPropertyValue('--pilot-nav-height'))"))) break;
+                Thread.sleep(100);
+            }
+            assertEquals("true", evaluate(activity, "(()=>{const nav=document.querySelector('#pilot-navigation nav').getBoundingClientRect(), box=document.querySelector('#ai-form').getBoundingClientRect(); return Math.abs(box.bottom-(nav.height ? nav.top : innerHeight)) <= 2})()"));
+            assertEquals("true", evaluate(activity, "document.querySelector('#model-key').closest('[data-screen]').dataset.screen === '/settings'"));
+            evaluate(activity, "document.querySelector('#pilot-page-header button[aria-label=设置]').click()");
+            assertEquals("false", evaluate(activity, "document.querySelector('.pilot-settings').hidden"));
+            evaluate(activity, "document.querySelector('input[name=ai-mode][value=demo]').click();document.querySelectorAll('#pilot-navigation button')[0].click()");
+            assertEquals("\"demo\"", evaluate(activity, "document.querySelector('#ai-form').dataset.mode"));
+            evaluate(activity, "document.querySelector('#pilot-page-header button[aria-label=设置]').click();document.querySelector('input[name=ai-mode][value=deepseek]').click();document.querySelectorAll('#pilot-navigation button')[0].click()");
+            assertEquals("\"deepseek\"", evaluate(activity, "document.querySelector('#ai-form').dataset.mode"));
+        } finally { getInstrumentation().runOnMainSync(activity::finish); }
+    }
+
     @Test public void sharedRulesAndSQLiteSurviveActivityRestart() throws Exception {
         Activity first = start();
         try {
