@@ -31,7 +31,7 @@ await new Promise((resolve, reject) => webpack({
   output: { path: output, filename: '[name].js' },
   devtool: false,
   optimization: { minimize: false },
-  resolve: { extensions: ['.tsx', '.ts', '.js', '.mjs', '.json'], alias: { '@earendil-works/pi-ai$': path.join(directory, 'pi-ai-browser.mjs') } },
+  resolve: { extensions: ['.tsx', '.ts', '.js', '.mjs', '.json'], alias: { '@earendil-works/pi-ai$': path.join(directory, 'pi-ai-browser.mjs'), '@': path.join(root, 'src') } },
   module: { rules: [{ test: /\.tsx?$/, use: path.join(directory, 'typescript-loader.cjs') }] },
   plugins: [{ apply(compiler) {
     compiler.hooks.normalModuleFactory.tap('SharedBoundary', factory => {
@@ -51,6 +51,7 @@ await new Promise((resolve, reject) => webpack({
 }));
 await writeFile(path.join(output, 'index.html'), (await readFile(path.join(directory, 'web/index.html'), 'utf8')).replaceAll('__PILOT_VERSION__', config.version));
 await copyFile(path.join(directory, 'web/pilot.css'), path.join(output, 'pilot.css'));
+await copyFile(path.join(root, 'src/styles/surface-theme.css'), path.join(output, 'surface-theme.css'));
 const stylesSource = path.join(directory, 'web/shared-message.css');
 const styles = await postcss([tailwindcss({ base: root, optimize: false })]).process(await readFile(stylesSource, 'utf8'), { from: stylesSource, to: path.join(output, 'shared-message.css'), map: false });
 await writeFile(path.join(output, 'shared-message.css'), styles.css);
@@ -63,6 +64,7 @@ const manifest = {
   messageSource, messageSourceSha256: hash(await readFile(path.join(root, messageSource))),
   messageBundleSha256: hash(await readFile(path.join(output, 'messages.js'))),
   messageStylesSha256: hash(await readFile(path.join(output, 'shared-message.css'))),
+  surfaceThemeSha256: hash(await readFile(path.join(root, 'src/styles/surface-theme.css'))),
   pilot: config.version, sharedSource: schema,
   sharedSourceSha256: hash(await readFile(path.join(root, schema))),
   sharedService: service, sharedServiceSha256: hash(await readFile(path.join(root, service))),
@@ -83,7 +85,7 @@ await writeFile(path.join(output, 'build-manifest.json'), JSON.stringify(manifes
 const assets = path.join(directory, 'android/app/src/main/assets');
 await mkdir(assets, { recursive: true });
 await writeFile(path.join(assets, 'bundled-js-licenses.txt'), licenses.text);
-for (const file of ['index.html', 'pilot.css', 'pilot.js', 'messages.js', 'shared-message.css', 'build-manifest.json']) await copyFile(path.join(output, file), path.join(assets, file));
+for (const file of ['index.html', 'pilot.css', 'pilot.js', 'messages.js', 'shared-message.css', 'surface-theme.css', 'build-manifest.json']) await copyFile(path.join(output, file), path.join(assets, file));
 // Preserve notices for code shipped inside the APK (build tools are not shipped).
 await copyFile(path.join(root, 'node_modules/zod/LICENSE'), path.join(assets, 'zod-license.txt'));
 await copyFile(path.join(root, 'node_modules/typescript/LICENSE.txt'), path.join(assets, 'apache-2.0.txt'));

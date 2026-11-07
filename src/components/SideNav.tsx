@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { TABS, NavIcon } from './nav-tabs';
+import SideNavView from './navigation/shared/SideNavView';
 import ThemeToggle from './ThemeToggle';
 import { SearchIcon, SettingsIcon } from './PageHeader';
 import { useT } from '@/lib/i18n/client';
@@ -20,53 +20,12 @@ import { useT } from '@/lib/i18n/client';
 export default function SideNav({ badge, collections = [] }: { badge?: number; collections?: { id: string; title: string }[] }) {
   const pathname = usePathname();
   const t = useT();
-  return (
-    <nav
-      className="hidden lg:flex fixed inset-y-0 left-0 z-40 w-56 flex-col border-r surface"
-      style={{ borderColor: 'var(--border)' }}
-    >
-      <div className="px-5 h-14 flex items-center shrink-0">
-        <span className="font-semibold tracking-tight">{t('家庭管家')}</span>
-      </div>
-
-      <div className="flex-1 overflow-y-auto px-2 pb-4 space-y-0.5">
-        {TABS.map((tab) => {
-          const active = pathname === tab.href || tab.href !== '/collections' && pathname.startsWith(tab.href + '/');
-          return (
-            <Link
-              key={tab.href}
-              href={tab.href}
-              // 选中态在侧栏要比底栏更明显：底栏靠变色就够（七格挨着，一眼能比），
-              // 侧栏是纵向长条，不给个底色看不出来哪个亮着。
-              //
-              // ⚠ 底色用 bg-brand-500/10 而不是 --color-brand-50 ——
-              // 后者是 @theme 里写死的浅蓝（#eef4ff），不随主题走，深色下会变成
-              // 一条刺眼的亮带。半透明的品牌色压在 surface 上，两种主题都成立。
-              className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-[14px] transition ${
-                active ? 'bg-brand-500/10' : ''
-              }`}
-              style={{ color: active ? 'var(--color-brand-500)' : 'var(--muted)' }}
-            >
-              <NavIcon name={tab.icon} className="h-[20px] w-[20px] shrink-0" />
-              <span className="font-medium">{t(tab.label)}</span>
-              {tab.href === '/tasks' && !!badge && badge > 0 && (
-                <span className="ml-auto min-w-5 h-5 px-1.5 rounded-full bg-red-500 text-white text-[11px] leading-5 text-center">
-                  {badge}
-                </span>
-              )}
-            </Link>
-          );
-        })}
-        {collections.map(collection => <Link key={collection.id} href={'/collections/' + collection.id}
-          className={`block rounded-xl py-2 pl-11 pr-3 text-[13px] break-words ${pathname === '/collections/' + collection.id || pathname.startsWith('/collections/' + collection.id + '/') ? 'bg-brand-500/10 text-brand-500' : 'muted'}`}>
-          {collection.title}
-        </Link>)}
-      </div>
-
-      {/* 全局的三样：跟当前是哪一页无关，所以不放页头放这里 —— 位置永远不变，
-          页头也就只剩这一页自己的操作（「+ 新建」「总览」）。
-          窄屏没有侧栏，它们仍在各页页头上（PageHeader 里 lg:hidden 那一段）。 */}
-      <div className="shrink-0 border-t px-2 py-3 space-y-0.5" style={{ borderColor: 'var(--border)' }}>
+  return <SideNavView pathname={pathname} badge={badge} t={t}
+    renderItem={({ href, className, style, children }) => <Link key={href} href={href} className={className} style={style}>{children}</Link>}
+    collections={collections.map(collection => <Link key={collection.id} href={'/collections/' + collection.id}
+      className={`block rounded-xl py-2 pl-11 pr-3 text-[13px] break-words ${pathname === '/collections/' + collection.id || pathname.startsWith('/collections/' + collection.id + '/') ? 'bg-brand-500/10 text-brand-500' : 'muted'}`}>
+      {collection.title}</Link>)}
+    trailing={<div className="shrink-0 border-t px-2 py-3 space-y-0.5" style={{ borderColor: 'var(--border)' }}>
         {[
           { href: '/search', label: t('搜索'), icon: <SearchIcon className="h-5 w-5 shrink-0" /> },
           { href: '/settings', label: t('设置'), icon: <SettingsIcon className="h-5 w-5 shrink-0" /> },
@@ -87,7 +46,5 @@ export default function SideNav({ badge, collections = [] }: { badge?: number; c
           );
         })}
         <ThemeToggle withLabel />
-      </div>
-    </nav>
-  );
+      </div>} />;
 }

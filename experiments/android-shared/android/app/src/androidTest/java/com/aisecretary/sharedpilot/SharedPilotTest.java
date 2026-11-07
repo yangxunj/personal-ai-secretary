@@ -57,7 +57,9 @@ public final class SharedPilotTest {
             assertEquals("false", evaluate(activity, "document.querySelector('.task-panel').hidden"));
             evaluate(activity, "document.querySelectorAll('#pilot-navigation button')[0].click();document.querySelectorAll('#pilot-navigation button')[1].click();");
             assertEquals("\"unsaved draft\"", evaluate(activity, "document.querySelector('#task-title').value"));
-            assertEquals("true", evaluate(activity, "document.querySelectorAll('#pilot-navigation button')[3].disabled"));
+            evaluate(activity, "document.querySelectorAll('#pilot-navigation button')[3].click();");
+            assertEquals("false", evaluate(activity, "document.querySelector('.pilot-unavailable').hidden"));
+            assertEquals("\"财务\"", evaluate(activity, "document.querySelector('#pilot-page-header h1').textContent"));
         } finally { getInstrumentation().runOnMainSync(activity::finish); }
     }
 

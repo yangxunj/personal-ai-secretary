@@ -168,13 +168,15 @@ export function startPage(document, host) {
   });
   host.Pilot.tasks = tasks;
   attachAiPanel(document, host, records, definition, () => { refresh(); refreshTasks(); }, tasks);
-  const navigation = host.PilotMessageUI.createNavigation(document.getElementById('pilot-navigation'), showScreen);
+  const navigation = host.PilotMessageUI.createAppShell(document.getElementById('pilot-shell'), document.getElementById('pilot-content-root'), showScreen);
   function showScreen(path) {
-    for (const section of document.querySelectorAll('[data-screen]')) section.hidden = section.dataset.screen !== path;
+    const target = ['/chat', '/tasks', '/collections', '/more', '/settings'].includes(path) ? path : '/unavailable';
+    for (const section of document.querySelectorAll('[data-screen]')) section.hidden = section.dataset.screen !== target;
     navigation.render(path);
     host.scrollTo(0, 0);
   }
   for (const button of document.querySelectorAll('[data-open-screen]')) button.addEventListener('click', () => showScreen(button.dataset.openScreen));
+  document.getElementById('pilot-settings-key').addEventListener('click', () => bridge.openModelSettings());
   showScreen('/chat');
 }
 

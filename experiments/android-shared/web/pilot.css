@@ -10,3 +10,18 @@ li small{overflow-wrap:anywhere}
 .shared-message{min-width:0;color:var(--ink);overflow-wrap:anywhere}.shared-message p{color:inherit;white-space:normal}.shared-message li{padding-top:0;padding-right:0;padding-bottom:0;border:0}.shared-message strong{display:inline;font-size:inherit}.shared-message pre{white-space:pre;overflow-wrap:normal;max-width:100%}.shared-message a{color:var(--accent)}.shared-message .chat-speaker{font-size:13px;color:var(--muted)}
 main>section{min-width:0}
 .shared-conversation-list{max-height:240px;overflow:auto;--border:var(--line)}.shared-conversation-list button{color:var(--ink)}.shared-conversation-list button[aria-current=page]{background:color-mix(in srgb,var(--accent) 16%,transparent);color:var(--accent);font-weight:600}.shared-conversation-list .muted{color:var(--muted)}.shared-conversation-list svg{flex-shrink:0}#shared-composer{min-width:0}#shared-composer textarea{min-height:90px;max-height:220px}
+/* Platform-specific mounting and native controls; shell, theme and nav are shared. */
+body.pilot-body{max-width:none;margin:0;padding:0;background:var(--bg);color:var(--text)}
+#pilot-content-root{min-width:0}#pilot-content-root main{display:block}#pilot-content-root main>section{border:0;border-radius:0;padding:16px;background:transparent}
+#pilot-content-root input,#pilot-content-root select,#pilot-content-root textarea{background:var(--surface);color:var(--text);border-color:var(--border)}
+#pilot-content-root button{background:var(--color-brand-500);color:white}#pilot-content-root button.secondary{background:var(--surface);color:var(--text);border:1px solid var(--border)}
+#pilot-content-root .pilot-page-header header{margin:0;background:var(--surface)}#pilot-content-root .pilot-page-header h1{font-size:16px;margin:0;letter-spacing:normal}
+#pilot-content-root .pilot-page-header button{background:transparent;color:var(--muted);min-height:40px;padding:8px}
+#pilot-side-navigation nav button{width:100%;min-height:40px;background:transparent;text-align:left}#pilot-side-navigation nav button:focus-visible,#pilot-navigation nav button:focus-visible{outline:3px solid var(--color-brand-500)}
+#pilot-navigation nav button{border:0;border-radius:0;min-height:56px;width:100%;padding:8px 2px;background:transparent;font:inherit;gap:4px}
+#pilot-navigation nav{background:var(--surface)}#pilot-navigation nav svg{display:block}
+#pilot-content-root .pilot-section-title{display:none}#pilot-content-root .shared-task-card{background:var(--surface)}
+#pilot-content-root .pilot-more button{width:100%;justify-content:flex-start;margin-bottom:12px}#pilot-content-root .task-create>summary,#pilot-content-root .conversation-drawer>summary,#pilot-content-root .model-options>summary{cursor:pointer;color:var(--color-brand-500);font-weight:600}
+#pilot-content-root footer{padding:16px;margin:0}.pilot-unavailable p{color:var(--muted)}
+#conversation-messages>li{border:0;padding:8px 0;display:flex;flex-direction:column;gap:12px}.pilot-input-label{position:absolute;clip:rect(0,0,0,0);width:1px;height:1px;overflow:hidden}
+#pilot-content-root .ai-panel:not([hidden]){min-height:calc(100dvh - 56px - 72px);display:flex;flex-direction:column}#ai-form{margin-top:auto}.pilot-composer{display:flex;align-items:end;gap:8px;position:sticky;bottom:calc(4.4rem + env(safe-area-inset-bottom,0px));padding:10px 0;background:var(--bg)}#shared-composer:not([hidden]){flex:1;min-width:0}#ai-form[data-mode=deepseek] #ai-send{flex:none;min-height:40px;width:40px;height:40px;padding:0;border-radius:999px}#shared-composer textarea{min-height:44px;margin:0}@media(min-width:1024px){.pilot-composer{bottom:0}}

@@ -43,9 +43,12 @@ export function attachAiPanel(document, host, records, definition, refresh, task
   }
   function showMode() {
     const real = mode() === 'deepseek';
+    form.dataset.mode = real ? 'deepseek' : 'demo';
     fields.hidden = !real; fields.disabled = !real;
+    document.getElementById('shared-composer').hidden = !real;
     document.getElementById('demo-guide').hidden = real;
-    send.textContent = real ? '发送给 DeepSeek' : '运行离线演练';
+    send.textContent = real ? '↑' : '运行离线演练';
+    send.setAttribute('aria-label', real ? '发送' : '运行离线演练');
     settingsChanged();
     conversations.load(real ? 'deepseek' : 'demo');
   }

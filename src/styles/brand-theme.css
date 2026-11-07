@@ -1,0 +1,21 @@
+@theme {
+  --color-ink-50:  #f6f7f9;
+  --color-ink-100: #eceef2;
+  --color-ink-200: #d9dde5;
+  --color-ink-400: #8b93a3;
+  --color-ink-600: #4e5666;
+  --color-ink-800: #232934;
+  --color-ink-900: #151920;
+  --color-brand-50:  #eef4ff;
+  --color-brand-100: #dbe6fe;
+  /* ⚠ 300 / 400 / 800 是补上的：代码里一直在用 dark:text-brand-300、
+     dark:text-brand-400，但色阶没定义，Tailwind 直接不生成那条规则 ——
+     深色下这些字就悄悄退回继承色，看着「差不多」所以一直没被发现。
+     加主题开关时才逮到。**用了哪一档就得在这里定义哪一档。** */
+  --color-brand-300: #a9bcfb;
+  --color-brand-400: #7d93f9;
+  --color-brand-500: #4f6ef7;
+  --color-brand-600: #3d55d6;
+  --color-brand-700: #2f42a8;
+  --color-brand-800: #26357f;
+}

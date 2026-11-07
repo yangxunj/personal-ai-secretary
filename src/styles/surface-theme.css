@@ -1,0 +1,53 @@
+:root {
+  color-scheme: light;
+  --color-brand-500: #4f6ef7;
+  --ink: var(--text);
+  --line: var(--border);
+  --accent: var(--color-brand-500);
+  --bg: #f6f7f9;
+  --surface: #ffffff;
+  --border: #e6e9ef;
+  --text: #232934;
+  --muted: #767e8f;
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #12151b;
+  --surface: #1a1e26;
+  --border: #2a2f3a;
+  --text: #e7eaf0;
+  --muted: #929aab;
+}
+
+/* 没有 JS 时（或脚本还没跑到）的兜底：跟系统。
+   ⚠ 必须限定 :not([data-theme])，否则手动选了浅色的人在深色系统下还是深色。 */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) {
+    color-scheme: dark;
+    --bg: #12151b;
+    --surface: #1a1e26;
+    --border: #2a2f3a;
+    --text: #e7eaf0;
+    --muted: #929aab;
+  }
+}
+
+html, body {
+  background: var(--bg);
+  color: var(--text);
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior-y: none;
+}
+
+body {
+  font-family: system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", "Segoe UI", sans-serif;
+}
+
+/* 移动端安全区 */
+.pb-safe { padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 0.5rem); }
+.pt-safe { padding-top: env(safe-area-inset-top, 0px); }
+
+.surface { background: var(--surface); border-color: var(--border); }
+.muted { color: var(--muted); }
+:root { background: var(--bg); color: var(--text); }

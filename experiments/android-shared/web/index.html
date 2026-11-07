@@ -6,28 +6,31 @@
   <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'none'; img-src 'none'; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
   <title>秘书共用逻辑试验</title>
   <link rel="stylesheet" href="pilot.css">
+  <link rel="stylesheet" href="surface-theme.css">
   <link rel="stylesheet" href="shared-message.css">
   <script defer src="messages.js"></script>
   <script defer src="pilot.js"></script>
 </head>
-<body>
-  <header><span class="tag">安卓 · 试验版 __PILOT_VERSION__</span><h1>家庭管家</h1><p>记录保存在这台设备，无需打开电脑。</p></header>
+<body class="pilot-body">
+  <div id="pilot-shell"></div>
+  <div id="pilot-content-root">
+  <div id="pilot-page-header" class="pilot-page-header"></div>
   <main>
     <section class="task-panel" data-screen="/tasks" hidden aria-labelledby="tasks-title">
-      <h2 id="tasks-title">我的待办</h2>
+      <h2 id="tasks-title" class="pilot-section-title">我的待办</h2>
         <details><summary>设置负责人名单</summary><form id="owners-form">
           <label>负责人（用逗号或换行分开）<textarea id="owners-input" rows="2"></textarea></label>
           <button type="submit" class="secondary">保存负责人</button><p id="owners-message" role="status" aria-live="polite"></p>
         </form></details>
       <div class="task-grid">
-        <form id="task-form">
+        <details class="task-create"><summary>＋ 新建任务</summary><form id="task-form">
           <label>要做什么<input id="task-title" required maxlength="200" autocomplete="off" placeholder="例如：预约下周的牙科检查"></label>
           <label>原始要求<textarea id="task-detail" rows="3" maxlength="2000" placeholder="具体要求会按原文保存"></textarea></label>
             <label>负责人<select id="task-create-owner"><option value="">未指派</option></select></label>
           <label>截止日期<input id="task-due" type="date"></label>
           <p id="task-message" role="status" aria-live="polite"></p>
           <button id="task-save" type="submit">保存待办</button>
-        </form>
+        </form></details>
         <div>
           <label>查看范围<select id="task-filter"><option value="">未完成（待办／进行中／卡住了）</option></select></label>
           <label>分类<select id="task-category"><option value="">全部分类</option></select></label>
@@ -51,34 +54,42 @@
     </section>
     <section data-screen="/collections" hidden aria-labelledby="list-title"><h2 id="list-title">已保存的书单 <span id="count">0</span></h2><p id="empty">还没有阅读记录。</p><ul id="records"></ul><button class="secondary" id="refresh" type="button">重新读取</button></section>
     <section class="ai-panel" data-screen="/chat" aria-labelledby="ai-title">
-      <h2 id="ai-title">秘书助手（待办与书单试点）</h2>
-      <h3>本机对话</h3><div id="shared-conversation-list" class="shared-conversation-list" aria-label="本机对话"></div>
+      <h2 id="ai-title" class="pilot-section-title">对话</h2>
+      <details class="conversation-drawer"><summary>对话列表</summary><div id="shared-conversation-list" class="shared-conversation-list" aria-label="本机对话"></div></details>
       <p id="conversation-status" role="status"></p>
       <ol id="conversation-messages" aria-label="对话记录"></ol>
       <p id="message-link-status" role="status" aria-live="polite"></p>
       <form id="ai-form">
-        <label class="mode-choice"><input type="radio" name="ai-mode" value="demo" checked>离线演练（不调用 AI 模型）</label>
-        <label class="mode-choice"><input type="radio" name="ai-mode" value="deepseek">DeepSeek Flash</label>
-        <p id="demo-guide">固定演练：创建一条“安卓待办演练”，再查询确认。无需密钥，不产生 API 费用；这不是自然语言 AI 测试。</p>
-        <fieldset id="deepseek-fields" disabled hidden>
-          <p>使用你自己的 DeepSeek API Key，调用会按服务商规则计费。本次对话历史、本轮请求、前 25 条书单及工具查询的待办／书单会发送到 DeepSeek。模型回复一次性显示。</p>
-          <button class="secondary" id="model-key" type="button">设置模型密钥</button><p id="key-state"></p>
-          <label for="ai-prompt">交代一件事</label><div id="shared-composer"></div>
-          <p>同一对话可以连续追问，重开后保留；切换对话可继续。中断不自动重发，请先查询已保存结果。每个对话最多 40 轮，上下文过长时请新建；暂不自动压缩，不支持附件、专题或同步。</p>
-        </fieldset>
-        <button id="ai-send" type="submit">运行离线演练</button>
-        <button class="secondary" id="ai-cancel" type="button" hidden>取消本轮</button>
+        <details class="model-options"><summary>模型与设置</summary>
+        <label class="mode-choice"><input type="radio" name="ai-mode" value="demo">离线演练（不调用 AI 模型）</label>
+        <label class="mode-choice"><input type="radio" name="ai-mode" value="deepseek" checked>DeepSeek Flash</label>
+        <p>使用你自己的 DeepSeek API Key；本轮请求、对话历史及工具查询结果会发送给服务商，并按其规则计费。</p>
+        <p>同一对话可以连续追问，重开后保留；切换对话可继续。中断不自动重发，请先查询已保存结果。每个对话最多 40 轮，上下文过长时请新建；暂不自动压缩，不支持附件、专题或同步。</p>
+        <button class="secondary" type="button" id="model-key">设置模型密钥</button><p id="key-state"></p></details>
+        <p id="demo-guide" hidden>固定演练：创建一条“安卓待办演练”，再查询确认。无需密钥，不产生 API 费用；这不是自然语言 AI 测试。</p>
+        <fieldset id="deepseek-fields" disabled hidden></fieldset>
+        <div class="pilot-composer"><label for="ai-prompt" class="pilot-input-label">交代一件事</label>
+          <div id="shared-composer" hidden></div>
+          <button id="ai-send" type="submit">运行离线演练</button>
+          <button class="secondary" id="ai-cancel" type="button" hidden>取消本轮</button>
+        </div>
       </form>
       <ol id="ai-events" aria-label="工具执行结果"></ol>
       <p id="ai-output" role="status" aria-live="polite"></p>
     </section>
     <section class="pilot-more" data-screen="/more" hidden aria-labelledby="more-title">
-      <h2 id="more-title">更多</h2><p>已开放的栏目</p>
+      <h2 id="more-title" class="pilot-section-title">更多</h2><div id="pilot-more-navigation" class="space-y-3"></div>
       <button class="secondary" type="button" data-open-screen="/collections">书单</button>
-      <p>资料、财务、健康、专题、文件、页面和邮件尚未接入安卓。</p>
+    </section>
+    <section class="pilot-unavailable" data-screen="/unavailable" hidden aria-labelledby="unavailable-title">
+      <h2 id="unavailable-title">栏目正在适配</h2><p>此栏目在网页版和 Windows 版中可用，安卓功能尚未接入。</p>
+    </section>
+    <section class="pilot-settings" data-screen="/settings" hidden aria-labelledby="pilot-settings-title">
+      <h2 id="pilot-settings-title">设置</h2><p>模型连接使用本机配置。</p>
+      <button class="secondary" type="button" id="pilot-settings-key">设置 DeepSeek 密钥</button>
     </section>
   </main>
   <footer data-screen="/more" hidden><p>本版尚无电脑数据导入、附件或跨设备同步；请只填写测试内容。卸载会删除本地试验记录。</p><details><summary>检查规则是否一致</summary><p>下方检查不会保存记录。</p><button class="secondary" id="verify" type="button">运行规则检查</button><pre id="checks" aria-live="polite"></pre></details></footer>
-  <div id="pilot-navigation" class="pilot-navigation"></div>
+  </div>
 </body>
 </html>

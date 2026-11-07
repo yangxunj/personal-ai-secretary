@@ -1,4 +1,5 @@
 'use client';
+import Bubble from '@/components/chat/shared/ChatBubble';
 
 import Link from 'next/link';
 import { useChat } from '@ai-sdk/react';
@@ -839,21 +840,6 @@ const HistoryItem = memo(function HistoryItem({ msg, focused, active, speechDisa
   );
 });
 
-function Bubble({ role, children }: { role: 'user' | 'assistant'; children: React.ReactNode }) {
-  const mine = role === 'user';
-  return (
-    <div className={`flex ${mine ? 'justify-end' : 'justify-start'}`}>
-      <div
-        className={`max-w-[85%] min-w-0 rounded-2xl px-3.5 py-2.5 text-[15px] leading-relaxed break-words ${
-          mine ? 'bg-brand-500 text-white rounded-br-md' : 'surface border rounded-bl-md'
-        }`}
-        style={mine ? undefined : { borderColor: 'var(--border)' }}
-      >
-        {children}
-      </div>
-    </div>
-  );
-}
 
 /**
  * 上下文压缩的分界线。

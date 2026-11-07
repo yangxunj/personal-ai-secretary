@@ -5,6 +5,9 @@ const files = new Map([
   ['/', ['index.html', 'text/html; charset=utf-8']],
   ['/pilot.js', ['pilot.js', 'text/javascript; charset=utf-8']],
   ['/pilot.css', ['pilot.css', 'text/css; charset=utf-8']],
+  ['/messages.js', ['messages.js', 'text/javascript; charset=utf-8']],
+  ['/shared-message.css', ['shared-message.css', 'text/css; charset=utf-8']],
+  ['/surface-theme.css', ['surface-theme.css', 'text/css; charset=utf-8']],
 ]);
 const server = http.createServer(async (request, response) => {
   const item = files.get(new URL(request.url, 'http://localhost').pathname);

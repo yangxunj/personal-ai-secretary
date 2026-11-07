@@ -62,6 +62,23 @@ test('all shared conversation and text input source files match the Android buil
   }
 });
 
+test('Android bundle records the same shell, navigation, header and chat bubble sources as the web', () => {
+  const manifest = JSON.parse(readFileSync(new URL('web-dist/build-manifest.json', import.meta.url), 'utf8'));
+  for (const file of [
+    'src/components/navigation/shared/AppShell.tsx',
+    'src/components/navigation/shared/SideNavView.tsx',
+    'src/components/navigation/shared/BottomNavView.tsx',
+    'src/components/navigation/shared/PageHeaderView.tsx',
+    'src/components/navigation/shared/MoreNavigationView.tsx',
+    'src/components/chat/shared/ChatBubble.tsx',
+  ]) {
+    const entry = manifest.sharedUiSources.find(row => row.file === file);
+    assert.ok(entry, file);
+    assert.equal(entry.sha256, createHash('sha256').update(readFileSync(path.join(root, file))).digest('hex'));
+  }
+  assert.equal(manifest.surfaceThemeSha256, createHash('sha256').update(readFileSync(path.join(root, 'src/styles/surface-theme.css'))).digest('hex'));
+});
+
 test('shared task card keeps platform navigation and actions, escapes titles and shows high priority', () => {
   const markup = renderToStaticMarkup(createElement(TaskCard, { title: '<script>unsafe</script>', completed: false,
     highPriority: true, highPriorityLabel: '高优先级', active: true,

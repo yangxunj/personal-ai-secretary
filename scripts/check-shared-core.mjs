@@ -19,10 +19,17 @@ export const sharedUiEntries = [
   'src/components/MessageBody.tsx',
   'src/components/chat/shared/ConversationListView.tsx',
   'src/components/chat/shared/ChatTextInput.tsx',
+  'src/components/chat/shared/ChatBubble.tsx',
   'src/components/tasks/shared/TaskCard.tsx',
   'src/components/tasks/shared/TaskStatusSelect.tsx',
   'src/components/tasks/shared/TaskOwnerSelect.tsx',
   'src/components/navigation/shared/BottomNavView.tsx',
+  'src/components/navigation/shared/SideNavView.tsx',
+  'src/components/navigation/shared/AppShell.tsx',
+  'src/components/navigation/shared/PageHeaderView.tsx',
+  'src/components/navigation/shared/HeaderIcons.tsx',
+  'src/components/navigation/shared/MoreNavigationView.tsx',
+  'src/components/ThemeToggle.tsx',
 ];
 const repository = fileURLToPath(new URL('../', import.meta.url));
 

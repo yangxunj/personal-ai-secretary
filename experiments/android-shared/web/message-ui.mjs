@@ -4,10 +4,17 @@ import { flushSync } from 'react-dom';
 import MessageBody from '../../../src/components/MessageBody.tsx';
 import ConversationListView from '../../../src/components/chat/shared/ConversationListView.tsx';
 import ChatTextInput from '../../../src/components/chat/shared/ChatTextInput.tsx';
+import ChatBubble from '../../../src/components/chat/shared/ChatBubble.tsx';
 import TaskCard from '../../../src/components/tasks/shared/TaskCard.tsx';
 import TaskStatusSelect from '../../../src/components/tasks/shared/TaskStatusSelect.tsx';
 import TaskOwnerSelect from '../../../src/components/tasks/shared/TaskOwnerSelect.tsx';
 import BottomNavView from '../../../src/components/navigation/shared/BottomNavView.tsx';
+import SideNavView from '../../../src/components/navigation/shared/SideNavView.tsx';
+import AppShell from '../../../src/components/navigation/shared/AppShell.tsx';
+import PageHeaderView from '../../../src/components/navigation/shared/PageHeaderView.tsx';
+import { SearchIcon, SettingsIcon } from '../../../src/components/navigation/shared/HeaderIcons.tsx';
+import MoreNavigationView from '../../../src/components/navigation/shared/MoreNavigationView.tsx';
+import ThemeToggle from '../../../src/components/ThemeToggle.tsx';
 
 // Only the platform mount and navigation policy live here. Markdown rendering
 // remains the existing production component, imported without a fork.
@@ -20,10 +27,10 @@ function createTranscript(element, onLinkBlocked) {
   return {
     render(turns, interruptedNotice) {
       flushSync(() => root.render(turns.map(turn => createElement('li', { key: turn.id },
-        createElement('p', { className: 'chat-user' }, '我：' + turn.prompt),
-        turn.status === 'complete'
-          ? createElement('div', { className: 'shared-message' }, createElement('p', { className: 'chat-speaker' }, '秘书：'), createElement(MessageBody, null, turn.reply))
-          : createElement('p', null, turn.status === 'running' ? '正在处理…' : interruptedNotice),
+        createElement(ChatBubble, { role: 'user' }, turn.prompt),
+        createElement(ChatBubble, { role: 'assistant' }, turn.status === 'complete'
+          ? createElement('div', { className: 'shared-message' }, createElement(MessageBody, null, turn.reply))
+          : turn.status === 'running' ? '正在处理…' : interruptedNotice),
       ))));
     },
   };
@@ -35,7 +42,7 @@ function createConversationControls(listElement, inputElement, callbacks) {
       flushSync(() => {
         listRoot.render(createElement(ConversationListView, { items, activeId, disabled, t: text => text === '新对话' ? '新建对话' : text, onSelect: callbacks.onSelect, onNew: callbacks.onNew }));
         inputRoot.render(createElement(ChatTextInput, { id: 'ai-prompt', value: draft, onDraftChange: callbacks.onDraftChange, onSend: callbacks.onSend,
-          canSend, disabled: busy, maxLength: 1000, rows: 3, placeholder: '例如：帮我建一条待办，周五前预约牙科检查',
+          canSend, disabled: busy, maxLength: 1000, rows: 1, placeholder: '跟我说点什么…',
           className: 'w-full min-w-0 resize-none rounded-2xl border px-3.5 py-2.5 text-[15px] bg-transparent outline-none transition max-h-32' }));
       });
     },
@@ -68,17 +75,45 @@ function createTaskCards(element, onChange) {
     },
   };
 }
-function createNavigation(element, onSelect) {
-  const root = createRoot(element), available = new Set(['/chat', '/tasks', '/more']);
+function createAppShell(element, content, onSelect) {
+  try {
+    const pref = localStorage.getItem('theme') || 'system';
+    document.documentElement.dataset.theme = pref === 'dark' || (pref === 'system' && matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light';
+  } catch { /* Follow the system theme if local preferences are unavailable. */ }
+  const shell = createRoot(element);
+  flushSync(() => shell.render(createElement(AppShell, {
+    side: createElement('div', { id: 'pilot-side-navigation' }),
+    bottom: createElement('div', { id: 'pilot-navigation' }),
+  }, createElement('div', { id: 'pilot-content-slot' }))));
+  document.getElementById('pilot-content-slot').append(content);
+  const bottom = createRoot(document.getElementById('pilot-navigation'));
+  const side = createRoot(document.getElementById('pilot-side-navigation'));
+  const header = createRoot(document.getElementById('pilot-page-header'));
+  const more = createRoot(document.getElementById('pilot-more-navigation'));
+  const navItem = ({ href, label, active, className, style, children }) => createElement('button', {
+    key: href, type: 'button', className, style, 'aria-label': label,
+    'aria-current': active ? 'page' : undefined, onClick: () => onSelect(href, label),
+  }, children);
+  const iconButton = (label, Icon, href) => createElement('button', {
+    type: 'button', className: 'p-2 rounded-lg active:opacity-60 transition muted', 'aria-label': label,
+    onClick: () => onSelect(href, label),
+  }, createElement(Icon));
   return { render(pathname) {
-    flushSync(() => root.render(createElement(BottomNavView, { pathname, t: text => text,
-      renderItem: ({ href, label, active, className, style, children }) => createElement('button', {
-        key: href, type: 'button', className, style, disabled: !available.has(href),
-        'aria-label': available.has(href) ? label : label + '（暂不可用）',
-        'aria-current': active ? 'page' : undefined,
-        onClick: () => onSelect(href),
-      }, children),
-    })));
+    const titles = { '/chat': '对话', '/tasks': '任务', '/collections': '栏目', '/more': '更多', '/settings': '设置', '/search': '搜索',
+      '/vault': '资料', '/finance': '财务', '/health': '健康', '/topics': '专题', '/files': '文件', '/pages': '页面', '/mail': '邮件' };
+    flushSync(() => {
+      bottom.render(createElement(BottomNavView, { pathname, t: text => text, renderItem: navItem }));
+      side.render(createElement(SideNavView, { pathname, t: text => text, renderItem: navItem,
+        trailing: createElement('div', { className: 'shrink-0 border-t px-2 py-3 space-y-0.5', style: { borderColor: 'var(--border)' } },
+          iconButton('搜索', SearchIcon, '/search'), iconButton('设置', SettingsIcon, '/settings'), createElement(ThemeToggle, { withLabel: true })) }));
+      header.render(createElement(PageHeaderView, { title: titles[pathname] || '栏目',
+        actions: createElement('span', { className: 'contents lg:hidden' }, createElement(ThemeToggle),
+          pathname !== '/search' && iconButton('搜索', SearchIcon, '/search'), pathname !== '/settings' && iconButton('设置', SettingsIcon, '/settings')) }));
+      more.render(createElement(MoreNavigationView, { t: text => text,
+        renderItem: ({ href, label, children }) => createElement('button', { key: href, type: 'button',
+          className: 'surface flex items-center gap-3 rounded-xl border p-4', style: { borderColor: 'var(--border)' },
+          onClick: () => onSelect(href, label) }, children) }));
+    });
   } };
 }
-globalThis.PilotMessageUI = { createTranscript, createConversationControls, createTaskCards, createNavigation };
+globalThis.PilotMessageUI = { createTranscript, createConversationControls, createTaskCards, createAppShell };

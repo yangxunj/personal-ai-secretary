@@ -24,6 +24,7 @@ export function attachConversationPanel(document, bridge, nonce, messageUi, onSe
     onSend() { if (!busy && healthy && mode === 'deepseek' && draft.trim()) onSend(); },
   });
   function renderControls() {
+      document.getElementById('ai-send').disabled = busy || !healthy || (mode === 'deepseek' && !draft.trim());
     controls.render({ items, activeId: current?.snapshot.id ?? null, disabled: busy || !healthy, busy, draft,
       canSend: healthy && !busy && mode === 'deepseek' && !!draft.trim() });
   }
