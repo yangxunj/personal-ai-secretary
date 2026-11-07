@@ -31,6 +31,7 @@ const { default: ConversationListView } = await import('../../src/components/cha
 const { default: TaskCard } = await import('../../src/components/tasks/shared/TaskCard.tsx');
 const { default: TaskStatusSelect } = await import('../../src/components/tasks/shared/TaskStatusSelect.tsx');
 const { default: TaskOwnerSelect } = await import('../../src/components/tasks/shared/TaskOwnerSelect.tsx');
+const { default: BottomNavView } = await import('../../src/components/navigation/shared/BottomNavView.tsx');
 const now = new Date(2026, 10, 4, 12), t = value => value;
 
 test('shared conversation date buckets preserve incoming order and existing local-day semantics', () => {
@@ -83,6 +84,22 @@ test('shared task controls retain uncommon status and existing owner, and honor 
   assert.match(owner, /value="Old member" selected/); assert.match(owner, /value="Alice"/); assert.match(owner, /value=""/);
   const manifest = JSON.parse(readFileSync(new URL('web-dist/build-manifest.json', import.meta.url), 'utf8'));
   for (const file of ['src/components/tasks/shared/TaskStatusSelect.tsx', 'src/components/tasks/shared/TaskOwnerSelect.tsx']) {
+    const entry = manifest.sharedUiSources.find(row => row.file === file);
+    assert.ok(entry); assert.equal(entry.sha256, createHash('sha256').update(readFileSync(path.join(root, file))).digest('hex'));
+  }
+});
+
+test('shared bottom navigation keeps web links and lets Android disable unsupported screens', () => {
+  const web = renderToStaticMarkup(createElement(BottomNavView, { pathname: '/tasks/123', badge: 3, t,
+    renderItem: ({ href, className, style, children }) => createElement('a', { key: href, href, className, style }, children) }));
+  for (const href of ['/chat', '/tasks', '/vault', '/finance', '/health', '/topics', '/more']) assert.ok(web.includes(`href="${href}"`));
+  assert.match(web, />3<\/span>/);
+  const android = renderToStaticMarkup(createElement(BottomNavView, { pathname: '/collections', t,
+    renderItem: ({ href, active, children }) => createElement('button', { key: href, disabled: !['/chat','/tasks','/more'].includes(href), 'aria-current': active ? 'page' : undefined }, children) }));
+  assert.equal((android.match(/disabled=""/g) || []).length, 4);
+  assert.equal((android.match(/aria-current="page"/g) || []).length, 1);
+  const manifest = JSON.parse(readFileSync(new URL('web-dist/build-manifest.json', import.meta.url), 'utf8'));
+  for (const file of ['src/components/navigation/shared/BottomNavView.tsx', 'src/components/nav-tabs.tsx']) {
     const entry = manifest.sharedUiSources.find(row => row.file === file);
     assert.ok(entry); assert.equal(entry.sha256, createHash('sha256').update(readFileSync(path.join(root, file))).digest('hex'));
   }

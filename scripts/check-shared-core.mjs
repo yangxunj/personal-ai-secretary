@@ -22,6 +22,7 @@ export const sharedUiEntries = [
   'src/components/tasks/shared/TaskCard.tsx',
   'src/components/tasks/shared/TaskStatusSelect.tsx',
   'src/components/tasks/shared/TaskOwnerSelect.tsx',
+  'src/components/navigation/shared/BottomNavView.tsx',
 ];
 const repository = fileURLToPath(new URL('../', import.meta.url));
 

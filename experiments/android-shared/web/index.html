@@ -11,9 +11,9 @@
   <script defer src="pilot.js"></script>
 </head>
 <body>
-  <header><span class="tag">安卓 · 独立试验版 __PILOT_VERSION__</span><h1>我的平板秘书</h1><p>记录保存在这台设备，无需打开电脑。</p></header>
+  <header><span class="tag">安卓 · 试验版 __PILOT_VERSION__</span><h1>家庭管家</h1><p>记录保存在这台设备，无需打开电脑。</p></header>
   <main>
-    <section class="task-panel" aria-labelledby="tasks-title">
+    <section class="task-panel" data-screen="/tasks" hidden aria-labelledby="tasks-title">
       <h2 id="tasks-title">我的待办</h2>
         <details><summary>设置负责人名单</summary><form id="owners-form">
           <label>负责人（用逗号或换行分开）<textarea id="owners-input" rows="2"></textarea></label>
@@ -38,19 +38,19 @@
         </div>
       </div>
     </section>
-    <section aria-labelledby="add-title">
+    <section data-screen="/collections" hidden aria-labelledby="add-title">
       <h2 id="add-title">添加阅读记录</h2>
       <form id="record-form">
         <label>书名<input id="name" name="name" autocomplete="off" required placeholder="例如：小王子"></label>
         <label>阅读日期<input id="date" name="date" type="date"></label>
         <label>阅读状态<select id="status" name="status"><option>想读</option><option>在读</option><option>读完</option></select></label>
         <p id="message" role="status" aria-live="polite"></p>
-        <button id="save" type="submit" disabled>保存到平板</button>
+        <button id="save" type="submit" disabled>保存到本机</button>
         <button class="secondary" id="cancel-edit" type="button" hidden>取消编辑</button>
       </form>
     </section>
-    <section aria-labelledby="list-title"><h2 id="list-title">已保存的书单 <span id="count">0</span></h2><p id="empty">还没有阅读记录。</p><ul id="records"></ul><button class="secondary" id="refresh" type="button">重新读取</button></section>
-    <section class="ai-panel" aria-labelledby="ai-title">
+    <section data-screen="/collections" hidden aria-labelledby="list-title"><h2 id="list-title">已保存的书单 <span id="count">0</span></h2><p id="empty">还没有阅读记录。</p><ul id="records"></ul><button class="secondary" id="refresh" type="button">重新读取</button></section>
+    <section class="ai-panel" data-screen="/chat" aria-labelledby="ai-title">
       <h2 id="ai-title">秘书助手（待办与书单试点）</h2>
       <h3>本机对话</h3><div id="shared-conversation-list" class="shared-conversation-list" aria-label="本机对话"></div>
       <p id="conversation-status" role="status"></p>
@@ -72,7 +72,13 @@
       <ol id="ai-events" aria-label="工具执行结果"></ol>
       <p id="ai-output" role="status" aria-live="polite"></p>
     </section>
+    <section class="pilot-more" data-screen="/more" hidden aria-labelledby="more-title">
+      <h2 id="more-title">更多</h2><p>已开放的栏目</p>
+      <button class="secondary" type="button" data-open-screen="/collections">书单</button>
+      <p>资料、财务、健康、专题、文件、页面和邮件尚未接入安卓。</p>
+    </section>
   </main>
-  <footer><p>本版接入共用待办业务与 Pi 工具。没有电脑数据导入、附件或跨设备同步；请只填写测试内容。卸载会删除本地试验记录。</p><details><summary>检查规则是否一致</summary><p>下方检查不会保存记录。</p><button class="secondary" id="verify" type="button">运行规则检查</button><pre id="checks" aria-live="polite"></pre></details></footer>
+  <footer data-screen="/more" hidden><p>本版尚无电脑数据导入、附件或跨设备同步；请只填写测试内容。卸载会删除本地试验记录。</p><details><summary>检查规则是否一致</summary><p>下方检查不会保存记录。</p><button class="secondary" id="verify" type="button">运行规则检查</button><pre id="checks" aria-live="polite"></pre></details></footer>
+  <div id="pilot-navigation" class="pilot-navigation"></div>
 </body>
 </html>

@@ -1,54 +1,13 @@
 'use client';
-
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { TABS, NavIcon } from './nav-tabs';
 import { useT } from '@/lib/i18n/client';
+import BottomNavView from '@/components/navigation/shared/BottomNavView';
 
-/**
- * 窄屏的底部导航。宽屏（lg 及以上）上不显示 —— 那边走 `SideNav`。
- *
- * 底部七格是手机习惯，1400px 的屏幕上又丑又远（手要横跨整个屏幕去够）。
- * 标签清单和图标在 `nav-tabs.tsx`，两边共用。
- */
 export default function BottomNav({ badge }: { badge?: number }) {
   const pathname = usePathname();
   const t = useT();
-  return (
-    <nav
-      className="lg:hidden fixed bottom-0 inset-x-0 z-40 border-t surface pb-safe"
-      style={{ borderColor: 'var(--border)' }}
-    >
-      <div className="mx-auto max-w-2xl grid grid-cols-7">
-        {TABS.filter((t) => !('wideOnly' in t && t.wideOnly)).slice(0, 6).map((tab) => {
-          // 原来第一格是 '/'，要特判才不会匹配所有路径。现在没有 '/' 这一格了，
-          // 统一按「正好相等，或者是它的子路径」判断：/tasks/123 高亮任务，
-          // 而 /chat 不会被别的格子抢走。
-          const active = pathname === tab.href || pathname.startsWith(tab.href + '/');
-          return (
-            <Link
-              key={tab.href}
-              href={tab.href}
-              className="flex flex-col items-center gap-1 py-2.5 transition"
-              style={{ color: active ? 'var(--color-brand-500)' : 'var(--muted)' }}
-            >
-              <span className="relative">
-                <NavIcon name={tab.icon} className="h-[22px] w-[22px]" />
-                {tab.href === '/tasks' && !!badge && badge > 0 && (
-                  <span className="absolute -top-1 -right-2 min-w-4 h-4 px-1 rounded-full bg-red-500 text-white text-[10px] leading-4 text-center">
-                    {badge}
-                  </span>
-                )}
-              </span>
-              <span className="text-[10px] font-medium">{t(tab.label)}</span>
-            </Link>
-          );
-        })}
-        <Link href="/more" className="flex flex-col items-center gap-1 py-2.5 transition"
-          style={{ color: ['/more', '/files', '/pages', '/mail', '/collections'].some(path => pathname === path || pathname.startsWith(path + '/')) ? 'var(--color-brand-500)' : 'var(--muted)' }}>
-          <NavIcon name="page" className="h-[22px] w-[22px]" /><span className="text-[10px] font-medium">{t('更多')}</span>
-        </Link>
-      </div>
-    </nav>
-  );
+  return <BottomNavView pathname={pathname} badge={badge} t={t}
+    renderItem={({ href, className, style, children }) =>
+      <Link key={href} href={href} className={className} style={style}>{children}</Link>} />;
 }

@@ -45,6 +45,22 @@ public final class SharedPilotTest {
         return result.get();
     }
 
+    @Test public void mobileNavigationSwitchesScreensWithoutDiscardingDraft() throws Exception {
+        Activity activity = start();
+        try {
+            for (int attempts = 0; attempts < 40; attempts++) {
+                if ("7".equals(evaluate(activity, "document.querySelectorAll('#pilot-navigation button').length"))) break;
+                Thread.sleep(100);
+            }
+            assertEquals("7", evaluate(activity, "document.querySelectorAll('#pilot-navigation button').length"));
+            evaluate(activity, "document.querySelectorAll('#pilot-navigation button')[1].click();document.querySelector('#task-title').value='unsaved draft';");
+            assertEquals("false", evaluate(activity, "document.querySelector('.task-panel').hidden"));
+            evaluate(activity, "document.querySelectorAll('#pilot-navigation button')[0].click();document.querySelectorAll('#pilot-navigation button')[1].click();");
+            assertEquals("\"unsaved draft\"", evaluate(activity, "document.querySelector('#task-title').value"));
+            assertEquals("true", evaluate(activity, "document.querySelectorAll('#pilot-navigation button')[3].disabled"));
+        } finally { getInstrumentation().runOnMainSync(activity::finish); }
+    }
+
     @Test public void sharedRulesAndSQLiteSurviveActivityRestart() throws Exception {
         Activity first = start();
         try {

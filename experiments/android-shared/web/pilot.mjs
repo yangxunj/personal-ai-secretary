@@ -94,7 +94,7 @@ export function startPage(document, host) {
   let editing = null;
   const t = (text, values = {}) => text.replace(/\{(\w+)\}/g, (_, key) => values[key] ?? '');
   const showError = error => { message.className = ''; message.textContent = collectionError(error, t) === '操作未完成，请稍后重试。' ? '本地存储不可用，请重试；已填写内容仍保留。' : collectionError(error, t); };
-  if (!bridge) { message.textContent = '请在安卓试验应用中打开；普通浏览器没有平板存储接口。'; return; }
+  if (!bridge) { message.textContent = '请在安卓试验应用中打开；普通浏览器没有本机存储接口。'; return; }
   message.textContent = '';
   const records = createRecords({
     list: () => decode(bridge.listRecords()),
@@ -106,7 +106,7 @@ export function startPage(document, host) {
   const cancel = document.getElementById('cancel-edit');
   function finishEdit() {
     editing = null; document.getElementById('record-form').reset();
-    save.textContent = '保存到平板'; cancel.hidden = true;
+    save.textContent = '保存到本机'; cancel.hidden = true;
   }
   function refresh() {
     const rows = records.list();
@@ -140,7 +140,7 @@ export function startPage(document, host) {
       if (editing) records.update(editing.id, editing.version, values);
       else records.append(values);
       finishEdit();
-      message.className = 'success'; message.textContent = '已保存到这台平板。';
+      message.className = 'success'; message.textContent = '已保存到本机。';
       try { refresh(); }
       catch { message.textContent = '记录已保存，但列表读取失败。请点“重新读取”，无需重复保存。'; }
     } catch (error) { showError(error); }
@@ -168,6 +168,14 @@ export function startPage(document, host) {
   });
   host.Pilot.tasks = tasks;
   attachAiPanel(document, host, records, definition, () => { refresh(); refreshTasks(); }, tasks);
+  const navigation = host.PilotMessageUI.createNavigation(document.getElementById('pilot-navigation'), showScreen);
+  function showScreen(path) {
+    for (const section of document.querySelectorAll('[data-screen]')) section.hidden = section.dataset.screen !== path;
+    navigation.render(path);
+    host.scrollTo(0, 0);
+  }
+  for (const button of document.querySelectorAll('[data-open-screen]')) button.addEventListener('click', () => showScreen(button.dataset.openScreen));
+  showScreen('/chat');
 }
 
 globalThis.PilotCore = { definition, validateValues, prepareRecordWrite, runRuleChecks, createRecords, createTasks, taskPolicy, projectTaskList, parseOwners, conversation, startPage, runPilotAgent, demoModelRequest };

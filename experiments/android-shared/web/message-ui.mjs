@@ -7,6 +7,7 @@ import ChatTextInput from '../../../src/components/chat/shared/ChatTextInput.tsx
 import TaskCard from '../../../src/components/tasks/shared/TaskCard.tsx';
 import TaskStatusSelect from '../../../src/components/tasks/shared/TaskStatusSelect.tsx';
 import TaskOwnerSelect from '../../../src/components/tasks/shared/TaskOwnerSelect.tsx';
+import BottomNavView from '../../../src/components/navigation/shared/BottomNavView.tsx';
 
 // Only the platform mount and navigation policy live here. Markdown rendering
 // remains the existing production component, imported without a fork.
@@ -67,4 +68,17 @@ function createTaskCards(element, onChange) {
     },
   };
 }
-globalThis.PilotMessageUI = { createTranscript, createConversationControls, createTaskCards };
+function createNavigation(element, onSelect) {
+  const root = createRoot(element), available = new Set(['/chat', '/tasks', '/more']);
+  return { render(pathname) {
+    flushSync(() => root.render(createElement(BottomNavView, { pathname, t: text => text,
+      renderItem: ({ href, label, active, className, style, children }) => createElement('button', {
+        key: href, type: 'button', className, style, disabled: !available.has(href),
+        'aria-label': available.has(href) ? label : label + '（暂不可用）',
+        'aria-current': active ? 'page' : undefined,
+        onClick: () => onSelect(href),
+      }, children),
+    })));
+  } };
+}
+globalThis.PilotMessageUI = { createTranscript, createConversationControls, createTaskCards, createNavigation };
