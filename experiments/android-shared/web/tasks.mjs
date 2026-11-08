@@ -39,6 +39,10 @@ export function attachTaskPanel(document, tasks, ownerStore) {
   const category = document.getElementById('task-category'), owner = document.getElementById('task-owner');
   const ownersForm = document.getElementById('owners-form'), ownersInput = document.getElementById('owners-input');
   const ownersMessage = document.getElementById('owners-message'), createOwner = document.getElementById('task-create-owner');
+  const createPanel = document.getElementById('task-create'), newButton = document.getElementById('task-new');
+  const setCreateOpen = open => { createPanel.hidden = !open; newButton.setAttribute('aria-expanded', String(open)); };
+  newButton.addEventListener('click', () => { const open = createPanel.hidden; setCreateOpen(open); if (open) document.getElementById('task-title').focus(); });
+  document.getElementById('task-cancel').addEventListener('click', () => { setCreateOpen(false); newButton.focus(); });
   let members = ['我'];
   try { members = ownerStore.read() ?? members; ownersInput.value = members.join('，'); }
   catch { ownersInput.disabled = true; ownersForm.querySelector('button').disabled = true; ownersMessage.textContent = '负责人名单读取失败，请重启后重试。'; }
@@ -65,6 +69,9 @@ export function attachTaskPanel(document, tasks, ownerStore) {
     cards.render(view.groups.map(group => ({ ...group, items: group.items.map(taskPublicDto) })), members);
     document.getElementById('task-count').textContent = String(rows.length);
     document.getElementById('tasks-empty').hidden = rows.length > 0;
+    const activeFilters = document.getElementById('task-active-filters');
+    const active = [view.cat && `分类：${view.cat}`, view.own && `负责人：${view.own === 'none' ? '未指派' : view.own}`].filter(Boolean);
+    activeFilters.textContent = active.join(' · '); activeFilters.hidden = active.length === 0;
   }
   filter.addEventListener('change', () => { try { refresh(); } catch { message.textContent = '任务读取失败。'; } });
   category.addEventListener('change', () => { try { refresh(); } catch { message.textContent = '任务读取失败。'; } });
@@ -84,7 +91,7 @@ export function attachTaskPanel(document, tasks, ownerStore) {
     try {
       const title = document.getElementById('task-title').value.trim(); if (!title) throw new Error('请填写标题');
       tasks.create({ title, detail: document.getElementById('task-detail').value || undefined, dueDate: document.getElementById('task-due').value || undefined, owner: createOwner.value || undefined });
-      form.reset(); message.textContent = '已保存待办。';
+      form.reset(); setCreateOpen(false); message.textContent = '已保存待办。';
       try { refresh(); } catch { message.textContent = '待办已保存，但列表重读失败；请重读，不要重复保存。'; }
     } catch { message.textContent = '保存失败，请检查输入；草稿仍保留。'; }
     finally { save.disabled = false; }

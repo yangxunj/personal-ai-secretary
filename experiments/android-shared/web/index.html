@@ -20,28 +20,31 @@
   <main>
     <section class="task-panel" data-screen="/tasks" hidden aria-labelledby="tasks-title">
       <h2 id="tasks-title" class="pilot-section-title">我的待办</h2>
-        <details><summary>设置负责人名单</summary><form id="owners-form">
-          <label>负责人（用逗号或换行分开）<textarea id="owners-input" rows="2"></textarea></label>
-          <button type="submit" class="secondary">保存负责人</button><p id="owners-message" role="status" aria-live="polite"></p>
-        </form></details>
-      <div class="task-grid">
-        <details class="task-create"><summary>＋ 新建任务</summary><form id="task-form">
+      <div class="task-toolbar"><div><h3>我的待办</h3><p>共显示 <span id="task-count">0</span> 条</p></div>
+        <button id="task-new" type="button" aria-expanded="false" aria-controls="task-create">＋ 新建</button>
+      </div>
+      <div id="task-create" class="task-create" hidden><form id="task-form">
           <label>要做什么<input id="task-title" required maxlength="200" autocomplete="off" placeholder="例如：预约下周的牙科检查"></label>
           <label>原始要求<textarea id="task-detail" rows="3" maxlength="2000" placeholder="具体要求会按原文保存"></textarea></label>
-            <label>负责人<select id="task-create-owner"><option value="">未指派</option></select></label>
+          <label>负责人<select id="task-create-owner"><option value="">未指派</option></select></label>
           <label>截止日期<input id="task-due" type="date"></label>
-          <p id="task-message" role="status" aria-live="polite"></p>
-          <button id="task-save" type="submit">保存待办</button>
-        </form></details>
-        <div>
-          <label>查看范围<select id="task-filter"><option value="">未完成（待办／进行中／卡住了）</option></select></label>
+          <div class="task-form-actions"><button id="task-save" type="submit">保存待办</button><button id="task-cancel" class="secondary" type="button">收起</button></div>
+        </form></div>
+      <p id="task-message" role="status" aria-live="polite"></p>
+      <div class="task-filter-bar">
+        <label class="task-primary-filter"><span class="task-sr-only">查看范围</span><select id="task-filter"><option value="">未完成</option></select></label>
+        <details class="task-filters"><summary>筛选与设置</summary><div class="task-filter-content">
           <label>分类<select id="task-category"><option value="">全部分类</option></select></label>
           <label>负责人<select id="task-owner"><option value="">全部负责人</option><option value="none">未指派</option></select></label>
-          <p>本次显示 <span id="task-count">0</span> 条；按状态分组，每组中新建的排在前面。</p>
-          <p id="tasks-empty">这个范围暂时没有待办。</p><div id="tasks"></div>
+          <details class="task-owners"><summary>设置负责人名单</summary><form id="owners-form">
+            <label>负责人（用逗号或换行分开）<textarea id="owners-input" rows="2"></textarea></label>
+            <button type="submit" class="secondary">保存负责人</button><p id="owners-message" role="status" aria-live="polite"></p>
+          </form></details>
           <button id="task-refresh" class="secondary" type="button">重读待办</button>
-        </div>
+        </div></details>
       </div>
+      <p id="task-active-filters" class="task-active-filters" hidden></p>
+      <p id="tasks-empty" class="task-empty">这个范围暂时没有待办。</p><div id="tasks"></div>
     </section>
     <section data-screen="/collections" hidden aria-labelledby="add-title">
       <h2 id="add-title">添加阅读记录</h2>
