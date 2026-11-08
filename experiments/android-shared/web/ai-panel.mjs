@@ -1,5 +1,6 @@
 import { runPilotAgent, demoModelRequest } from './pi-runtime.mjs';
 import { attachConversationPanel } from './conversation-panel.mjs';
+import { generateTitle, titleCandidate } from './title-work.mjs';
 
 const nonce = () => Array.from(crypto.getRandomValues(new Uint8Array(12)), byte => byte.toString(16).padStart(2, '0')).join('');
 
@@ -12,6 +13,8 @@ export function attachAiPanel(document, host, records, definition, refresh, task
   const bridge = host.SecretaryStorage;
   const pending = new Map();
   let active;
+  const titleQueue = [], titleQueued = new Set();
+  let titleActive;
   const conversations = attachConversationPanel(document, bridge, nonce, host.PilotMessageUI, () => form.requestSubmit(send), closeDrawer);
   const mode = () => document.querySelector('input[name="ai-mode"]:checked').value;
   const settingsChanged = () => { document.getElementById('key-state').textContent = bridge.hasApiKey?.() ? '已保存密钥；是否有效需实际请求确认。' : '尚未配置密钥。'; };
@@ -37,17 +40,38 @@ export function attachAiPanel(document, host, records, definition, refresh, task
   function nativeTransport(kind, body, signal) {
     signal.throwIfAborted();
     return new Promise((resolve, reject) => {
-      const id = (kind ? 'web-' : 'model-') + nonce();
+      const id = (kind === 'title' ? 'title-' : kind ? 'web-' : 'model-') + nonce();
       const cleanup = () => { pending.delete(id); clearTimeout(timer); signal.removeEventListener('abort', abort); };
-      const abort = () => { bridge.cancelModelRequest(); cleanup(); reject(new Error('本轮已取消，请先检查已保存记录。')); };
-      const timer = setTimeout(() => { bridge.cancelModelRequest(); cleanup(); reject(new Error('模型请求超时，请检查已保存记录。')); }, 90000);
+      const cancelNative = () => kind === 'title' ? bridge.cancelTitleRequest() : bridge.cancelModelRequest();
+      const abort = () => { cancelNative(); cleanup(); reject(new Error('本轮已取消，请先检查已保存记录。')); };
+      const timer = setTimeout(() => { cancelNative(); cleanup(); reject(new Error('模型请求超时，请检查已保存记录。')); }, kind === 'title' ? 45000 : 90000);
       pending.set(id, { resolve: value => { cleanup(); resolve(value); }, reject: error => { cleanup(); reject(error); } });
       signal.addEventListener('abort', abort, { once: true });
       try {
-        if (kind) bridge.beginWebRequest(id, kind, JSON.stringify(body));
+        if (kind === 'title') bridge.beginTitleRequest(id, JSON.stringify(body));
+        else if (kind) bridge.beginWebRequest(id, kind, JSON.stringify(body));
         else bridge.beginModelRequest(id, JSON.stringify(body));
       } catch { cleanup(); reject(new Error('请求入口不可用，请安装新版测试包。')); }
     });
+  }
+  function scheduleTitle(candidate) {
+    if (!candidate || titleQueued.has(candidate.id) || document.hidden) return;
+    titleQueued.add(candidate.id); titleQueue.push(candidate); void runTitleQueue();
+  }
+  async function runTitleQueue() {
+    if (titleActive) return;
+    while (titleQueue.length && !document.hidden) {
+      const candidate = titleQueue.shift();
+      titleActive = new AbortController();
+      try {
+        const row = JSON.parse(bridge.readConversation(candidate.id));
+        const latest = row.ok && row.data && titleCandidate(row.data.snapshot);
+        if (!latest || latest.expectedTitle !== candidate.expectedTitle || !bridge.claimTitleAttempt(candidate.id)) continue;
+        const title = await generateTitle(latest, (body, signal) => nativeTransport('title', body, signal), titleActive.signal);
+        if (conversations.applyTitle(candidate, title)) bridge.finishTitle(candidate.id);
+      } catch { /* Keep the existing title and leave the conversation usable. */ }
+      finally { titleQueued.delete(candidate.id); titleActive = undefined; }
+    }
   }
   function showMode() {
     const real = mode() === 'deepseek';
@@ -62,7 +86,9 @@ export function attachAiPanel(document, host, records, definition, refresh, task
   for (const radio of document.querySelectorAll('input[name="ai-mode"]')) radio.addEventListener('change', showMode);
   document.getElementById('model-key').addEventListener('click', () => bridge.openModelSettings());
   cancel.addEventListener('click', () => active?.abort());
-  document.addEventListener('visibilitychange', () => { if (document.hidden) active?.abort(); });
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) { active?.abort(); titleActive?.abort(); for (const item of titleQueue.splice(0)) titleQueued.delete(item.id); }
+  });
   form.addEventListener('submit', async event => {
     event.preventDefault(); if (active) return;
     const real = mode() === 'deepseek';
@@ -101,6 +127,7 @@ export function attachAiPanel(document, host, records, definition, refresh, task
       });
       events.replaceChildren(); output.textContent = '';
       conversations.finish(result.reply, true); started = false;
+      if (real) scheduleTitle(conversations.titleCandidate());
     } catch (error) {
       events.replaceChildren();
       if (started) try { conversations.finish('本轮未完整结束。', false); } catch { conversations.fail(); }

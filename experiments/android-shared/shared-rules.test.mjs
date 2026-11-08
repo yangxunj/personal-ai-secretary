@@ -52,6 +52,8 @@ test('Android bundle contains the exact current shared source and its rules pass
     ['webSearchSharedSha256', 'web-search/shared.mjs'],
     ['webSearchUrlSha256', 'web-search/url.mjs'],
     ['citationSha256', 'agent-citations.mjs'],
+    ['titlePromptSha256', 'system-prompt.ts'],
+    ['titleContentSha256', 'title-content.mjs'],
   ]) assert.equal(manifest[field], createHash('sha256').update(readFileSync(new URL('../../src/lib/' + source, import.meta.url))).digest('hex'));
   assert.equal(core.runRuleChecks().length, 10);
   assert.ok(core.runRuleChecks().every(row => row.passed));
@@ -371,6 +373,28 @@ test('offline task rehearsal and task receipt replay do not duplicate one tool w
   fixture.tasks.toolWrite('same:task', 'createTask', args); fixture.tasks.toolWrite('same:task', 'createTask', args);
   assert.equal(fixture.rows.length, 2);
   assert.throws(() => fixture.tasks.toolWrite('same:task', 'createTask', { title: '换内容' }), /mismatch/);
+});
+
+test('automatic title uses two completed turns, shared cleanup and validation without tools', async () => {
+  const policy = core.conversation, work = core.titleWork;
+  let snapshot = policy.newConversation('title-test', 'deepseek');
+  snapshot = policy.beginConversationTurn(snapshot, 'first', '安排亲子周末行程');
+  snapshot = policy.finishConversationTurn(snapshot, '可以先找活动。', true);
+  assert.equal(work.titleCandidate(snapshot), null);
+  snapshot = policy.beginConversationTurn(snapshot, 'second', '想找香港室内活动');
+  snapshot = policy.finishConversationTurn(snapshot, '这里有一些选择。', true);
+  const candidate = work.titleCandidate(snapshot);
+  assert.equal(candidate.messages.length, 4);
+  const title = await work.generateTitle(candidate, async body => {
+    assert.equal(body.model, 'deepseek-flash'); assert.equal(body.max_tokens, 128); assert.equal(body.tools, undefined);
+    assert.equal(JSON.parse(body.messages[1].content).messages.length, 4);
+    return { choices: [{ finish_reason: 'stop', message: { content: '标题：「香港亲子室内活动」' } }] };
+  }, new AbortController().signal);
+  assert.equal(title, '香港亲子室内活动');
+  await assert.rejects(work.generateTitle(candidate, async () => ({ choices: [{ finish_reason: 'stop', message: { content: 'sk-1234567890secret' } }] }), new AbortController().signal), /Invalid title/);
+  await assert.rejects(work.generateTitle(candidate, async () => ({ choices: [{ finish_reason: 'length', message: { content: '不完整标题' } }] }), new AbortController().signal), /Invalid title/);
+  snapshot.title = '用户已有的标题'; assert.equal(work.titleCandidate(snapshot), null);
+  snapshot.mode = 'demo'; assert.equal(work.titleCandidate(snapshot), null);
 });
 
 test('Pi follow-up receives prior tool IDs/results after JSON persistence without replaying a write', async () => {

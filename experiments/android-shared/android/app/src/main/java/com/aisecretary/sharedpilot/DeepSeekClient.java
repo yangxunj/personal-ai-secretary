@@ -31,6 +31,7 @@ final class DeepSeekClient implements AutoCloseable {
     private final Activity activity;
     private final SharedPreferences preferences;
     private final Callback callback;
+    private final boolean titleOnly;
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
     private final AtomicReference<Pending> active = new AtomicReference<>();
     private volatile boolean foreground = true;
@@ -43,7 +44,11 @@ final class DeepSeekClient implements AutoCloseable {
     }
 
     DeepSeekClient(Activity activity, Callback callback) {
+        this(activity, callback, false);
+    }
+    DeepSeekClient(Activity activity, Callback callback, boolean titleOnly) {
         this.activity = activity; this.callback = callback;
+        this.titleOnly = titleOnly;
         preferences = activity.getSharedPreferences("model-settings", Context.MODE_PRIVATE);
     }
     boolean hasKey() { return preferences.contains("ciphertext"); }
@@ -118,7 +123,7 @@ final class DeepSeekClient implements AutoCloseable {
                 JSONObject body = new JSONObject(payload);
                 if ("chat".equals(kind)) {
                     if (!"deepseek-flash".equals(body.optString("model")) || body.optBoolean("stream", true)) throw new IllegalArgumentException("本包仅支持非流式 DeepSeek Flash 请求。");
-                    body.put("max_tokens", 2048);
+                    body.put("max_tokens", titleOnly ? 128 : 2048);
                 } else if ("search".equals(kind)) {
                     String query = body.optString("query", "").trim(); int count = body.optInt("count", 0);
                     if (query.isEmpty() || query.length() > 128 || count < 1 || count > 5) throw new IllegalArgumentException("搜索参数无效。");

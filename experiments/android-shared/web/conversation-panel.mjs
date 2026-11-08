@@ -1,6 +1,7 @@
 import { newConversation, parseConversation, recoverConversation, conversationHistory, beginConversationTurn,
   recordConversationMessage, finishConversationTurn, interruptedNotice } from '../../../src/lib/pi/conversation.mjs';
 import { publicWebUrl } from '../../../src/lib/web-search/url.mjs';
+import { titleCandidate } from './title-work.mjs';
 
 export function attachConversationPanel(document, bridge, nonce, messageUi, onSend, closeDrawer) {
   const status = document.getElementById('conversation-status');
@@ -106,6 +107,21 @@ export function attachConversationPanel(document, bridge, nonce, messageUi, onSe
     },
     record(message) { save(recordConversationMessage(current.snapshot, message)); },
     finish(reply, complete) { save(finishConversationTurn(current.snapshot, reply, complete)); render(); },
+    titleCandidate() { return healthy && current ? titleCandidate(current.snapshot) : null; },
+    applyTitle(candidate, title) {
+      const row = decode(bridge.readConversation(candidate.id));
+      if (!row) return false;
+      const snapshot = parseConversation(row.snapshot);
+      const latest = titleCandidate(snapshot);
+      if (!latest || latest.expectedTitle !== candidate.expectedTitle) return false;
+      const saved = decode(bridge.setConversationTitle(candidate.id, row.version, candidate.expectedTitle, title));
+      if (current?.snapshot.id === candidate.id) current = { version: saved.version, snapshot: parseConversation(saved.snapshot) };
+      try {
+        items = decode(bridge.listConversations(mode)).map(item => ({ ...item, updatedAt: new Date(item.updatedAt ?? 0).toISOString() }));
+        renderControls();
+      } catch { /* The title is already saved; the next load will refresh the list. */ }
+      return true;
+    },
     busy(value) { busy = value; renderControls(); },
     get draft() { return draft; }, get healthy() { return healthy; }, fail,
   };

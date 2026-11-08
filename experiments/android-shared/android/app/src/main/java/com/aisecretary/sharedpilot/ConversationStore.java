@@ -33,6 +33,18 @@ final class ConversationStore {
         if (id == null || !id.matches("[a-zA-Z0-9_-]{1,80}") || expectedVersion < 1) throw new IllegalArgumentException("Invalid conversation");
         if (db.delete("conversations", "id = ? AND mode = ? AND version = ?", new String[]{id, mode, String.valueOf(expectedVersion)}) != 1) throw new RecordStore.StoreError("conflict");
     }
+    static JSONObject setTitle(SQLiteDatabase db, String id, int expectedVersion, String expectedTitle, String title) throws Exception {
+        if (expectedVersion < 1 || expectedTitle == null || title == null || title.trim().isEmpty() || title.length() > 80 || title.contains("\n") || title.contains("\r")) throw new IllegalArgumentException("Invalid title");
+        JSONObject before = read(db, id);
+        if (before == null || before.getInt("version") != expectedVersion) throw new RecordStore.StoreError("conflict");
+        JSONObject snapshot = before.getJSONObject("snapshot");
+        if (!"deepseek".equals(snapshot.getString("mode")) || !expectedTitle.equals(snapshot.getString("title"))) throw new RecordStore.StoreError("conflict");
+        snapshot.put("title", title);
+        ContentValues values = new ContentValues(); values.put("title", title); values.put("data", snapshot.toString()); values.put("version", expectedVersion + 1);
+        // A background title should not change the conversation's activity order.
+        if (db.update("conversations", values, "id = ? AND version = ?", new String[]{id, String.valueOf(expectedVersion)}) != 1) throw new RecordStore.StoreError("conflict");
+        return read(db, id);
+    }
     static JSONObject save(SQLiteDatabase db, String id, int expectedVersion, String serialized) throws Exception {
         if (serialized == null || serialized.length() > 240000 || expectedVersion < 0) throw new IllegalArgumentException("Invalid conversation snapshot");
         JSONObject snapshot = new JSONObject(serialized); String mode = snapshot.getString("mode"); mode(mode);

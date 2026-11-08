@@ -16,6 +16,8 @@ export const sharedEntries = [
   'src/lib/pi/context-budget.mjs',
   'src/lib/web-search/shared.mjs',
   'src/lib/agent-citations.mjs',
+  'src/lib/system-prompt.ts',
+  'src/lib/title-content.mjs',
   'src/topic-plugins/registry.mjs',
 ];
 export const sharedUiEntries = [

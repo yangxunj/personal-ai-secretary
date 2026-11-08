@@ -33,10 +33,15 @@ public final class SharedPilotTest {
             JSONObject two = new JSONObject().put("schemaVersion", 1).put("id", "two").put("mode", "deepseek").put("title", "second").put("draft", "").put("turns", new JSONArray());
             ConversationStore.save(db, "one", 0, one.toString()); ConversationStore.save(db, "two", 0, two.toString());
             ConversationStore.save(db, "one", 1, one.toString());
+            long updatedAt = android.database.DatabaseUtils.longForQuery(db, "SELECT updated_at FROM conversations WHERE id='one'", null);
+            try { ConversationStore.setTitle(db, "one", 1, "first", "new title"); fail("Stale title accepted"); } catch (RecordStore.StoreError expected) { assertEquals("conflict", expected.code); }
+            try { ConversationStore.setTitle(db, "one", 2, "changed", "new title"); fail("Changed title overwritten"); } catch (RecordStore.StoreError expected) { assertEquals("conflict", expected.code); }
+            assertEquals("new title", ConversationStore.setTitle(db, "one", 2, "first", "new title").getJSONObject("snapshot").getString("title"));
+            assertEquals(updatedAt, android.database.DatabaseUtils.longForQuery(db, "SELECT updated_at FROM conversations WHERE id='one'", null));
             try { ConversationStore.delete(db, "one", "deepseek", 1); fail("Stale version deleted"); } catch (RecordStore.StoreError expected) { assertEquals("conflict", expected.code); }
-            try { ConversationStore.delete(db, "one", "demo", 2); fail("Wrong mode deleted"); } catch (RecordStore.StoreError expected) { assertEquals("conflict", expected.code); }
+            try { ConversationStore.delete(db, "one", "demo", 3); fail("Wrong mode deleted"); } catch (RecordStore.StoreError expected) { assertEquals("conflict", expected.code); }
             assertNotNull(ConversationStore.read(db, "one"));
-            ConversationStore.delete(db, "one", "deepseek", 2);
+            ConversationStore.delete(db, "one", "deepseek", 3);
             assertNull(ConversationStore.read(db, "one")); assertNotNull(ConversationStore.read(db, "two"));
             assertEquals(1, android.database.DatabaseUtils.longForQuery(db, "SELECT COUNT(*) FROM records", null));
             assertEquals(1, android.database.DatabaseUtils.longForQuery(db, "SELECT COUNT(*) FROM tasks", null));

@@ -19,6 +19,7 @@ public final class MainActivity extends Activity {
     private WebView webView;
     private RecordStore store;
     private DeepSeekClient modelClient;
+    private DeepSeekClient titleClient;
     private TopicNativeRegistry topicPlugins;
 
     @Override public void onCreate(Bundle state) {
@@ -34,6 +35,12 @@ public final class MainActivity extends Activity {
                 runScript("window.SecretaryAI && window.SecretaryAI.settingsChanged()");
             }
         });
+        titleClient = new DeepSeekClient(this, new DeepSeekClient.Callback() {
+            @Override public void complete(String id, String json) {
+                runScript("window.SecretaryAI && window.SecretaryAI.receive(" + quote(id) + "," + quote(json) + ")");
+            }
+            @Override public void settingsChanged() { }
+        }, true);
         WebSettings settings = webView.getSettings();
         settings.setJavaScriptEnabled(true);
         settings.setAllowFileAccess(false);
@@ -97,8 +104,23 @@ public final class MainActivity extends Activity {
             catch (Exception error) { return failure(); }
         }
         @JavascriptInterface public String deleteConversation(String id, String mode, int version) {
-            try { store.deleteConversation(id, mode, version); return new JSONObject().put("ok", true).toString(); }
+            try { store.deleteConversation(id, mode, version); getSharedPreferences("title-attempts", MODE_PRIVATE).edit().remove(id).apply(); return new JSONObject().put("ok", true).toString(); }
             catch (Exception error) { return failure(); }
+        }
+        @JavascriptInterface public boolean claimTitleAttempt(String id) {
+            if (id == null || !id.matches("[a-zA-Z0-9_-]{1,80}")) return false;
+            synchronized (MainActivity.this) {
+                android.content.SharedPreferences prefs = getSharedPreferences("title-attempts", MODE_PRIVATE);
+                int attempts = prefs.getInt(id, 0);
+                return attempts < 2 && prefs.edit().putInt(id, attempts + 1).commit();
+            }
+        }
+        @JavascriptInterface public String setConversationTitle(String id, int version, String expectedTitle, String title) {
+            try { return new JSONObject().put("ok", true).put("data", store.setConversationTitle(id, version, expectedTitle, title)).toString(); }
+            catch (Exception error) { return failure(); }
+        }
+        @JavascriptInterface public void finishTitle(String id) {
+            if (id != null && id.matches("[a-zA-Z0-9_-]{1,80}")) getSharedPreferences("title-attempts", MODE_PRIVATE).edit().putInt(id, 2).apply();
         }
         @JavascriptInterface public String saveConversation(String id, int version, String data) {
             try { return new JSONObject().put("ok", true).put("data", store.saveConversation(id, version, data)).toString(); }
@@ -129,6 +151,8 @@ public final class MainActivity extends Activity {
         @JavascriptInterface public boolean hasApiKey() { return modelClient.hasKey(); }
         @JavascriptInterface public void openModelSettings() { modelClient.showSettings(); }
         @JavascriptInterface public void beginModelRequest(String id, String payload) { modelClient.start(id, payload); }
+        @JavascriptInterface public void beginTitleRequest(String id, String payload) { titleClient.start(id, payload); }
+        @JavascriptInterface public void cancelTitleRequest() { titleClient.cancel(); }
         @JavascriptInterface public void beginWebRequest(String id, String kind, String payload) { modelClient.startWeb(id, kind, payload); }
         @JavascriptInterface public void openWebLink(String url) {
             if (!DeepSeekClient.isPublicWebUrl(url)) return;
@@ -168,10 +192,11 @@ public final class MainActivity extends Activity {
         private String failure() { return "{\"ok\":false,\"error\":\"本地存储操作失败，请重试；已填写内容仍保留。\"}"; }
     }
 
-    @Override protected void onStart() { super.onStart(); if (modelClient != null) modelClient.foreground(true); }
-    @Override protected void onStop() { if (modelClient != null) modelClient.foreground(false); super.onStop(); }
+    @Override protected void onStart() { super.onStart(); if (modelClient != null) modelClient.foreground(true); if (titleClient != null) titleClient.foreground(true); }
+    @Override protected void onStop() { if (modelClient != null) modelClient.foreground(false); if (titleClient != null) titleClient.foreground(false); super.onStop(); }
     @Override protected void onDestroy() {
         if (modelClient != null) modelClient.close();
+        if (titleClient != null) titleClient.close();
         if (topicPlugins != null) topicPlugins.close();
         if (webView != null) {
             webView.removeJavascriptInterface("SecretaryStorage");

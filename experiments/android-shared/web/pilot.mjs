@@ -7,6 +7,7 @@ import { topicPlugins } from '../../../src/topic-plugins/registry.mjs';
 import { mountTopicPlugins } from './topic-plugin-adapters.mjs';
 import { createTasks, attachTaskPanel, taskPolicy, projectTaskList, parseOwners } from './tasks.mjs';
 import * as conversation from '../../../src/lib/pi/conversation.mjs';
+import * as titleWork from './title-work.mjs';
 
 export const definition = parseDefinition({
   title: '平板书单', view: 'cards', titleFieldId: 'name', fields: [
@@ -196,5 +197,5 @@ export function startPage(document, host) {
   }
 }
 
-globalThis.PilotCore = { definition, validateValues, prepareRecordWrite, runRuleChecks, createRecords, createTasks, taskPolicy, projectTaskList, parseOwners, conversation, startPage, runPilotAgent, demoModelRequest };
+globalThis.PilotCore = { definition, validateValues, prepareRecordWrite, runRuleChecks, createRecords, createTasks, taskPolicy, projectTaskList, parseOwners, conversation, titleWork, startPage, runPilotAgent, demoModelRequest };
 if (typeof document !== 'undefined') startPage(document, globalThis);

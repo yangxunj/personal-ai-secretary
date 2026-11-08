@@ -94,6 +94,8 @@ const manifest = {
   webSearchSharedSha256: hash(await readFile(path.join(root, 'src/lib/web-search/shared.mjs'))),
   webSearchUrlSha256: hash(await readFile(path.join(root, 'src/lib/web-search/url.mjs'))),
   citationSha256: hash(await readFile(path.join(root, 'src/lib/agent-citations.mjs'))),
+  titlePromptSha256: hash(await readFile(path.join(root, 'src/lib/system-prompt.ts'))),
+  titleContentSha256: hash(await readFile(path.join(root, 'src/lib/title-content.mjs'))),
   piAgentCoreVersion: piPackage.version,
   piAgentLoopSha256: hash(await readFile(path.join(root, 'node_modules/@earendil-works/pi-agent-core/dist/agent-loop.js'))),
   bundleSha256: hash(await readFile(path.join(output, 'pilot.js'))),
