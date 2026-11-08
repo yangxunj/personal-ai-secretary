@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { formatDate } from '@/lib/format';
 import { TOPIC_STATUS, parseQuestions } from '@/lib/topic';
 import { getLocale, getT } from '@/lib/i18n/server';
+import TopicCardContent from '@/components/topics/shared/TopicCardContent';
 
 export const dynamic = 'force-dynamic';
 
@@ -79,11 +80,8 @@ export default async function TopicsPage({
               className="block surface border rounded-2xl p-4 active:opacity-70"
               style={{ borderColor: 'var(--border)' }}
             >
-              <div className="flex items-start justify-between gap-3">
-                <h3 className="font-medium leading-snug">{topic.title}</h3>
-                {/* 卡片上最该显示的不是日期，是「还没搞清楚几件事」——
-                    主人要的是「不再有任何疑问」，这个数归零就是完成 */}
-                {qs.length > 0 && (
+              <TopicCardContent title={topic.title} summary={topic.summary} category={t(topic.category)}
+                badge={qs.length > 0 && (
                   <span
                     className={`shrink-0 text-[11px] px-2 py-0.5 rounded-full font-medium ${
                       open === 0
@@ -93,20 +91,12 @@ export default async function TopicsPage({
                   >
                     {open === 0 ? t('都清楚了') : t('还有 {n} 件没弄清', { n: open })}
                   </span>
-                )}
-              </div>
-
-              {topic.summary && <p className="muted text-sm mt-1.5 leading-relaxed">{topic.summary}</p>}
-
-              <div className="flex items-center gap-2 mt-3 muted text-[11px] flex-wrap">
-                <span className="px-2 py-0.5 rounded-md" style={{ background: 'var(--bg)' }}>
-                  {t(topic.category)}
-                </span>
+                )} metadata={<>
                 {topic.page && <span className="text-brand-600 dark:text-brand-400">{t('有呈现页')}</span>}
                 {topic._count.tasks > 0 && <span>· {t('任务 {n}', { n: topic._count.tasks })}</span>}
                 {topic._count.attachments > 0 && <span>· {t('附件 {n}', { n: topic._count.attachments })}</span>}
                 <span>· {formatDate(topic.updatedAt, locale)}</span>
-              </div>
+              </>} />
             </Link>
           );
         })}

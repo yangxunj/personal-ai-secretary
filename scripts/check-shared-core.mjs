@@ -14,6 +14,8 @@ export const sharedEntries = [
   'src/lib/tasks/owners-policy.ts',
   'src/lib/pi/conversation.mjs',
   'src/lib/pi/context-budget.mjs',
+  'src/lib/weekend/engine.mjs',
+  'src/lib/weekend/service.mjs',
 ];
 export const sharedUiEntries = [
   'src/components/MessageBody.tsx',
@@ -22,6 +24,7 @@ export const sharedUiEntries = [
   'src/components/chat/shared/ChatTextInput.tsx',
   'src/components/chat/shared/ChatBubble.tsx',
   'src/components/tasks/shared/TaskCard.tsx',
+  'src/components/topics/shared/TopicCardContent.tsx',
   'src/components/tasks/shared/TaskStatusSelect.tsx',
   'src/components/tasks/shared/TaskOwnerSelect.tsx',
   'src/components/navigation/shared/BottomNavView.tsx',

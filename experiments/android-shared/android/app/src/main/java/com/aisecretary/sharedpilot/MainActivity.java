@@ -1,6 +1,7 @@
 package com.aisecretary.sharedpilot;
 
 import android.app.Activity;
+import android.content.Intent;
 import android.os.Bundle;
 import android.net.Uri;
 import android.webkit.JavascriptInterface;
@@ -19,11 +20,13 @@ public final class MainActivity extends Activity {
     private WebView webView;
     private RecordStore store;
     private DeepSeekClient modelClient;
+    private WeekendClient weekendClient;
 
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
         store = new RecordStore(this);
         webView = new WebView(this);
+        weekendClient = new WeekendClient((id, response) -> runScript("window.SecretaryWeekend && window.SecretaryWeekend.receive(" + quote(id) + "," + quote(response) + ")"));
         modelClient = new DeepSeekClient(this, new DeepSeekClient.Callback() {
             @Override public void complete(String id, String json) {
                 runScript("window.SecretaryAI && window.SecretaryAI.receive(" + quote(id) + "," + quote(json) + ")");
@@ -124,6 +127,26 @@ public final class MainActivity extends Activity {
         @JavascriptInterface public void openModelSettings() { modelClient.showSettings(); }
         @JavascriptInterface public void beginModelRequest(String id, String payload) { modelClient.start(id, payload); }
         @JavascriptInterface public void cancelModelRequest() { modelClient.cancel(); }
+        @JavascriptInterface public void fetchWeekendSource(String id, String query) { weekendClient.fetch(id, query); }
+        @JavascriptInterface public String readWeekendCache() {
+            return getSharedPreferences("weekend-cache", MODE_PRIVATE).getString("result", "");
+        }
+        @JavascriptInterface public boolean saveWeekendCache(String json) {
+            if (json == null || json.length() > 2_000_000) return false;
+            try {
+                JSONObject data = new JSONObject(json);
+                if (!data.has("saturday") || !data.has("sunday") || !data.has("rows") || !data.has("reports")) return false;
+                return getSharedPreferences("weekend-cache", MODE_PRIVATE).edit().putString("result", json).commit();
+            } catch (Exception error) { return false; }
+        }
+        @JavascriptInterface public void openWeekendLink(String value) {
+            if (value == null || value.length() > 2048) return;
+            try {
+                Uri uri = Uri.parse(value);
+                if (!"https".equalsIgnoreCase(uri.getScheme()) || uri.getHost() == null || uri.getUserInfo() != null) return;
+                runOnUiThread(() -> { try { startActivity(new Intent(Intent.ACTION_VIEW, uri)); } catch (Exception ignored) { } });
+            } catch (Exception ignored) { }
+        }
         @JavascriptInterface public String listRecords() {
             try { return new JSONObject().put("ok", true).put("data", store.list()).toString(); }
             catch (Exception error) { return failure(); }
@@ -154,6 +177,7 @@ public final class MainActivity extends Activity {
     @Override protected void onStop() { if (modelClient != null) modelClient.foreground(false); super.onStop(); }
     @Override protected void onDestroy() {
         if (modelClient != null) modelClient.close();
+        if (weekendClient != null) weekendClient.close();
         if (webView != null) {
             webView.removeJavascriptInterface("SecretaryStorage");
             webView.destroy();

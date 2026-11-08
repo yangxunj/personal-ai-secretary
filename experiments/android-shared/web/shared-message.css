@@ -9,6 +9,7 @@
 @source "../../../src/components/chat/shared/ConversationDrawer.tsx";
 @source "../../../src/components/chat/shared/ChatBubble.tsx";
 @source "../../../src/components/tasks/shared/TaskCard.tsx";
+@source "../../../src/components/topics/shared/TopicCardContent.tsx";
 @source "../../../src/components/tasks/shared/TaskStatusSelect.tsx";
 @source "../../../src/components/tasks/shared/TaskOwnerSelect.tsx";
 @source "../../../src/components/navigation/shared/BottomNavView.tsx";

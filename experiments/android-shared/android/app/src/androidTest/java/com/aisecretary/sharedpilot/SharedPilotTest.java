@@ -63,6 +63,21 @@ public final class SharedPilotTest {
         } finally { getInstrumentation().runOnMainSync(activity::finish); }
     }
 
+    @Test public void weekendTopicCanBeOpenedWithoutStartingNetworkRequests() throws Exception {
+        Activity activity = start();
+        try {
+            for (int attempts = 0; attempts < 40; attempts++) {
+                if ("7".equals(evaluate(activity, "document.querySelectorAll('#pilot-navigation button').length"))) break;
+                Thread.sleep(100);
+            }
+            evaluate(activity, "document.querySelectorAll('#pilot-navigation button')[5].click()");
+            assertEquals("false", evaluate(activity, "document.querySelector('.pilot-topics').hidden"));
+            evaluate(activity, "document.querySelector('.pilot-topic-card').click()");
+            assertEquals("false", evaluate(activity, "document.querySelector('.pilot-weekend').hidden"));
+            assertEquals("true", evaluate(activity, "Boolean(document.querySelector('#weekend-refresh'))"));
+        } finally { getInstrumentation().runOnMainSync(activity::finish); }
+    }
+
     @Test public void conversationDrawerOpensClosesAndCreatesConversation() throws Exception {
         Activity activity = start();
         try {

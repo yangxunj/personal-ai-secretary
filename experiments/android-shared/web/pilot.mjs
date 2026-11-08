@@ -3,6 +3,7 @@ import { parseDefinition, validateValues, collectionError, CollectionError, MAX_
 import { prepareRecordWrite } from '../../../src/lib/collections/record-write.ts';
 import { runPilotAgent, demoModelRequest } from './pi-runtime.mjs';
 import { attachAiPanel } from './ai-panel.mjs';
+import { attachWeekendPanel } from './weekend-panel.mjs';
 import { createTasks, attachTaskPanel, taskPolicy, projectTaskList, parseOwners } from './tasks.mjs';
 import * as conversation from '../../../src/lib/pi/conversation.mjs';
 
@@ -170,8 +171,9 @@ export function startPage(document, host) {
   const navigation = host.PilotMessageUI.createAppShell(document.getElementById('pilot-shell'), document.getElementById('pilot-content-root'), showScreen);
   navigation.initDrawer();
   attachAiPanel(document, host, records, definition, () => { refresh(); refreshTasks(); }, tasks, navigation.closeDrawer);
+  attachWeekendPanel(document, host);
   function showScreen(path) {
-    const target = ['/chat', '/tasks', '/collections', '/more', '/settings'].includes(path) ? path : '/unavailable';
+    const target = ['/chat', '/tasks', '/collections', '/more', '/settings', '/topics', '/topics/weekend'].includes(path) ? path : '/unavailable';
     for (const section of document.querySelectorAll('[data-screen]')) section.hidden = section.dataset.screen !== target;
     navigation.render(path);
     host.scrollTo(0, 0);
