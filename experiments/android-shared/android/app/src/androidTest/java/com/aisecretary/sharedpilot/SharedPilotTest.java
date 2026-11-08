@@ -97,6 +97,21 @@ public final class SharedPilotTest {
         } finally { getInstrumentation().runOnMainSync(activity::finish); }
     }
 
+    @Test public void transcriptUsesAvailableSpaceAndCanScrollToBothEnds() throws Exception {
+        Activity activity = start();
+        try {
+            for (int attempts = 0; attempts < 40; attempts++) {
+                if ("true".equals(evaluate(activity, "Boolean(document.documentElement.style.getPropertyValue('--pilot-header-height'))"))) break;
+                Thread.sleep(100);
+            }
+            assertEquals("true", evaluate(activity, "document.querySelector('#conversation-status').textContent === ''"));
+            assertEquals("true", evaluate(activity, "(()=>{const p=document.querySelector('.ai-panel').getBoundingClientRect(),h=document.querySelector('#pilot-page-header header').getBoundingClientRect(),f=document.querySelector('#ai-form').getBoundingClientRect(); return Math.abs(p.top-h.bottom)<2 && Math.abs(p.bottom-f.top)<2})()"));
+            evaluate(activity, "(()=>{const list=document.querySelector('#conversation-messages');const a=document.createElement('li'),b=document.createElement('li');a.textContent='first';b.textContent='last';b.style.minHeight='1500px';list.replaceChildren(a,b)})()");
+            assertEquals("true", evaluate(activity, "(()=>{const p=document.querySelector('.ai-panel');p.scrollTop=0;return p.scrollTop===0 && p.scrollHeight>p.clientHeight})()"));
+            assertEquals("true", evaluate(activity, "(()=>{const p=document.querySelector('.ai-panel');p.scrollTop=p.scrollHeight;return Math.abs(p.scrollHeight-p.clientHeight-p.scrollTop)<2})()"));
+        } finally { getInstrumentation().runOnMainSync(activity::finish); }
+    }
+
     @Test public void sharedRulesAndSQLiteSurviveActivityRestart() throws Exception {
         Activity first = start();
         try {

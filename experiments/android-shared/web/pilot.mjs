@@ -182,12 +182,14 @@ export function startPage(document, host) {
   // a multi-line draft. Reserve exactly their rendered height for scrolling.
   const nav = document.querySelector('#pilot-navigation nav');
   const composer = document.getElementById('ai-form');
-  if (host.ResizeObserver && nav && composer) {
+  const header = document.querySelector('#pilot-page-header header');
+  if (host.ResizeObserver && nav && composer && header) {
     const observer = new host.ResizeObserver(() => {
       document.documentElement.style.setProperty('--pilot-nav-height', `${nav.getBoundingClientRect().height}px`);
       document.documentElement.style.setProperty('--pilot-composer-height', `${composer.getBoundingClientRect().height}px`);
+      document.documentElement.style.setProperty('--pilot-header-height', `${header.getBoundingClientRect().height}px`);
     });
-    observer.observe(nav); observer.observe(composer);
+    observer.observe(nav); observer.observe(composer); observer.observe(header);
   }
 }
 

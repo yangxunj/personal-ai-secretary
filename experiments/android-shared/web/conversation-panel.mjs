@@ -29,7 +29,7 @@ export function attachConversationPanel(document, bridge, nonce, messageUi, onSe
     controls.render({ items, activeId: current?.snapshot.id ?? null, disabled: busy || !healthy, busy, draft,
       canSend: healthy && !busy && mode === 'deepseek' && !!draft.trim() });
   }
-  function fail() { healthy = false; status.textContent = '会话存储不可用，已停止发送。草稿保留，请重新打开应用后检查。'; document.getElementById('ai-send').disabled = true; renderControls(); }
+  function fail() { healthy = false; status.textContent = '会话存储不可用，已停止发送。草稿保留，请重新打开应用后检查。'; document.querySelector('.ai-panel').scrollTop = 0; document.getElementById('ai-send').disabled = true; renderControls(); }
   const clearTransient = () => { document.getElementById('ai-output').textContent = ''; document.getElementById('ai-events').replaceChildren(); document.getElementById('message-link-status').textContent = ''; };
   function save(snapshot) {
     const next = parseConversation(snapshot);
@@ -40,8 +40,14 @@ export function attachConversationPanel(document, bridge, nonce, messageUi, onSe
     const snapshot = current.snapshot;
     transcript.render(snapshot.turns, interruptedNotice);
     items = decode(bridge.listConversations(mode)).map(row => ({ ...row, updatedAt: new Date(row.updatedAt ?? 0).toISOString() }));
-    status.textContent = `${mode === 'demo' ? '离线演练' : 'DeepSeek'}对话 · ${snapshot.turns.length}/40 轮 · 保存在本机`;
+    status.textContent = '';
     draft = snapshot.draft; renderControls();
+    // When a conversation is opened or a turn changes, show the newest reply.
+    // Typing a draft does not invoke render(), so it will not move the reader.
+    document.defaultView.requestAnimationFrame(() => {
+      const panel = document.querySelector('.ai-panel');
+      if (panel && !panel.hidden) panel.scrollTop = panel.scrollHeight;
+    });
   }
   function load(nextMode, id) {
     mode = nextMode;
