@@ -7,6 +7,7 @@ import { checkSharedCore, sharedUiEntries } from '../../scripts/check-shared-cor
 import postcss from 'postcss';
 import tailwindcss from '@tailwindcss/postcss';
 import { bundleLicenses } from './bundle-licenses.mjs';
+import { topicPlugins } from '../../src/topic-plugins/registry.mjs';
 
 const require = createRequire(import.meta.url);
 const compiled = require('next/dist/compiled/webpack/webpack');
@@ -49,7 +50,16 @@ await new Promise((resolve, reject) => webpack({
   catch (error) { reject(error); return; }
   resolve();
 }));
-await writeFile(path.join(output, 'index.html'), (await readFile(path.join(directory, 'web/index.html'), 'utf8')).replaceAll('__PILOT_VERSION__', config.version));
+const pluginStyles = [];
+for (const plugin of topicPlugins) {
+  if (plugin.styleFile !== `src/topic-plugins/${plugin.id}/styles.css`) throw new Error(`Invalid plugin style path: ${plugin.id}`);
+  const name = `topic-plugin-${plugin.id}.css`;
+  await copyFile(path.join(root, plugin.styleFile), path.join(output, name));
+  pluginStyles.push(name);
+}
+await writeFile(path.join(output, 'index.html'), (await readFile(path.join(directory, 'web/index.html'), 'utf8'))
+  .replaceAll('__PILOT_VERSION__', config.version)
+  .replace('<!-- TOPIC_PLUGIN_STYLES -->', pluginStyles.map(name => `<link rel="stylesheet" href="${name}">`).join('\n  ')));
 await copyFile(path.join(directory, 'web/pilot.css'), path.join(output, 'pilot.css'));
 await copyFile(path.join(root, 'src/styles/surface-theme.css'), path.join(output, 'surface-theme.css'));
 const stylesSource = path.join(directory, 'web/shared-message.css');
@@ -73,8 +83,11 @@ const manifest = {
   taskServiceSha256: hash(await readFile(path.join(root, 'src/lib/tasks/service.ts'))),
   taskListViewSha256: hash(await readFile(path.join(root, 'src/lib/tasks/list-view.ts'))),
   ownersPolicySha256: hash(await readFile(path.join(root, 'src/lib/tasks/owners-policy.ts'))),
-  weekendEngineSha256: hash(await readFile(path.join(root, 'src/lib/weekend/engine.mjs'))),
-  weekendRecommendSha256: hash(await readFile(path.join(root, 'src/lib/weekend/recommend.mjs'))),
+  topicPlugins: await Promise.all(topicPlugins.map(async ({ id, path: route, capabilities, sourceFiles }) => ({ id, path: route, capabilities,
+    sources: await Promise.all(sourceFiles.map(async name => {
+      if (!/^(?:[a-z0-9-]+\.(?:mjs|css)|PLUGIN\.md|android\/[A-Za-z0-9]+\.java)$/.test(name)) throw new Error(`Invalid plugin source: ${id}`);
+      return { name, sha256: hash(await readFile(path.join(root, 'src/topic-plugins', id, name))) };
+    })) }))),
   taskPolicySha256: hash(await readFile(path.join(root, 'src/lib/tasks/policy.ts'))),
   conversationSha256: hash(await readFile(path.join(root, 'src/lib/pi/conversation.mjs'))),
   contextBudgetSha256: hash(await readFile(path.join(root, 'src/lib/pi/context-budget.mjs'))),
@@ -87,7 +100,7 @@ await writeFile(path.join(output, 'build-manifest.json'), JSON.stringify(manifes
 const assets = path.join(directory, 'android/app/src/main/assets');
 await mkdir(assets, { recursive: true });
 await writeFile(path.join(assets, 'bundled-js-licenses.txt'), licenses.text);
-for (const file of ['index.html', 'pilot.css', 'pilot.js', 'messages.js', 'shared-message.css', 'surface-theme.css', 'build-manifest.json']) await copyFile(path.join(output, file), path.join(assets, file));
+for (const file of ['index.html', 'pilot.css', 'pilot.js', 'messages.js', 'shared-message.css', 'surface-theme.css', 'build-manifest.json', ...pluginStyles]) await copyFile(path.join(output, file), path.join(assets, file));
 // Preserve notices for code shipped inside the APK (build tools are not shipped).
 await copyFile(path.join(root, 'node_modules/zod/LICENSE'), path.join(assets, 'zod-license.txt'));
 await copyFile(path.join(root, 'node_modules/typescript/LICENSE.txt'), path.join(assets, 'apache-2.0.txt'));

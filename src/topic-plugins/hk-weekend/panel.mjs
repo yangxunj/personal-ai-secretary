@@ -1,35 +1,20 @@
-import { loadWeekend } from '../../../src/lib/weekend/service.mjs';
-import { SOURCES, weekendFor, groupWeekend } from '../../../src/lib/weekend/engine.mjs';
-import { recommendWeekend } from '../../../src/lib/weekend/recommend.mjs';
+import { loadWeekend } from './service.mjs';
+import { SOURCES, weekendFor, groupWeekend } from './engine.mjs';
+import { recommendWeekend } from './recommend.mjs';
 
-/** Android bridge handles only transport/storage; source parsing is shared. */
-export function attachWeekendPanel(document, host) {
-  const bridge = host.SecretaryStorage, status = document.getElementById('weekend-status');
-  const container = document.getElementById('weekend-results'), button = document.getElementById('weekend-refresh');
-  const recommend = document.getElementById('weekend-recommend'), aiStatus = document.getElementById('weekend-ai-status');
-  const recommendations = document.getElementById('weekend-recommendations'), preference = document.getElementById('weekend-preference');
+/** UI uses only the capabilities supplied by its platform adapter. */
+export function attachWeekendPanel(document, root, services) {
+  const status = root.querySelector('#weekend-status');
+  const container = root.querySelector('#weekend-results'), button = root.querySelector('#weekend-refresh');
+  const recommend = root.querySelector('#weekend-recommend'), aiStatus = root.querySelector('#weekend-ai-status');
+  const recommendations = root.querySelector('#weekend-recommendations'), preference = root.querySelector('#weekend-preference');
   let currentData = null, busy = false;
-  const pending = new Map(); let serial = 0;
-  const session = Array.from(host.crypto.getRandomValues(new Uint8Array(8)), byte => byte.toString(16).padStart(2, '0')).join('');
-  host.SecretaryWeekend = { receive(id, raw) {
-    const entry = pending.get(id); if (!entry) return;
-    pending.delete(id); host.clearTimeout(entry.timer);
-    try { const result = JSON.parse(raw); if (!result.ok || typeof result.data !== 'string') throw new Error(); entry.resolve(result.data); }
-    catch { entry.reject(new Error('来源暂时不可用')); }
-  } };
-  const adapter = { get(query) { return new Promise((resolve, reject) => {
-    if (!bridge?.fetchWeekendSource) { reject(new Error('网络功能不可用')); return; }
-    const id = `weekend-${session}-${++serial}`;
-    const timer = host.setTimeout(() => { pending.delete(id); reject(new Error('请求超时')); }, 55000);
-    pending.set(id, { resolve, reject, timer });
-    try { bridge.fetchWeekendSource(id, JSON.stringify(query)); }
-    catch { pending.delete(id); host.clearTimeout(timer); reject(new Error('网络功能不可用')); }
-  }); } };
+  const adapter = { get: services.fetchSource };
   function el(tag, text, className) { const element = document.createElement(tag); if (text != null) element.textContent = text; if (className) element.className = className; return element; }
-  const sources = document.getElementById('weekend-source-links');
+  const sources = root.querySelector('#weekend-source-links');
   for (const source of Object.values(SOURCES)) {
     const link = el('button', `${source.label}官网 ↗`, 'weekend-link'); link.type = 'button';
-    link.addEventListener('click', () => bridge.openWeekendLink?.(source.url)); sources.append(link, document.createTextNode('　'));
+    link.addEventListener('click', () => services.openLink(source.url)); sources.append(link, document.createTextNode('　'));
   }
   function render(data) {
     if (!data || !Array.isArray(data.rows) || !Array.isArray(data.reports) || !/^\d{4}-\d{2}-\d{2}$/.test(data.saturday) || !/^\d{4}-\d{2}-\d{2}$/.test(data.sunday) || data.rows.length > 10000) throw new Error('缓存格式有误');
@@ -62,7 +47,7 @@ export function attachWeekendPanel(document, host) {
           const spots = Array.isArray(row.spots) ? row.spots : [];
           for (const spot of spots.slice(0, 3)) {
             const label = [spot.start, spot.time, spot.venue || '地点未注明'].filter(Boolean).join(' · ');
-            if (spot.url) { const link = el('button', label + ' ↗', 'weekend-link'); link.type = 'button'; link.addEventListener('click', () => bridge.openWeekendLink?.(spot.url)); card.append(link); }
+            if (spot.url) { const link = el('button', label + ' ↗', 'weekend-link'); link.type = 'button'; link.addEventListener('click', () => services.openLink(spot.url)); card.append(link); }
             else card.append(el('p', label));
           }
           if (spots.length > 3) card.append(el('p', `另有 ${spots.length - 3} 场，可在全部活动中查看。`));
@@ -82,7 +67,7 @@ export function attachWeekendPanel(document, host) {
       if (row.description) details.append(el('p', row.description.slice(0, 400)));
       for (const spot of row.spots) {
         const block = el('div'), label = [spot.start, spot.time, spot.venue || '地点未注明'].filter(Boolean).join(' · ');
-        if (spot.url) { const link = el('button', label + ' ↗', 'weekend-link'); link.type = 'button'; link.addEventListener('click', () => bridge.openWeekendLink?.(spot.url)); block.append(link); }
+        if (spot.url) { const link = el('button', label + ' ↗', 'weekend-link'); link.type = 'button'; link.addEventListener('click', () => services.openLink(spot.url)); block.append(link); }
         else block.append(el('p', label));
         details.append(block);
       }
@@ -92,7 +77,7 @@ export function attachWeekendPanel(document, host) {
     if (data.rows.length) container.append(all);
   }
   let cached = '';
-  try { cached = bridge?.readWeekendCache?.() || ''; if (cached) render(JSON.parse(cached)); }
+  try { cached = services.readCache(); if (cached) render(JSON.parse(cached)); }
   catch { status.textContent = '本机缓存无法读取，请重新更新。'; }
   if (!cached) status.textContent = '点击更新，获取最近一个周末的活动。';
   button.addEventListener('click', async () => {
@@ -100,7 +85,7 @@ export function attachWeekendPanel(document, host) {
     let updated = false;
     try {
       const result = await loadWeekend(adapter);
-      const saved = bridge.saveWeekendCache?.(JSON.stringify(result)) === true;
+      const saved = services.saveCache(JSON.stringify(result));
       render(result);
       updated = true;
       aiStatus.textContent = '';
@@ -112,18 +97,18 @@ export function attachWeekendPanel(document, host) {
   recommend.addEventListener('click', async () => {
     if (!currentData || busy) return;
     if (currentData.saturday !== weekendFor()[0]) { aiStatus.textContent = '活动数据已过期，请先更新。'; return; }
-    if (!bridge.hasApiKey?.()) { aiStatus.textContent = '请先在设置中配置 DeepSeek 密钥。'; return; }
-    if (!host.SecretaryAI?.request) { aiStatus.textContent = '模型连接不可用，请重新打开应用。'; return; }
+    if (!services.hasModelKey()) { aiStatus.textContent = '请先在设置中配置 DeepSeek 密钥。'; return; }
+    if (!services.hasModel()) { aiStatus.textContent = '模型连接不可用，请重新打开应用。'; return; }
     busy = true; button.disabled = true; recommend.disabled = true;
     const snapshot = currentData, controller = new AbortController();
     try {
-      const result = await recommendWeekend(snapshot, request => host.SecretaryAI.request(request, controller.signal),
+      const result = await recommendWeekend(snapshot, request => services.requestModel(request, controller.signal),
         count => { aiStatus.textContent = `AI 正在比较活动（第 ${count} 次模型请求）……`; }, preference.value.trim());
       snapshot.aiRecommendations = result;
-      const saved = bridge.saveWeekendCache?.(JSON.stringify(snapshot)) === true;
+      const saved = services.saveCache(JSON.stringify(snapshot));
       render(snapshot);
       aiStatus.textContent = saved ? '推荐已生成并保存在本机。' : '推荐已生成，但未能保存到本机。';
-      if (!document.querySelector('.pilot-weekend').hidden) recommendations.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      if (!root.hidden) recommendations.scrollIntoView({ behavior: 'smooth', block: 'start' });
     } catch (error) { aiStatus.textContent = error.message || 'AI 推荐未能完成，请重试。'; }
     finally { busy = false; button.disabled = false; recommend.disabled = !currentData?.rows.length || currentData.saturday !== weekendFor()[0]; }
   });

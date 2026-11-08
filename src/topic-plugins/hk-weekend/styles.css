@@ -1,0 +1,6 @@
+#pilot-content-root .pilot-weekend h2{margin-bottom:8px}#pilot-content-root .pilot-weekend h3{font-size:16px;margin:20px 0 8px}
+#pilot-content-root .weekend-event{margin:10px 0;padding:14px;border:1px solid var(--border);border-radius:14px;background:var(--surface)}
+#pilot-content-root .weekend-event summary{margin:0;color:var(--text);font-weight:600;overflow-wrap:anywhere}
+#pilot-content-root .weekend-event p{margin:8px 0;font-size:14px;overflow-wrap:anywhere}
+#pilot-content-root .weekend-link{background:transparent;color:var(--color-brand-500);padding:4px 0;text-align:left;min-height:40px}
+#weekend-recommendations{scroll-margin-top:72px}

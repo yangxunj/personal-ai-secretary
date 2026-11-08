@@ -8,6 +8,7 @@
   <link rel="stylesheet" href="pilot.css">
   <link rel="stylesheet" href="surface-theme.css">
   <link rel="stylesheet" href="shared-message.css">
+  <!-- TOPIC_PLUGIN_STYLES -->
   <script defer src="messages.js"></script>
   <script defer src="pilot.js"></script>
 </head>
@@ -77,21 +78,6 @@
     <section class="pilot-topics" data-screen="/topics" hidden aria-labelledby="topics-title">
       <h2 id="topics-title" class="pilot-section-title">专题</h2>
       <div id="shared-topics-list"></div>
-    </section>
-    <section class="pilot-weekend" data-screen="/topics/weekend" hidden aria-labelledby="weekend-title">
-      <button class="secondary" type="button" data-open-screen="/topics">← 返回专题</button>
-      <h2 id="weekend-title">周末去哪</h2>
-      <p>查询香港官方活动资料；亲子分类仅供参考，活动日期、适龄、票价和预约安排请以主办方最新说明为准。当前未按位置筛选。</p>
-      <label for="weekend-preference">出行偏好（可选）</label>
-      <textarea id="weekend-preference" rows="2" maxlength="300" placeholder="例如：希望靠近地铁、适合儿童"></textarea>
-      <p>查询并推荐会将活动摘要和填写的偏好发送给 DeepSeek；活动较多时可能调用多次并产生 API 费用。</p>
-      <button type="button" id="weekend-refresh">查询并 AI 推荐</button>
-      <button class="secondary" type="button" id="weekend-recommend" disabled>重新生成推荐</button>
-      <p id="weekend-status" role="status" aria-live="polite"></p>
-      <p id="weekend-ai-status" role="status" aria-live="polite"></p>
-      <div id="weekend-source-links"></div>
-      <div id="weekend-recommendations"></div>
-      <div id="weekend-results"></div>
     </section>
     <section class="pilot-unavailable" data-screen="/unavailable" hidden aria-labelledby="unavailable-title">
       <h2 id="unavailable-title">栏目正在适配</h2><p>此栏目在网页版和 Windows 版中可用，安卓功能尚未接入。</p>

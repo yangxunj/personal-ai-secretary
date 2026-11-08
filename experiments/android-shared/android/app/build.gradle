@@ -5,6 +5,8 @@ android {
     namespace 'com.aisecretary.sharedpilot'
     compileSdk 34
     buildFeatures { buildConfig true }
+    // Plugin-owned native adapters are compiled alongside the host.
+    sourceSets { main.java.srcDir '../../../../src/topic-plugins' }
     defaultConfig {
         applicationId 'com.aisecretary.sharedpilot'
         minSdk 26

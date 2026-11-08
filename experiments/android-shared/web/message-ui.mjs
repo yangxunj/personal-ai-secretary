@@ -79,7 +79,7 @@ function createTaskCards(element, onChange) {
     },
   };
 }
-function createAppShell(element, content, onSelect) {
+function createAppShell(element, content, onSelect, topicPlugins = []) {
   try {
     const pref = localStorage.getItem('theme') || 'system';
     document.documentElement.dataset.theme = pref === 'dark' || (pref === 'system' && matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light';
@@ -106,7 +106,8 @@ function createAppShell(element, content, onSelect) {
   function closeDrawer() { setDrawer(false); }
   function renderHeader() {
     const titles = { '/chat': '对话', '/tasks': '任务', '/collections': '栏目', '/more': '更多', '/settings': '设置', '/search': '搜索',
-      '/vault': '资料', '/finance': '财务', '/health': '健康', '/topics': '专题', '/topics/weekend': '周末去哪', '/files': '文件', '/pages': '页面', '/mail': '邮件' };
+      '/vault': '资料', '/finance': '财务', '/health': '健康', '/topics': '专题', '/files': '文件', '/pages': '页面', '/mail': '邮件' };
+    for (const plugin of topicPlugins) titles[plugin.path] = plugin.title;
     flushSync(() => header.render(createElement(PageHeaderView, { title: titles[currentPath] || '栏目',
       back: currentPath === '/chat' ? createElement('button', { type: 'button', 'aria-label': '对话列表', 'aria-expanded': drawerOpen,
         'aria-controls': 'pilot-conversation-drawer', className: 'h-9 w-9 shrink-0 flex items-center justify-center rounded-lg muted',
@@ -134,8 +135,8 @@ function createAppShell(element, content, onSelect) {
         renderItem: ({ href, label, children }) => createElement('button', { key: href, type: 'button',
           className: 'surface flex items-center gap-3 rounded-xl border p-4', style: { borderColor: 'var(--border)' },
           onClick: () => onSelect(href, label) }, children) }));
-      topics.render(createElement('button', { type: 'button', className: 'pilot-topic-card surface border rounded-2xl p-4', onClick: () => onSelect('/topics/weekend') },
-        createElement(TopicCardContent, { title: '周末去哪', summary: '查询香港适合家庭出行的活动。', category: '出行' })));
+      topics.render(topicPlugins.map(plugin => createElement('button', { key: plugin.id, type: 'button', className: 'pilot-topic-card surface border rounded-2xl p-4', onClick: () => onSelect(plugin.path) },
+        createElement(TopicCardContent, { title: plugin.title, summary: plugin.summary, category: plugin.category }))));
     });
     renderHeader();
   }, initDrawer() { setDrawer(false); }, closeDrawer };

@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
-import { recommendationBatches, recommendWeekend } from '../src/lib/weekend/recommend.mjs';
+import { recommendationBatches, recommendWeekend } from '../src/topic-plugins/hk-weekend/recommend.mjs';
 
 const sample = (count, padding = '') => ({ saturday: '2026-11-07', sunday: '2026-11-08', reports: [{ source: 'hktb', ok: false }], rows: Array.from({ length: count }, (_, i) => ({ title: `活动 ${i}${padding}`, source: 'hkpl', start: '2026-11-07', end: '2026-11-08', family: true, description: '简短介绍', spots: [{ start: '2026-11-07', time: '10:00', venue: '图书馆' }] })) });
 const fakeModel = async request => {
@@ -12,8 +12,9 @@ const fakeModel = async request => {
 
 test('Android bundle records the current shared recommendation source', () => {
   const manifest = JSON.parse(readFileSync(new URL('../experiments/android-shared/web-dist/build-manifest.json', import.meta.url), 'utf8'));
-  const expected = createHash('sha256').update(readFileSync(new URL('../src/lib/weekend/recommend.mjs', import.meta.url))).digest('hex');
-  assert.equal(manifest.weekendRecommendSha256, expected);
+  const expected = createHash('sha256').update(readFileSync(new URL('../src/topic-plugins/hk-weekend/recommend.mjs', import.meta.url))).digest('hex');
+  const plugin = manifest.topicPlugins.find(item => item.id === 'hk-weekend');
+  assert.ok(plugin); assert.equal(plugin.sources.find(item => item.name === 'recommend.mjs')?.sha256, expected);
 });
 
 test('recommends five real IDs and includes optional preference without guessing details', async () => {

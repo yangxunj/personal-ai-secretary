@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { weekendFor, parseHktb, parseHkpl, parseLcsdm, projectWeekend, groupWeekend } from '../src/lib/weekend/engine.mjs';
-import { loadWeekend } from '../src/lib/weekend/service.mjs';
+import { weekendFor, parseHktb, parseHkpl, parseLcsdm, projectWeekend, groupWeekend } from '../src/topic-plugins/hk-weekend/engine.mjs';
+import { loadWeekend } from '../src/topic-plugins/hk-weekend/service.mjs';
 
 test('Hong Kong local Sunday stays in current weekend and cross-month dates remain correct', () => {
   assert.deepEqual(weekendFor(new Date('2026-08-30T00:30:00+08:00')), ['2026-08-29', '2026-08-30']);
