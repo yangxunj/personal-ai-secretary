@@ -125,6 +125,14 @@ public final class MainActivity extends Activity {
         @JavascriptInterface public boolean hasApiKey() { return modelClient.hasKey(); }
         @JavascriptInterface public void openModelSettings() { modelClient.showSettings(); }
         @JavascriptInterface public void beginModelRequest(String id, String payload) { modelClient.start(id, payload); }
+        @JavascriptInterface public void beginWebRequest(String id, String kind, String payload) { modelClient.startWeb(id, kind, payload); }
+        @JavascriptInterface public void openWebLink(String url) {
+            if (!DeepSeekClient.isPublicWebUrl(url)) return;
+            runOnUiThread(() -> {
+                try { startActivity(new android.content.Intent(android.content.Intent.ACTION_VIEW, Uri.parse(url)).addCategory(android.content.Intent.CATEGORY_BROWSABLE)); }
+                catch (android.content.ActivityNotFoundException ignored) { android.widget.Toast.makeText(MainActivity.this, "没有可用的浏览器。", android.widget.Toast.LENGTH_SHORT).show(); }
+            });
+        }
         @JavascriptInterface public void cancelModelRequest() { modelClient.cancel(); }
         @JavascriptInterface public void topicRequest(String pluginId, String id, String query) { topicPlugins.request(pluginId, id, query); }
         @JavascriptInterface public String topicReadCache(String pluginId) { return topicPlugins.readCache(pluginId); }

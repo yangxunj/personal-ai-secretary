@@ -29,16 +29,24 @@ export function attachAiPanel(document, host, records, definition, refresh, task
     request: nativeRequest,
   };
   function nativeRequest(body, signal) {
+    return nativeTransport(null, body, signal);
+  }
+  function nativeWebRequest(kind, body, signal) {
+    return nativeTransport(kind, body, signal);
+  }
+  function nativeTransport(kind, body, signal) {
     signal.throwIfAborted();
     return new Promise((resolve, reject) => {
-      const id = 'model-' + nonce();
+      const id = (kind ? 'web-' : 'model-') + nonce();
       const cleanup = () => { pending.delete(id); clearTimeout(timer); signal.removeEventListener('abort', abort); };
       const abort = () => { bridge.cancelModelRequest(); cleanup(); reject(new Error('本轮已取消，请先检查已保存记录。')); };
       const timer = setTimeout(() => { bridge.cancelModelRequest(); cleanup(); reject(new Error('模型请求超时，请检查已保存记录。')); }, 90000);
       pending.set(id, { resolve: value => { cleanup(); resolve(value); }, reject: error => { cleanup(); reject(error); } });
       signal.addEventListener('abort', abort, { once: true });
-      try { bridge.beginModelRequest(id, JSON.stringify(body)); }
-      catch { cleanup(); reject(new Error('模型连接入口不可用，请安装新版测试包。')); }
+      try {
+        if (kind) bridge.beginWebRequest(id, kind, JSON.stringify(body));
+        else bridge.beginModelRequest(id, JSON.stringify(body));
+      } catch { cleanup(); reject(new Error('请求入口不可用，请安装新版测试包。')); }
     });
   }
   function showMode() {
@@ -74,12 +82,12 @@ export function attachAiPanel(document, host, records, definition, refresh, task
       const turnId = nonce();
       const history = conversations.begin(turnId, prompt); started = true;
       const result = await runPilotAgent({ prompt, records, definition, tasks, history,
-        modelRequest: real ? nativeRequest : demoModelRequest('tasks'), signal: active.signal, turnId,
+        modelRequest: real ? nativeRequest : demoModelRequest('tasks'), webRequest: real ? nativeWebRequest : undefined, signal: active.signal, turnId,
         onEvent(event) {
           if (event.type === 'message_end') conversations.record(event.message);
           if (event.type === 'tool_execution_start' || event.type === 'tool_execution_end') {
             const item = document.createElement('li');
-            const labels = { describeCollection: '读取栏目定义', readCollectionRecord: '读取记录', createCollectionRecord: '创建书单记录', updateCollectionRecord: '修改书单记录', createTask: '创建待办', listTasks: '查询待办', updateTask: '修改待办' };
+            const labels = { describeCollection: '读取栏目定义', readCollectionRecord: '读取记录', createCollectionRecord: '创建书单记录', updateCollectionRecord: '修改书单记录', createTask: '创建待办', listTasks: '查询待办', updateTask: '修改待办', webSearch: '联网搜索', fetchWebPage: '读取网页' };
             item.textContent = `${labels[event.toolName] || '工具操作'}：${event.type === 'tool_execution_start' ? '执行中' : event.isError ? '失败' : '已完成'}`;
             events.append(item);
             if (event.type === 'tool_execution_end') { try { refresh(); } catch {} }

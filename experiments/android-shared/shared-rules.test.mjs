@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { createHash } from 'node:crypto';
+import { createHash, webcrypto } from 'node:crypto';
 import { createRequire } from 'node:module';
 import vm from 'node:vm';
 import ts from 'typescript';
@@ -30,7 +30,7 @@ const ownersContext = vm.createContext({ exports: {}, require: specifier => spec
 vm.runInContext(ts.transpileModule(readFileSync(new URL('../../src/lib/tasks/owners-policy.ts', import.meta.url), 'utf8'), { compilerOptions: { target: ts.ScriptTarget.ES2020, module: ts.ModuleKind.CommonJS } }).outputText, ownersContext);
 const taskListContext = vm.createContext({ exports: {}, require: specifier => specifier === './contracts' ? taskContractsContext.exports : require(specifier) });
 vm.runInContext(ts.transpileModule(readFileSync(new URL('../../src/lib/tasks/list-view.ts', import.meta.url), 'utf8'), { compilerOptions: { target: ts.ScriptTarget.ES2020, module: ts.ModuleKind.CommonJS } }).outputText, taskListContext);
-const browser = vm.createContext({ console, performance, structuredClone, AbortController, TextEncoder, TextDecoder, URL, URLSearchParams, setTimeout, clearTimeout }, { codeGeneration: { strings: false, wasm: false } });
+const browser = vm.createContext({ console, performance, structuredClone, AbortController, TextEncoder, TextDecoder, URL, URLSearchParams, crypto: webcrypto, setTimeout, clearTimeout }, { codeGeneration: { strings: false, wasm: false } });
 vm.runInContext(readFileSync(new URL('web-dist/pilot.js', import.meta.url), 'utf8'), browser);
 const core = browser.PilotCore;
 const plain = value => JSON.parse(JSON.stringify(value));
@@ -49,6 +49,9 @@ test('Android bundle contains the exact current shared source and its rules pass
     ['ownersPolicySha256', 'tasks/owners-policy.ts'],
     ['conversationSha256', 'pi/conversation.mjs'],
     ['contextBudgetSha256', 'pi/context-budget.mjs'],
+    ['webSearchSharedSha256', 'web-search/shared.mjs'],
+    ['webSearchUrlSha256', 'web-search/url.mjs'],
+    ['citationSha256', 'agent-citations.mjs'],
   ]) assert.equal(manifest[field], createHash('sha256').update(readFileSync(new URL('../../src/lib/' + source, import.meta.url))).digest('hex'));
   assert.equal(core.runRuleChecks().length, 10);
   assert.ok(core.runRuleChecks().every(row => row.passed));
@@ -302,6 +305,41 @@ test('Node and Android bundle execute matching task policies for create, partial
   for (const [method, inputs] of Object.entries(cases)) for (const input of inputs) {
     assert.deepEqual(outcome(serverTasks, method, input), outcome(core.taskPolicy, method, input), `${method}: ${JSON.stringify(input)}`);
   }
+});
+
+test('Android Pi searches and fetches through bounded adapter with verified citations', async () => {
+  const books = agentFixture(), requests = []; let step = 0;
+  const result = await core.runPilotAgent({ prompt: 'Find public information', records: books.records, definition: core.definition,
+    signal: new AbortController().signal, turnId: 'web-turn',
+    webRequest: async (kind, body) => {
+      requests.push({ kind, body: plain(body) });
+      if (kind === 'search') return { results: [{ title: 'Official', url: 'https://example.com/info', snippet: 'summary' }, { title: 'Private', url: 'http://127.0.0.1/' }] };
+      return { title: 'Official page', content: 'Verified page text' };
+    },
+    modelRequest: async body => {
+      assert.ok(body.tools.some(tool => tool.function.name === 'webSearch'));
+      const call = (name, args) => ({ choices: [{ finish_reason: 'tool_calls', message: { content: null, tool_calls: [{ id: `web-${step}`, function: { name, arguments: JSON.stringify(args) } }] } }] });
+      if (++step === 1) return call('webSearch', { query: 'public information', count: 2 });
+      const data = JSON.parse(body.messages.filter(message => message.role === 'tool').at(-1).content);
+      if (step === 2) { assert.equal(data.results.length, 1); return call('fetchWebPage', { url: data.results[0].url }); }
+      return { choices: [{ finish_reason: 'stop', message: { content: `Answer [[cite:${data.citation.token}]] [[cite:invented]]` } }] };
+    } });
+  assert.deepEqual(requests.map(row => row.kind), ['search', 'fetch']);
+  assert.equal(requests[0].body.query, 'public information');
+  assert.match(result.reply, /https:\/\/example\.com\/info/);
+  assert.match(result.reply, /来源未核实/);
+});
+
+test('Android Pi reports web transport failure without turning it into a result', async () => {
+  const books = agentFixture(); let step = 0, observedError = false;
+  await core.runPilotAgent({ prompt: 'Search', records: books.records, definition: core.definition, signal: new AbortController().signal, turnId: 'failed-web',
+    webRequest: async () => { throw new Error('synthetic network failure'); },
+    modelRequest: async body => {
+      if (++step === 1) return { choices: [{ finish_reason: 'tool_calls', message: { content: null, tool_calls: [{ id: 'web-fail', function: { name: 'webSearch', arguments: '{"query":"public","count":1}' } }] } }] };
+      observedError = body.messages.some(message => message.role === 'tool' && message.content.includes('synthetic network failure'));
+      return { choices: [{ finish_reason: 'stop', message: { content: 'Search failed.' } }] };
+    } });
+  assert.equal(observedError, true);
 });
 
 test('upstream Pi creates, queries and completes a task through the same formal task contracts', async () => {

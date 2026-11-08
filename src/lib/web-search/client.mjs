@@ -9,14 +9,7 @@ export function selectSearchKey({dedicatedKey='',baseUrl='',apiKey=''}) {
   // search key override the official DeepSeek chat credential.
   return dedicatedKey.trim();
 }
-export function publicWebUrl(value) {
-  if(typeof value!=='string'||value.length>8192)throw new Error('Invalid public web URL');
-  const u=new URL(value),host=u.hostname.toLowerCase().replace(/\.$/,'');
-  // Domain names only; no IP literals, single-label hosts, credentials or local suffixes.
-  if(!['https:','http:'].includes(u.protocol)||u.username||u.password||u.port||!host.includes('.')||/[:\[\]]/.test(host)||/^[\d.]+$/.test(host)||/(^|\.)(localhost|local|internal|lan|home|test|invalid)$/.test(host))throw new Error('Only public web URLs are supported');
-  // Encode Markdown delimiters before rendering a provider-returned URL as a link.
-  return u.href.replace(/[()<>\[\]\\]/g,c=>'%'+c.charCodeAt(0).toString(16).toUpperCase());
-}
+export { publicWebUrl } from './url.mjs';
 export function createSearchClient({apiKey,signal,fetchImpl=fetch,maxCalls=6,timeoutMs=25000,maxBytes=2*1024*1024}) {
   let calls=0;
   return {get calls(){return calls;},async request(kind,body){

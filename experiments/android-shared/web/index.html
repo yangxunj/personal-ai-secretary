@@ -91,6 +91,7 @@
       <label class="mode-choice"><input type="radio" name="ai-mode" value="deepseek" checked>DeepSeek Flash</label>
       <label class="mode-choice"><input type="radio" name="ai-mode" value="demo">离线演练（不调用 AI 模型）</label>
       <p>使用你自己的 DeepSeek API Key；本轮请求、对话历史及工具查询结果会发送给服务商，并按其规则计费。</p>
+      <p>需要实时信息时，对话可使用 DeepSeek 联网搜索及公开网页读取；搜索查询会发送给服务商，可能产生额外费用。</p>
       <p>同一对话可以连续追问，重开后保留；切换对话可继续。中断不自动重发，请先查询已保存结果。每个对话最多 40 轮，上下文过长时请新建；暂不自动压缩，不支持附件、专题或同步。</p>
       <button class="secondary" type="button" id="model-key">设置 DeepSeek 密钥</button><p id="key-state"></p>
     </section>

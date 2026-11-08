@@ -22,6 +22,12 @@ import java.util.UUID;
 /** Runs on Android; compiling this test is not a device-test pass. */
 @RunWith(AndroidJUnit4.class)
 public final class SharedPilotTest {
+    @Test public void webLinksOnlyAllowPublicHttpDomains() {
+        assertTrue(DeepSeekClient.isPublicWebUrl("https://example.com/info"));
+        for (String url : new String[]{"file:///tmp/a", "http://127.0.0.1", "https://printer.local/a", "https://user@example.com/", "https://example.com:8443/", "javascript:alert(1)"}) {
+            assertFalse(url, DeepSeekClient.isPublicWebUrl(url));
+        }
+    }
     private Instrumentation getInstrumentation() { return InstrumentationRegistry.getInstrumentation(); }
     private Activity start() throws Exception {
         Intent intent = new Intent(getInstrumentation().getTargetContext(), MainActivity.class);

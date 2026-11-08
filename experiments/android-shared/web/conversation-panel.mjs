@@ -1,10 +1,14 @@
 import { newConversation, parseConversation, recoverConversation, conversationHistory, beginConversationTurn,
   recordConversationMessage, finishConversationTurn, interruptedNotice } from '../../../src/lib/pi/conversation.mjs';
+import { publicWebUrl } from '../../../src/lib/web-search/url.mjs';
 
 export function attachConversationPanel(document, bridge, nonce, messageUi, onSend, closeDrawer) {
   const status = document.getElementById('conversation-status');
   if (!messageUi?.createConversationControls) throw new Error('共用会话界面未加载，请重新打开应用。');
-  const transcript = messageUi.createTranscript(document.getElementById('conversation-messages'), () => { document.getElementById('message-link-status').textContent = '此试验版暂不打开外部链接。'; });
+  const transcript = messageUi.createTranscript(document.getElementById('conversation-messages'), url => {
+    try { bridge.openWebLink(publicWebUrl(url)); }
+    catch { document.getElementById('message-link-status').textContent = '无法打开此链接。'; }
+  });
   let current, mode = 'demo', busy = false, healthy = true, draft = '', items = [];
   const decode = raw => { const result = JSON.parse(raw); if (!result.ok) throw new Error('会话保存或读取失败，请重新打开应用后检查。'); return result.data; };
   const controls = messageUi.createConversationControls(document.getElementById('shared-conversation-list'), document.getElementById('shared-composer'), {

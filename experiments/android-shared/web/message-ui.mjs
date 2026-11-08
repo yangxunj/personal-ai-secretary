@@ -20,11 +20,11 @@ import ThemeToggle from '../../../src/components/ThemeToggle.tsx';
 
 // Only the platform mount and navigation policy live here. Markdown rendering
 // remains the existing production component, imported without a fork.
-function createTranscript(element, onLinkBlocked) {
+function createTranscript(element, onLink) {
   const root = createRoot(element);
   element.addEventListener('click', event => {
     const link = event.target.closest?.('a');
-    if (link && element.contains(link)) { event.preventDefault(); onLinkBlocked(); }
+    if (link && element.contains(link)) { event.preventDefault(); onLink(link.href); }
   });
   return {
     render(turns, interruptedNotice) {
