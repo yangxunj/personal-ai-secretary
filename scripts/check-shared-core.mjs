@@ -16,6 +16,7 @@ export const sharedEntries = [
   'src/lib/pi/context-budget.mjs',
   'src/lib/weekend/engine.mjs',
   'src/lib/weekend/service.mjs',
+  'src/lib/weekend/recommend.mjs',
 ];
 export const sharedUiEntries = [
   'src/components/MessageBody.tsx',

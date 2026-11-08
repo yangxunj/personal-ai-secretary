@@ -75,6 +75,7 @@ public final class SharedPilotTest {
             evaluate(activity, "document.querySelector('.pilot-topic-card').click()");
             assertEquals("false", evaluate(activity, "document.querySelector('.pilot-weekend').hidden"));
             assertEquals("true", evaluate(activity, "Boolean(document.querySelector('#weekend-refresh'))"));
+            assertEquals("true", evaluate(activity, "Boolean(document.querySelector('#weekend-recommend') && document.querySelector('#weekend-preference') && window.SecretaryAI.request)"));
         } finally { getInstrumentation().runOnMainSync(activity::finish); }
     }
 

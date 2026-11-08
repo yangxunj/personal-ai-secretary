@@ -39,3 +39,4 @@ body.pilot-body{max-width:none;margin:0;padding:0;background:var(--bg);color:var
 #pilot-content-root .weekend-event summary{margin:0;color:var(--text);font-weight:600;overflow-wrap:anywhere}
 #pilot-content-root .weekend-event p{margin:8px 0;font-size:14px;overflow-wrap:anywhere}
 #pilot-content-root .weekend-link{background:transparent;color:var(--color-brand-500);padding:4px 0;text-align:left;min-height:40px}
+#weekend-recommendations{scroll-margin-top:72px}

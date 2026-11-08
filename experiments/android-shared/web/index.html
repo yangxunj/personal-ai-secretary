@@ -82,9 +82,15 @@
       <button class="secondary" type="button" data-open-screen="/topics">← 返回专题</button>
       <h2 id="weekend-title">周末去哪</h2>
       <p>查询香港官方活动资料；亲子分类仅供参考，活动日期、适龄、票价和预约安排请以主办方最新说明为准。当前未按位置筛选。</p>
-      <button type="button" id="weekend-refresh">更新本周末活动</button>
+      <label for="weekend-preference">出行偏好（可选）</label>
+      <textarea id="weekend-preference" rows="2" maxlength="300" placeholder="例如：希望靠近地铁、适合儿童"></textarea>
+      <p>查询并推荐会将活动摘要和填写的偏好发送给 DeepSeek；活动较多时可能调用多次并产生 API 费用。</p>
+      <button type="button" id="weekend-refresh">查询并 AI 推荐</button>
+      <button class="secondary" type="button" id="weekend-recommend" disabled>重新生成推荐</button>
       <p id="weekend-status" role="status" aria-live="polite"></p>
+      <p id="weekend-ai-status" role="status" aria-live="polite"></p>
       <div id="weekend-source-links"></div>
+      <div id="weekend-recommendations"></div>
       <div id="weekend-results"></div>
     </section>
     <section class="pilot-unavailable" data-screen="/unavailable" hidden aria-labelledby="unavailable-title">

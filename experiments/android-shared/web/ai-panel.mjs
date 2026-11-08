@@ -26,6 +26,7 @@ export function attachAiPanel(document, host, records, definition, refresh, task
       } catch (error) { request.reject(error); }
     },
     settingsChanged,
+    request: nativeRequest,
   };
   function nativeRequest(body, signal) {
     signal.throwIfAborted();

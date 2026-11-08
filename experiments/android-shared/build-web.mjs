@@ -73,6 +73,8 @@ const manifest = {
   taskServiceSha256: hash(await readFile(path.join(root, 'src/lib/tasks/service.ts'))),
   taskListViewSha256: hash(await readFile(path.join(root, 'src/lib/tasks/list-view.ts'))),
   ownersPolicySha256: hash(await readFile(path.join(root, 'src/lib/tasks/owners-policy.ts'))),
+  weekendEngineSha256: hash(await readFile(path.join(root, 'src/lib/weekend/engine.mjs'))),
+  weekendRecommendSha256: hash(await readFile(path.join(root, 'src/lib/weekend/recommend.mjs'))),
   taskPolicySha256: hash(await readFile(path.join(root, 'src/lib/tasks/policy.ts'))),
   conversationSha256: hash(await readFile(path.join(root, 'src/lib/pi/conversation.mjs'))),
   contextBudgetSha256: hash(await readFile(path.join(root, 'src/lib/pi/context-budget.mjs'))),
