@@ -51,6 +51,9 @@ test('one conversation view supports disabled native buttons and caller-owned we
     renderNavigation: ({ id, className, children }) => createElement('a', { href: id === null ? '/chat' : '/chat/' + id, className }, children) }));
   assert.match(web, /href="\/chat"/); assert.match(web, /href="\/chat\/a"/);
   assert.doesNotMatch(web, /<button/);
+  const removable = renderToStaticMarkup(createElement(ConversationListView, { items, activeId: 'a', t, onDelete() {} }));
+  assert.match(removable, /aria-label="删除对话：&lt;script&gt;title&lt;\/script&gt;"/);
+  assert.equal((removable.match(/<button/g) || []).length, 3);
 });
 
 test('all shared conversation and text input source files match the Android build manifest', () => {

@@ -9,7 +9,9 @@ export function attachConversationPanel(document, bridge, nonce, messageUi, onSe
     try { bridge.openWebLink(publicWebUrl(url)); }
     catch { document.getElementById('message-link-status').textContent = '无法打开此链接。'; }
   });
-  let current, mode = 'demo', busy = false, healthy = true, draft = '', items = [];
+  let current, mode = 'demo', busy = false, healthy = true, draft = '', items = [], pendingDelete;
+  const deleteDialog = document.getElementById('conversation-delete-dialog');
+  const deleteError = document.getElementById('conversation-delete-error');
   const decode = raw => { const result = JSON.parse(raw); if (!result.ok) throw new Error('会话保存或读取失败，请重新打开应用后检查。'); return result.data; };
   const controls = messageUi.createConversationControls(document.getElementById('shared-conversation-list'), document.getElementById('shared-composer'), {
     onSelect(id) { if (busy || !healthy) return false; try { load(mode, id); return true; } catch { fail(); return false; } },
@@ -21,6 +23,22 @@ export function attachConversationPanel(document, bridge, nonce, messageUi, onSe
         return true;
       } catch { fail(); return false; }
     },
+    onDelete(id) {
+      if (busy || !healthy) return;
+      pendingDelete = null;
+      const confirm = document.getElementById('conversation-delete-confirm');
+      try {
+        const row = decode(bridge.readConversation(id));
+        if (!row || row.snapshot.mode !== mode) throw new Error('missing');
+        pendingDelete = { id, mode, version: row.version };
+        document.getElementById('conversation-delete-name').textContent = row.snapshot.title;
+        confirm.disabled = false; deleteError.textContent = '';
+      } catch {
+        document.getElementById('conversation-delete-name').textContent = '';
+        confirm.disabled = true; deleteError.textContent = '无法读取对话，请关闭后重试。';
+      }
+      deleteDialog.showModal();
+    },
     onDraftChange(value) {
       draft = value;
       if (!busy && healthy) try { save({ ...current.snapshot, draft }); } catch { fail(); }
@@ -28,6 +46,19 @@ export function attachConversationPanel(document, bridge, nonce, messageUi, onSe
     },
     onSend() { if (!busy && healthy && mode === 'deepseek' && draft.trim()) onSend(); },
   }, closeDrawer);
+  document.getElementById('conversation-delete-cancel').addEventListener('click', () => deleteDialog.close());
+  deleteDialog.addEventListener('close', () => { pendingDelete = null; });
+  document.getElementById('conversation-delete-confirm').addEventListener('click', () => {
+    if (!pendingDelete || busy || !healthy) return;
+    const target = pendingDelete;
+    try { decode(bridge.deleteConversation(target.id, target.mode, target.version)); }
+    catch { deleteError.textContent = '删除失败，对话可能已发生变化。请取消后重新打开列表再试。'; return; }
+    deleteDialog.close(); pendingDelete = null;
+    try {
+      if (current.snapshot.id === target.id) { current = null; load(mode); }
+      else render();
+    } catch { fail(); status.textContent = '对话已删除，但列表读取失败，请重新打开应用。'; }
+  });
   function renderControls() {
       document.getElementById('ai-send').disabled = busy || !healthy || (mode === 'deepseek' && !draft.trim());
     controls.render({ items, activeId: current?.snapshot.id ?? null, disabled: busy || !healthy, busy, draft,

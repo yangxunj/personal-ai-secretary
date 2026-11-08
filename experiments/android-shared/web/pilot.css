@@ -33,6 +33,11 @@ body.pilot-body{max-width:none;margin:0;padding:0;background:var(--bg);color:var
 #pilot-conversation-drawer .shared-conversation-list{height:100%;max-height:none;overflow:hidden}
 #pilot-conversation-drawer button{background:transparent;color:var(--text);min-height:40px}
 #pilot-conversation-drawer button[aria-current=page]{background:color-mix(in srgb,var(--color-brand-500) 16%,transparent);color:var(--color-brand-500)}
+#pilot-conversation-drawer .shared-conversation-row{display:flex;align-items:center;min-width:0}
+#pilot-conversation-drawer .shared-conversation-row>button:first-child{flex:1;min-width:0}
+#pilot-conversation-drawer .shared-conversation-row .shared-conversation-delete{flex:none;width:44px;height:44px;min-height:44px;display:flex;align-items:center;justify-content:center;padding:0;border-radius:10px;color:var(--muted)}
+#conversation-delete-dialog{width:min(90vw,24rem);border:1px solid var(--border);border-radius:16px;padding:20px;background:var(--surface);color:var(--text)}
+#conversation-delete-dialog::backdrop{background:rgba(0,0,0,.55)}#conversation-delete-dialog h2{font-size:18px;margin:0 0 12px}#conversation-delete-dialog p{margin:8px 0;font-size:14px;overflow-wrap:anywhere}#conversation-delete-name{font-weight:600;color:var(--text)}#conversation-delete-error{color:#d64045}#conversation-delete-error:empty{display:none}.conversation-delete-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:18px}.conversation-delete-actions button{min-height:44px}.conversation-delete-actions #conversation-delete-confirm{background:#c93838;color:white}
 #pilot-content-root .pilot-topic-card{display:block;width:100%;text-align:left;background:var(--surface);color:var(--text);border:1px solid var(--border)}
 /* The task list stays in the foreground; creation and less-used filters expand in place. */
 #pilot-content-root .task-panel{max-width:52rem;margin:0 auto;padding-bottom:calc(var(--pilot-nav-height,4.4rem) + 24px)}

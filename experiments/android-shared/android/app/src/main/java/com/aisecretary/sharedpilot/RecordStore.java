@@ -88,6 +88,7 @@ final class RecordStore extends SQLiteOpenHelper {
     synchronized JSONArray listTasksForView() throws Exception { return TaskStore.listForView(getReadableDatabase()); }
     synchronized JSONArray listConversations(String mode) throws Exception { return ConversationStore.list(getReadableDatabase(), mode); }
     synchronized JSONObject readConversation(String id) throws Exception { return ConversationStore.read(getReadableDatabase(), id); }
+    synchronized void deleteConversation(String id, String mode, int version) throws Exception { ConversationStore.delete(getWritableDatabase(), id, mode, version); }
     synchronized JSONObject saveConversation(String id, int version, String data) throws Exception {
         SQLiteDatabase db = getWritableDatabase(); db.beginTransaction();
         try {

@@ -15,6 +15,13 @@
 <body class="pilot-body">
   <div id="pilot-shell"></div>
   <div id="pilot-conversation-drawer"></div>
+  <dialog id="conversation-delete-dialog" aria-labelledby="conversation-delete-title" aria-describedby="conversation-delete-description">
+    <h2 id="conversation-delete-title">删除对话？</h2>
+    <p id="conversation-delete-name"></p>
+    <p id="conversation-delete-description">这条对话和聊天记录将被删除，无法恢复。已创建的待办和书单会保留。</p>
+    <p id="conversation-delete-error" role="alert"></p>
+    <div class="conversation-delete-actions"><button id="conversation-delete-cancel" type="button" class="secondary">取消</button><button id="conversation-delete-confirm" type="button">删除对话</button></div>
+  </dialog>
   <div id="pilot-content-root">
   <div id="pilot-page-header" class="pilot-page-header"></div>
   <main>

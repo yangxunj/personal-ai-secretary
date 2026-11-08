@@ -28,6 +28,11 @@ final class ConversationStore {
             return cursor.moveToFirst() ? new JSONObject().put("snapshot", new JSONObject(cursor.getString(0))).put("version", cursor.getInt(1)) : null;
         }
     }
+    static void delete(SQLiteDatabase db, String id, String mode, int expectedVersion) throws Exception {
+        mode(mode);
+        if (id == null || !id.matches("[a-zA-Z0-9_-]{1,80}") || expectedVersion < 1) throw new IllegalArgumentException("Invalid conversation");
+        if (db.delete("conversations", "id = ? AND mode = ? AND version = ?", new String[]{id, mode, String.valueOf(expectedVersion)}) != 1) throw new RecordStore.StoreError("conflict");
+    }
     static JSONObject save(SQLiteDatabase db, String id, int expectedVersion, String serialized) throws Exception {
         if (serialized == null || serialized.length() > 240000 || expectedVersion < 0) throw new IllegalArgumentException("Invalid conversation snapshot");
         JSONObject snapshot = new JSONObject(serialized); String mode = snapshot.getString("mode"); mode(mode);

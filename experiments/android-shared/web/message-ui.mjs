@@ -44,7 +44,8 @@ function createConversationControls(listElement, inputElement, callbacks, closeD
       flushSync(() => {
         listRoot.render(createElement(ConversationListView, { items, activeId, disabled, t: text => text === '新对话' ? '新建对话' : text,
           onSelect: id => { if (callbacks.onSelect(id) !== false) closeDrawer(); },
-          onNew: () => { if (callbacks.onNew() !== false) closeDrawer(); } }));
+          onNew: () => { if (callbacks.onNew() !== false) closeDrawer(); },
+          onDelete: callbacks.onDelete }));
         inputRoot.render(createElement(ChatTextInput, { id: 'ai-prompt', value: draft, onDraftChange: callbacks.onDraftChange, onSend: callbacks.onSend,
           canSend, disabled: busy, maxLength: 1000, rows: 1, placeholder: '跟我说点什么…',
           className: 'w-full min-w-0 resize-none rounded-2xl border px-3.5 py-2.5 text-[15px] bg-transparent outline-none transition max-h-32' }));

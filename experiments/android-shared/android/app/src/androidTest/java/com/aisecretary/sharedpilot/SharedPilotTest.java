@@ -22,6 +22,26 @@ import java.util.UUID;
 /** Runs on Android; compiling this test is not a device-test pass. */
 @RunWith(AndroidJUnit4.class)
 public final class SharedPilotTest {
+    @Test public void deletingOneConversationChecksVersionAndPreservesOtherData() throws Exception {
+        try (SQLiteDatabase db = SQLiteDatabase.create(null)) {
+            ConversationStore.createTable(db);
+            db.execSQL("CREATE TABLE records (id TEXT PRIMARY KEY)");
+            db.execSQL("CREATE TABLE tasks (id TEXT PRIMARY KEY)");
+            db.execSQL("INSERT INTO records VALUES ('keep-book')");
+            db.execSQL("INSERT INTO tasks VALUES ('keep-task')");
+            JSONObject one = new JSONObject().put("schemaVersion", 1).put("id", "one").put("mode", "deepseek").put("title", "first").put("draft", "").put("turns", new JSONArray());
+            JSONObject two = new JSONObject().put("schemaVersion", 1).put("id", "two").put("mode", "deepseek").put("title", "second").put("draft", "").put("turns", new JSONArray());
+            ConversationStore.save(db, "one", 0, one.toString()); ConversationStore.save(db, "two", 0, two.toString());
+            ConversationStore.save(db, "one", 1, one.toString());
+            try { ConversationStore.delete(db, "one", "deepseek", 1); fail("Stale version deleted"); } catch (RecordStore.StoreError expected) { assertEquals("conflict", expected.code); }
+            try { ConversationStore.delete(db, "one", "demo", 2); fail("Wrong mode deleted"); } catch (RecordStore.StoreError expected) { assertEquals("conflict", expected.code); }
+            assertNotNull(ConversationStore.read(db, "one"));
+            ConversationStore.delete(db, "one", "deepseek", 2);
+            assertNull(ConversationStore.read(db, "one")); assertNotNull(ConversationStore.read(db, "two"));
+            assertEquals(1, android.database.DatabaseUtils.longForQuery(db, "SELECT COUNT(*) FROM records", null));
+            assertEquals(1, android.database.DatabaseUtils.longForQuery(db, "SELECT COUNT(*) FROM tasks", null));
+        }
+    }
     @Test public void webLinksOnlyAllowPublicHttpDomains() {
         assertTrue(DeepSeekClient.isPublicWebUrl("https://example.com/info"));
         for (String url : new String[]{"file:///tmp/a", "http://127.0.0.1", "https://printer.local/a", "https://user@example.com/", "https://example.com:8443/", "javascript:alert(1)"}) {

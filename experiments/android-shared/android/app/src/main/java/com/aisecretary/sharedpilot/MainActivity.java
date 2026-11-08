@@ -96,6 +96,10 @@ public final class MainActivity extends Activity {
             try { JSONObject result = store.readConversation(id); return new JSONObject().put("ok", true).put("data", result == null ? JSONObject.NULL : result).toString(); }
             catch (Exception error) { return failure(); }
         }
+        @JavascriptInterface public String deleteConversation(String id, String mode, int version) {
+            try { store.deleteConversation(id, mode, version); return new JSONObject().put("ok", true).toString(); }
+            catch (Exception error) { return failure(); }
+        }
         @JavascriptInterface public String saveConversation(String id, int version, String data) {
             try { return new JSONObject().put("ok", true).put("data", store.saveConversation(id, version, data)).toString(); }
             catch (RecordStore.StoreError error) { return "{\"ok\":false,\"code\":\"conflict\"}"; }
