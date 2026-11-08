@@ -77,6 +77,7 @@ export function attachAiPanel(document, host, records, definition, refresh, task
     for (const radio of document.querySelectorAll('input[name="ai-mode"]')) radio.disabled = true;
     output.textContent = real ? '正在连接 DeepSeek…' : '正在运行固定演练，不调用模型…';
     events.replaceChildren();
+    document.getElementById('message-link-status').textContent = '';
     let started = false;
     try {
       const turnId = nonce();
@@ -86,17 +87,22 @@ export function attachAiPanel(document, host, records, definition, refresh, task
         onEvent(event) {
           if (event.type === 'message_end') conversations.record(event.message);
           if (event.type === 'tool_execution_start' || event.type === 'tool_execution_end') {
-            const item = document.createElement('li');
             const labels = { describeCollection: '读取栏目定义', readCollectionRecord: '读取记录', createCollectionRecord: '创建书单记录', updateCollectionRecord: '修改书单记录', createTask: '创建待办', listTasks: '查询待办', updateTask: '修改待办', webSearch: '联网搜索', fetchWebPage: '读取网页' };
-            item.textContent = `${labels[event.toolName] || '工具操作'}：${event.type === 'tool_execution_start' ? '执行中' : event.isError ? '失败' : '已完成'}`;
-            events.append(item);
-            if (event.type === 'tool_execution_end') { try { refresh(); } catch {} }
+            if (event.type === 'tool_execution_start') {
+              const item = document.createElement('li');
+              item.textContent = `${labels[event.toolName] || '工具操作'}：执行中`;
+              output.textContent = ''; events.replaceChildren(item);
+            } else {
+              events.replaceChildren(); output.textContent = event.isError ? '工具未完成，正在整理结果…' : '正在整理回答…';
+              try { refresh(); } catch {}
+            }
           }
         },
       });
+      events.replaceChildren(); output.textContent = '';
       conversations.finish(result.reply, true); started = false;
-      output.textContent = '本轮已完成，回复已保存在上方对话中。';
     } catch (error) {
+      events.replaceChildren();
       if (started) try { conversations.finish('本轮未完整结束。', false); } catch { conversations.fail(); }
       output.textContent = (active.signal.aborted ? '本轮已取消。' : error.message || '本轮未完成。') + ' 已保存的工具结果保留，请先查看待办和书单；请求草稿仍保留。';
     } finally {
