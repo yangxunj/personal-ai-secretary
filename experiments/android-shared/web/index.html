@@ -22,14 +22,21 @@
     <p id="conversation-delete-error" role="alert"></p>
     <div class="conversation-delete-actions"><button id="conversation-delete-cancel" type="button" class="secondary">取消</button><button id="conversation-delete-confirm" type="button">删除对话</button></div>
   </dialog>
+  <dialog id="task-delete-dialog" aria-labelledby="task-delete-title" aria-describedby="task-delete-description">
+    <h2 id="task-delete-title">永久删除待办？</h2>
+    <p id="task-delete-name"></p><p id="task-delete-description">这条已归档的待办将被永久删除，无法恢复。相关对话记录不会删除。</p>
+    <p id="task-delete-error" role="alert"></p>
+    <div class="conversation-delete-actions"><button id="task-delete-cancel" type="button" class="secondary">取消</button><button id="task-delete-confirm" type="button">永久删除</button></div>
+  </dialog>
   <div id="pilot-content-root">
   <div id="pilot-page-header" class="pilot-page-header"></div>
   <main>
     <section class="task-panel" data-screen="/tasks" hidden aria-labelledby="tasks-title">
       <h2 id="tasks-title" class="pilot-section-title">我的待办</h2>
-      <div class="task-toolbar"><div><h3>我的待办</h3><p>共显示 <span id="task-count">0</span> 条</p></div>
+      <div class="task-toolbar"><div><h3 id="task-list-heading">我的待办</h3><p>共显示 <span id="task-count">0</span> 条</p></div>
         <button id="task-new" type="button" aria-expanded="false" aria-controls="task-create">＋ 新建</button>
       </div>
+      <button id="task-archive-toggle" type="button" class="secondary task-archive-toggle">已归档</button>
       <div id="task-create" class="task-create" hidden><form id="task-form">
           <label>要做什么<input id="task-title" required maxlength="200" autocomplete="off" placeholder="例如：预约下周的牙科检查"></label>
           <label>原始要求<textarea id="task-detail" rows="3" maxlength="2000" placeholder="具体要求会按原文保存"></textarea></label>

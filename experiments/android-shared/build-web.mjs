@@ -83,6 +83,7 @@ const manifest = {
   taskServiceSha256: hash(await readFile(path.join(root, 'src/lib/tasks/service.ts'))),
   taskListViewSha256: hash(await readFile(path.join(root, 'src/lib/tasks/list-view.ts'))),
   ownersPolicySha256: hash(await readFile(path.join(root, 'src/lib/tasks/owners-policy.ts'))),
+  taskLifecycleSha256: hash(await readFile(path.join(root, 'src/lib/tasks/lifecycle.ts'))),
   topicPlugins: await Promise.all(topicPlugins.map(async ({ id, path: route, capabilities, sourceFiles }) => ({ id, path: route, capabilities,
     sources: await Promise.all(sourceFiles.map(async name => {
       if (!/^(?:[a-z0-9-]+\.(?:mjs|css)|PLUGIN\.md|android\/[A-Za-z0-9]+\.java)$/.test(name)) throw new Error(`Invalid plugin source: ${id}`);

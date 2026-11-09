@@ -14,7 +14,7 @@ import java.security.MessageDigest;
 
 /** Storage adapter only; field rules are executed by the shared TypeScript module. */
 final class RecordStore extends SQLiteOpenHelper {
-    RecordStore(Context context) { super(context, "shared-pilot.db", null, 5); }
+    RecordStore(Context context) { super(context, "shared-pilot.db", null, 6); }
 
     @Override public void onCreate(SQLiteDatabase db) {
         db.execSQL("CREATE TABLE records (id TEXT PRIMARY KEY, data TEXT NOT NULL, created_at INTEGER NOT NULL, version INTEGER NOT NULL DEFAULT 1)");
@@ -28,11 +28,18 @@ final class RecordStore extends SQLiteOpenHelper {
     }
 
     static void migrate(SQLiteDatabase db, int oldVersion, int newVersion) {
-        if (oldVersion >= 1 && oldVersion < newVersion && newVersion <= 5) {
+        if (oldVersion >= 1 && oldVersion < newVersion && newVersion <= 6) {
             if (oldVersion < 2 && newVersion >= 2) db.execSQL("ALTER TABLE records ADD COLUMN version INTEGER NOT NULL DEFAULT 1");
             if (oldVersion < 3 && newVersion >= 3) createReceipts(db);
             if (oldVersion < 4 && newVersion >= 4) TaskStore.createTable(db);
             if (oldVersion < 5 && newVersion >= 5) ConversationStore.createTable(db);
+            if (oldVersion < 6 && newVersion >= 6) {
+                boolean found = false;
+                try (Cursor columns = db.rawQuery("PRAGMA table_info(tasks)", null)) {
+                    while (columns.moveToNext()) if ("archived_at".equals(columns.getString(columns.getColumnIndexOrThrow("name")))) found = true;
+                }
+                if (!found) db.execSQL("ALTER TABLE tasks ADD COLUMN archived_at INTEGER");
+            }
             return;
         }
         // Refuse unknown migrations rather than deleting user records.
@@ -102,6 +109,8 @@ final class RecordStore extends SQLiteOpenHelper {
         } finally { db.endTransaction(); }
     }
     synchronized JSONObject readTask(String id) throws Exception { return TaskStore.read(getReadableDatabase(), id); }
+    synchronized JSONObject archiveTask(String id, int version, boolean archived) throws Exception { return TaskStore.setArchived(getWritableDatabase(), id, version, archived); }
+    synchronized void deleteArchivedTask(String id, int version) throws Exception { TaskStore.deleteArchived(getWritableDatabase(), id, version); }
     synchronized JSONObject writeTask(String serialized, String id, int version) throws Exception {
         SQLiteDatabase db = getWritableDatabase(); db.beginTransaction();
         try {

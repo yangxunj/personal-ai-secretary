@@ -5,7 +5,7 @@ export default function TaskStatusSelect({ status, disabled, onChange, t }: {
   status: string; disabled?: boolean; onChange: (value: string) => void; t: (text: string) => string;
 }) {
   const label = (value: string) => value === 'todo' ? t('未开始') : value === 'doing' ? t('进行中') :
-    value === 'done' ? t('已完成') : value === 'cancelled' ? t('已取消') : value;
+    value === 'done' ? t('已完成') : value === 'cancelled' ? t('已取消') : value === 'blocked' ? t('卡住了') : value;
   const options = OPTIONS.includes(status) ? OPTIONS : [status, ...OPTIONS];
   return <span className="relative z-[2] inline-flex items-center">
     <select value={status} disabled={disabled} onChange={event => onChange(event.target.value)} aria-label={t('状态')}

@@ -5,7 +5,7 @@ import { runPilotAgent, demoModelRequest } from './pi-runtime.mjs';
 import { attachAiPanel } from './ai-panel.mjs';
 import { topicPlugins } from '../../../src/topic-plugins/registry.mjs';
 import { mountTopicPlugins } from './topic-plugin-adapters.mjs';
-import { createTasks, attachTaskPanel, taskPolicy, projectTaskList, parseOwners } from './tasks.mjs';
+import { createTasks, attachTaskPanel, taskPolicy, lifecyclePolicy, projectTaskList, parseOwners } from './tasks.mjs';
 import * as conversation from '../../../src/lib/pi/conversation.mjs';
 import * as titleWork from './title-work.mjs';
 
@@ -160,6 +160,8 @@ export function startPage(document, host) {
   const tasks = createTasks({
     list: plan => decode(bridge.listTasks(JSON.stringify(plan))), read: id => decode(bridge.readTask(id)),
     listForView: () => decode(bridge.listTasksForView()),
+    setArchived: (id, version, archived) => decode(bridge.setTaskArchived(id, version, archived)),
+    deleteArchived: (id, version) => decode(bridge.deleteArchivedTask(id, version)),
     create: data => decode(bridge.createTask(JSON.stringify(data))),
     update: (id, version, patch) => decode(bridge.updateTask(id, version, JSON.stringify(patch))),
     readReceipt: (key, signature) => decode(bridge.readToolReceipt(key, signature)),
@@ -172,7 +174,7 @@ export function startPage(document, host) {
   host.Pilot.tasks = tasks;
   const navigation = host.PilotMessageUI.createAppShell(document.getElementById('pilot-shell'), document.getElementById('pilot-content-root'), showScreen, topicPlugins);
   navigation.initDrawer();
-  attachAiPanel(document, host, records, definition, () => { refresh(); refreshTasks(); }, tasks, navigation.closeDrawer);
+  attachAiPanel(document, host, records, definition, () => { refresh(); refreshTasks(); }, tasks, navigation.closeDrawer, value => refreshTasks.setBusy(value));
   mountTopicPlugins(topicPlugins, { document, host, parent: document.querySelector('#pilot-content-root main') });
   function showScreen(path) {
     const target = ['/chat', '/tasks', '/collections', '/more', '/settings', '/topics', ...topicPlugins.map(plugin => plugin.path)].includes(path) ? path : '/unavailable';
@@ -197,5 +199,5 @@ export function startPage(document, host) {
   }
 }
 
-globalThis.PilotCore = { definition, validateValues, prepareRecordWrite, runRuleChecks, createRecords, createTasks, taskPolicy, projectTaskList, parseOwners, conversation, titleWork, startPage, runPilotAgent, demoModelRequest };
+globalThis.PilotCore = { definition, validateValues, prepareRecordWrite, runRuleChecks, createRecords, createTasks, taskPolicy, lifecyclePolicy, projectTaskList, parseOwners, conversation, titleWork, startPage, runPilotAgent, demoModelRequest };
 if (typeof document !== 'undefined') startPage(document, globalThis);

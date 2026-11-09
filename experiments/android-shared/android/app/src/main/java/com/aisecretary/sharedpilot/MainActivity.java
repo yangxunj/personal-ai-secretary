@@ -139,6 +139,16 @@ public final class MainActivity extends Activity {
             try { JSONObject task = store.readTask(id); return new JSONObject().put("ok", true).put("data", task == null ? JSONObject.NULL : task).toString(); }
             catch (Exception error) { return failure(); }
         }
+        @JavascriptInterface public String setTaskArchived(String id, int version, boolean archived) {
+            try { return new JSONObject().put("ok", true).put("data", store.archiveTask(id, version, archived)).toString(); }
+            catch (RecordStore.StoreError error) { return "{\"ok\":false,\"code\":\"conflict\"}"; }
+            catch (Exception error) { return failure(); }
+        }
+        @JavascriptInterface public String deleteArchivedTask(String id, int version) {
+            try { store.deleteArchivedTask(id, version); return new JSONObject().put("ok", true).toString(); }
+            catch (RecordStore.StoreError error) { return "{\"ok\":false,\"code\":\"conflict\"}"; }
+            catch (Exception error) { return failure(); }
+        }
         @JavascriptInterface public String createTask(String data) {
             try { return new JSONObject().put("ok", true).put("data", store.writeTask(data, null, 0)).toString(); }
             catch (Exception error) { return failure(); }

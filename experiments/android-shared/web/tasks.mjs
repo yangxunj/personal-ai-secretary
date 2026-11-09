@@ -2,7 +2,9 @@ import { createTaskService } from '../../../src/lib/tasks/service.ts';
 import { prepareTaskCreate, prepareTaskUpdate, prepareTaskQuery, taskPublicDto } from '../../../src/lib/tasks/policy.ts';
 import { projectTaskList } from '../../../src/lib/tasks/list-view.ts';
 import { parseOwners } from '../../../src/lib/tasks/owners-policy.ts';
+import { assertTaskLifecycle } from '../../../src/lib/tasks/lifecycle.ts';
 export const taskPolicy = { prepareTaskCreate, prepareTaskUpdate, prepareTaskQuery, taskPublicDto };
+export const lifecyclePolicy = { assertTaskLifecycle };
 export { projectTaskList };
 export { parseOwners };
 
@@ -15,6 +17,14 @@ export function createTasks(storage) {
   return {
     ...service,
     listForView: (filters, members) => projectTaskList(storage.listForView(), filters, members),
+    readForLifecycle: id => storage.read(id),
+    lifecycle(id, action, expectedVersion) {
+      const before = storage.read(id);
+      if (!before || (expectedVersion !== undefined && before.version !== expectedVersion)) throw new Error('Task changed');
+      assertTaskLifecycle(before, action);
+      if (action === 'delete') return storage.deleteArchived(id, before.version);
+      return storage.setArchived(id, before.version, action === 'archive');
+    },
     toolWrite(key, name, args) {
       if (name !== 'createTask' && name !== 'updateTask') throw new Error('Unknown task write: ' + name);
       const signature = name + ':' + JSON.stringify(args);
@@ -40,6 +50,9 @@ export function attachTaskPanel(document, tasks, ownerStore) {
   const ownersForm = document.getElementById('owners-form'), ownersInput = document.getElementById('owners-input');
   const ownersMessage = document.getElementById('owners-message'), createOwner = document.getElementById('task-create-owner');
   const createPanel = document.getElementById('task-create'), newButton = document.getElementById('task-new');
+  const archiveToggle = document.getElementById('task-archive-toggle'), deleteDialog = document.getElementById('task-delete-dialog');
+  const deleteError = document.getElementById('task-delete-error');
+  let archived = false, busy = false, pendingDelete, lastGroups = [];
   const setCreateOpen = open => { createPanel.hidden = !open; newButton.setAttribute('aria-expanded', String(open)); };
   newButton.addEventListener('click', () => { const open = createPanel.hidden; setCreateOpen(open); if (open) document.getElementById('task-title').focus(); });
   document.getElementById('task-cancel').addEventListener('click', () => { setCreateOpen(false); newButton.focus(); });
@@ -47,13 +60,42 @@ export function attachTaskPanel(document, tasks, ownerStore) {
   try { members = ownerStore.read() ?? members; ownersInput.value = members.join('，'); }
   catch { ownersInput.disabled = true; ownersForm.querySelector('button').disabled = true; ownersMessage.textContent = '负责人名单读取失败，请重启后重试。'; }
   const cards = globalThis.PilotMessageUI.createTaskCards(document.getElementById('tasks'), (id, patch) => {
+    if (busy || archived) return;
     try { tasks.update({ id, ...patch }); }
     catch { message.textContent = '更新失败，请重读后再试。'; return; }
     try { refresh(); message.textContent = '已更新待办。'; }
     catch { message.textContent = '待办已更新，但列表重读失败；请重读。'; }
+  }, (id, action) => {
+    if (busy) return;
+    if (action === 'delete') {
+      try {
+        const task = tasks.readForLifecycle(id); if (!task || task.archivedAt == null) throw new Error('Task changed');
+        pendingDelete = { id, version: task.version };
+        document.getElementById('task-delete-name').textContent = task.title; deleteError.textContent = ''; deleteDialog.showModal();
+      } catch { message.textContent = '读取待办失败，请重读后再试。'; }
+      return;
+    }
+    try { tasks.lifecycle(id, action); }
+    catch { message.textContent = '操作失败，待办可能已发生变化，请重读后再试。'; return; }
+    try { refresh(); message.textContent = action === 'archive' ? '已归档。' : '已恢复。'; }
+    catch { message.textContent = '操作已完成，但列表重读失败，请重读。'; }
+  });
+  document.getElementById('task-delete-cancel').addEventListener('click', () => deleteDialog.close());
+  deleteDialog.addEventListener('close', () => { pendingDelete = null; });
+  document.getElementById('task-delete-confirm').addEventListener('click', () => {
+    if (!pendingDelete || busy) return;
+    try { tasks.lifecycle(pendingDelete.id, 'delete', pendingDelete.version); }
+    catch { deleteError.textContent = '删除失败，待办可能已发生变化。请关闭后重读再试。'; return; }
+    deleteDialog.close(); pendingDelete = null;
+    try { refresh(); message.textContent = '已永久删除待办。'; }
+    catch { message.textContent = '待办已删除，但列表重读失败，请重读。'; }
+  });
+  archiveToggle.addEventListener('click', () => {
+    archived = !archived; filter.value = archived ? 'all' : ''; setCreateOpen(false);
+    try { refresh(); message.textContent = ''; } catch { message.textContent = '任务读取失败。'; }
   });
   function refresh() {
-    const view = tasks.listForView({ status: filter.value || 'open', category: category.value, owner: owner.value }, members);
+    const view = tasks.listForView({ status: filter.value || (archived ? 'all' : 'open'), category: category.value, owner: owner.value, archived }, members);
     const rows = view.groups.flatMap(group => group.items);
     const setOptions = (select, entries, selected) => {
       select.replaceChildren();
@@ -66,9 +108,14 @@ export function attachTaskPanel(document, tasks, ownerStore) {
     setOptions(category, [['', `全部分类 (${view.byStatus.length})`], ...view.cats.map(name => [name, `${name} (${view.counts.get(name)})`])], view.cat);
     setOptions(owner, [['', `全部负责人 (${view.byOwnerRow.length})`], ['none', `未指派 (${view.ownerCounts.get('none')})`], ...view.owners.map(name => [name, `${name} (${view.ownerCounts.get(name)})`])], view.own);
     setOptions(createOwner, [['', '未指派'], ...members.map(name => [name, name])], createOwner.value);
-    cards.render(view.groups.map(group => ({ ...group, items: group.items.map(taskPublicDto) })), members);
+    lastGroups = view.groups.map(group => ({ ...group, items: group.items.map(task => ({ ...taskPublicDto(task), archivedAt: task.archivedAt })) }));
+    cards.render(lastGroups, members, { archived, busy });
+    document.getElementById('task-list-heading').textContent = archived ? '已归档' : '我的待办';
+    archiveToggle.textContent = archived ? '← 返回待办' : `已归档 (${view.archivedCount})`;
+    newButton.hidden = archived;
     document.getElementById('task-count').textContent = String(rows.length);
     document.getElementById('tasks-empty').hidden = rows.length > 0;
+    document.getElementById('tasks-empty').textContent = archived ? '这个范围暂时没有已归档的待办。' : '这个范围暂时没有待办。';
     const activeFilters = document.getElementById('task-active-filters');
     const active = [view.cat && `分类：${view.cat}`, view.own && `负责人：${view.own === 'none' ? '未指派' : view.own}`].filter(Boolean);
     activeFilters.textContent = active.join(' · '); activeFilters.hidden = active.length === 0;
@@ -97,5 +144,6 @@ export function attachTaskPanel(document, tasks, ownerStore) {
     finally { save.disabled = false; }
   });
   try { refresh(); } catch { message.textContent = '任务读取失败，请重试。'; }
+  refresh.setBusy = value => { busy = value; cards.render(lastGroups, members, { archived, busy }); };
   return refresh;
 }

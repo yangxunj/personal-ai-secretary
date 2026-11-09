@@ -3,7 +3,7 @@ import { OPEN_TASK_STATUSES, TASK_CATEGORIES } from './contracts';
 export const TASK_GROUP_ORDER = ['doing', 'blocked', 'todo', 'done', 'cancelled'] as const;
 export const TASK_VIEW_STATUSES = ['all', 'open', 'overdue', 'done', 'cancelled'] as const;
 export type TaskViewStatus = typeof TASK_VIEW_STATUSES[number] | 'todo' | 'doing' | 'blocked';
-export type ListTask = { id: string; status: string; category: string; owner: string | null; dueDate: Date | string | null; createdAt: Date | string | number };
+export type ListTask = { id: string; status: string; category: string; owner: string | null; dueDate: Date | string | null; createdAt: Date | string | number; archivedAt?: Date | string | number | null };
 
 export function startOfToday(now = new Date()) {
   const today = new Date(now); today.setHours(0, 0, 0, 0); return today;
@@ -22,7 +22,8 @@ export function matchTaskStatus(task: Pick<ListTask, 'status' | 'dueDate'>, key:
 }
 
 /** Apply the same cross-filter counts and ordering to full platform snapshots. */
-export function projectTaskList<T extends ListTask>(all: T[], filters: { status?: string; category?: string; owner?: string } = {}, members: string[] = [], now = new Date()) {
+export function projectTaskList<T extends ListTask>(allTasks: T[], filters: { status?: string; category?: string; owner?: string; archived?: boolean } = {}, members: string[] = [], now = new Date()) {
+  const all = allTasks.filter(task => filters.archived ? task.archivedAt != null : task.archivedAt == null);
   const today = startOfToday(now);
   const valid = [...TASK_VIEW_STATUSES, 'todo', 'doing', 'blocked'];
   const status = (valid.includes(filters.status ?? '') ? filters.status : 'open') as TaskViewStatus;
@@ -45,8 +46,11 @@ export function projectTaskList<T extends ListTask>(all: T[], filters: { status?
   const statusCounts = new Map<TaskViewStatus, number>([...TASK_VIEW_STATUSES, 'todo', 'doing', 'blocked'].map(key =>
     [key as TaskViewStatus, byCat.filter(task => matchTaskStatus(task, key as TaskViewStatus, today)).length]));
   const ownerCounts = new Map<string, number>([['none', byOwnerRow.filter(task => !task.owner).length], ...owners.map(name => [name, byOwnerRow.filter(task => task.owner === name).length] as [string, number])]);
-  const sorted = [...tasks].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  const sorted = [...tasks].sort((a, b) => filters.archived
+    ? new Date(b.archivedAt!).getTime() - new Date(a.archivedAt!).getTime()
+    : new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   const groups = TASK_GROUP_ORDER.map(key => ({ status: key, items: sorted.filter(task => task.status === key) })).filter(group => group.items.length > 0);
   return { today, status, cat, own, owners, tasks, byStatus, byOwnerRow, counts, cats, statusCounts, ownerCounts, groups,
-    overdueCount: all.filter(task => matchTaskStatus(task, 'overdue', today)).length };
+    overdueCount: all.filter(task => matchTaskStatus(task, 'overdue', today)).length,
+    archivedCount: allTasks.filter(task => task.archivedAt != null).length };
 }

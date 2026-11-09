@@ -53,11 +53,11 @@ function createConversationControls(listElement, inputElement, callbacks, closeD
     },
   };
 }
-function createTaskCards(element, onChange) {
+function createTaskCards(element, onChange, onLifecycle) {
   const root = createRoot(element);
   const labels = { todo: '待办', doing: '进行中', blocked: '卡住了', done: '已完成', cancelled: '已取消' };
   return {
-    render(groups, members) {
+    render(groups, members, { archived = false, busy = false } = {}) {
       const sections = groups.map(group => {
         const cards = group.items.map(task => createElement(TaskCard, {
           key: task.id, title: task.title, completed: ['done', 'cancelled'].includes(task.status),
@@ -66,13 +66,16 @@ function createTaskCards(element, onChange) {
         createElement('small', null, [labels[task.status] || task.status, task.category,
           '优先级' + ({ 1: '高', 2: '中', 3: '低' }[task.priority] || task.priority),
           task.dueDate ? '截止 ' + task.dueDate : '未设截止日', task.owner || '未指派'].join(' · ')),
+        archived && task.archivedAt != null && createElement('small', null, '归档于 ' + new Date(task.archivedAt).toLocaleDateString('zh-CN')),
         task.detail && createElement('p', null, task.detail),
         task.result && createElement('p', null, '处理结果：' + task.result),
         createElement('div', { className: 'shared-task-actions' },
-          createElement(TaskOwnerSelect, { owner: task.owner, members, t: text => text,
+          createElement(TaskOwnerSelect, { owner: task.owner, members, disabled: archived || busy, t: text => text,
             onChange: value => onChange(task.id, { owner: value ?? '' }) }),
-          createElement(TaskStatusSelect, { status: task.status, t: text => text,
-            onChange: value => onChange(task.id, { status: value }) }))));
+          createElement(TaskStatusSelect, { status: task.status, disabled: archived || busy, t: text => text,
+            onChange: value => onChange(task.id, { status: value }) }),
+          createElement('button', { type: 'button', className: 'secondary', disabled: busy, onClick: () => onLifecycle(task.id, archived ? 'restore' : 'archive'), 'aria-label': `${archived ? '恢复' : '归档'}：${task.title}` }, archived ? '恢复' : '归档'),
+          archived && createElement('button', { type: 'button', className: 'secondary task-delete', disabled: busy, onClick: () => onLifecycle(task.id, 'delete'), 'aria-label': `永久删除：${task.title}` }, '永久删除'))));
         return createElement('div', { key: group.status, className: 'shared-task-group' },
           createElement('h4', { className: 'shared-task-group-title' }, `${labels[group.status]} · ${group.items.length}`), cards);
       });

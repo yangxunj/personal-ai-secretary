@@ -22,6 +22,28 @@ import java.util.UUID;
 /** Runs on Android; compiling this test is not a device-test pass. */
 @RunWith(AndroidJUnit4.class)
 public final class SharedPilotTest {
+    @Test public void taskArchiveMigrationAndDeletePreserveExistingData() throws Exception {
+        try (SQLiteDatabase db = SQLiteDatabase.create(null)) {
+            db.execSQL("CREATE TABLE tasks (id TEXT PRIMARY KEY, data TEXT NOT NULL, title TEXT NOT NULL, status TEXT NOT NULL, category TEXT NOT NULL, priority INTEGER NOT NULL, due_date TEXT, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, version INTEGER NOT NULL DEFAULT 1)");
+            db.execSQL("CREATE TABLE records (id TEXT PRIMARY KEY)"); db.execSQL("INSERT INTO records VALUES ('keep-book')");
+            db.execSQL("CREATE TABLE conversations (id TEXT PRIMARY KEY)"); db.execSQL("INSERT INTO conversations VALUES ('keep-chat')");
+            JSONObject data = new JSONObject().put("title", "旧任务").put("detail", "原始要求").put("status", "doing").put("category", "其他").put("priority", 2).put("owner", JSONObject.NULL).put("dueDate", JSONObject.NULL).put("result", JSONObject.NULL);
+            db.execSQL("INSERT INTO tasks VALUES (?,?,?,?,?,?,?,?,?,?)", new Object[]{"legacy", data.toString(), "旧任务", "doing", "其他", 2, null, 100, 100, 3});
+            RecordStore.migrate(db, 5, 6);
+            JSONObject original = TaskStore.read(db, "legacy"); assertTrue(original.isNull("archivedAt")); assertEquals("原始要求", original.getString("detail"));
+            try { TaskStore.deleteArchived(db, "legacy", 3); fail("Unarchived task deleted"); } catch (RecordStore.StoreError expected) { assertEquals("conflict", expected.code); }
+            JSONObject archived = TaskStore.setArchived(db, "legacy", 3, true); assertFalse(archived.isNull("archivedAt")); assertEquals("doing", archived.getString("status"));
+            JSONObject plan = new JSONObject().put("statuses", new JSONArray().put("doing")).put("limit", 20).put("category", JSONObject.NULL).put("keyword", JSONObject.NULL);
+            assertEquals(0, TaskStore.list(db, plan.toString()).length());
+            try { TaskStore.update(db, "legacy", 4, "{\"status\":\"done\"}"); fail("Archived task edited"); } catch (RecordStore.StoreError expected) { assertEquals("conflict", expected.code); }
+            try { TaskStore.deleteArchived(db, "legacy", 3); fail("Stale task deleted"); } catch (RecordStore.StoreError expected) { assertEquals("conflict", expected.code); }
+            JSONObject restored = TaskStore.setArchived(db, "legacy", 4, false); assertTrue(restored.isNull("archivedAt")); assertEquals("doing", restored.getString("status"));
+            assertEquals(1, TaskStore.list(db, plan.toString()).length());
+            TaskStore.setArchived(db, "legacy", 5, true); TaskStore.deleteArchived(db, "legacy", 6); assertNull(TaskStore.read(db, "legacy"));
+            assertEquals(1, android.database.DatabaseUtils.longForQuery(db, "SELECT COUNT(*) FROM records", null));
+            assertEquals(1, android.database.DatabaseUtils.longForQuery(db, "SELECT COUNT(*) FROM conversations", null));
+        }
+    }
     @Test public void deletingOneConversationChecksVersionAndPreservesOtherData() throws Exception {
         try (SQLiteDatabase db = SQLiteDatabase.create(null)) {
             ConversationStore.createTable(db);

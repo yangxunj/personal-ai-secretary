@@ -47,6 +47,7 @@ test('Android bundle contains the exact current shared source and its rules pass
     ['taskServiceSha256', 'tasks/service.ts'],
     ['taskListViewSha256', 'tasks/list-view.ts'],
     ['ownersPolicySha256', 'tasks/owners-policy.ts'],
+    ['taskLifecycleSha256', 'tasks/lifecycle.ts'],
     ['conversationSha256', 'pi/conversation.mjs'],
     ['contextBudgetSha256', 'pi/context-budget.mjs'],
     ['webSearchSharedSha256', 'web-search/shared.mjs'],
@@ -373,6 +374,22 @@ test('offline task rehearsal and task receipt replay do not duplicate one tool w
   fixture.tasks.toolWrite('same:task', 'createTask', args); fixture.tasks.toolWrite('same:task', 'createTask', args);
   assert.equal(fixture.rows.length, 2);
   assert.throws(() => fixture.tasks.toolWrite('same:task', 'createTask', { title: '换内容' }), /mismatch/);
+});
+
+test('archive is separate from task status and deletion requires an archived record', () => {
+  const rows = [
+    { id: 'active', title: 'active', status: 'doing', category: '其他', owner: null, dueDate: null, createdAt: 2, archivedAt: null },
+    { id: 'archive', title: 'archived', status: 'doing', category: '其他', owner: null, dueDate: null, createdAt: 1, archivedAt: 123 },
+    { id: 'archive-old', title: 'older archive', status: 'doing', category: '其他', owner: null, dueDate: null, createdAt: 3, archivedAt: 100 },
+    { id: 'legacy', title: 'legacy', status: 'todo', category: '其他', owner: null, dueDate: null, createdAt: 0 },
+  ];
+  const active = core.projectTaskList(rows, {}, []), archived = core.projectTaskList(rows, { archived: true, status: 'all' }, []);
+  assert.deepEqual(plain(active.tasks.map(row => row.id)).sort(), ['active', 'legacy']);
+  assert.deepEqual(plain(archived.tasks.map(row => row.id)), ['archive', 'archive-old']);
+  assert.equal(active.archivedCount, 2); assert.equal(archived.tasks[0].status, 'doing');
+  assert.throws(() => core.lifecyclePolicy.assertTaskLifecycle(rows[0], 'delete'), /请先归档/);
+  assert.doesNotThrow(() => core.lifecyclePolicy.assertTaskLifecycle(rows[1], 'delete'));
+  assert.throws(() => core.lifecyclePolicy.assertTaskLifecycle(rows[1], 'archive'), /已经归档/);
 });
 
 test('automatic title uses two completed turns, shared cleanup and validation without tools', async () => {

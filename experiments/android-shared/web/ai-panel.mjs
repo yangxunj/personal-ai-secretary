@@ -4,7 +4,7 @@ import { generateTitle, titleCandidate } from './title-work.mjs';
 
 const nonce = () => Array.from(crypto.getRandomValues(new Uint8Array(12)), byte => byte.toString(16).padStart(2, '0')).join('');
 
-export function attachAiPanel(document, host, records, definition, refresh, tasks, closeDrawer) {
+export function attachAiPanel(document, host, records, definition, refresh, tasks, closeDrawer, setTasksBusy = () => {}) {
   const form = document.getElementById('ai-form');
   const output = document.getElementById('ai-output');
   const events = document.getElementById('ai-events');
@@ -97,6 +97,7 @@ export function attachAiPanel(document, host, records, definition, refresh, task
     if (!prompt) { output.textContent = '请填写请求。'; return; }
     if (typeof structuredClone !== 'function') { output.textContent = '当前 WebView 版本过旧，请先更新 Android System WebView。'; return; }
     active = new AbortController();
+    try { setTasksBusy(true); } catch { /* The task view must not prevent chat from starting. */ }
     conversations.busy(true);
     send.disabled = true; cancel.hidden = false;
     document.getElementById('model-key').disabled = true;
@@ -135,6 +136,7 @@ export function attachAiPanel(document, host, records, definition, refresh, task
     } finally {
       try { refresh(); } catch {}
       active = undefined; send.disabled = !conversations.healthy; cancel.hidden = true;
+      try { setTasksBusy(false); } catch { /* Task controls will refresh when the panel is reopened. */ }
       conversations.busy(false);
       document.getElementById('model-key').disabled = false;
       for (const radio of document.querySelectorAll('input[name="ai-mode"]')) radio.disabled = false;
