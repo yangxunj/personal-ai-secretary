@@ -3,6 +3,7 @@ import { prepareTaskCreate, prepareTaskUpdate, prepareTaskQuery, taskPublicDto }
 import { projectTaskList } from '../../../src/lib/tasks/list-view.ts';
 import { parseOwners } from '../../../src/lib/tasks/owners-policy.ts';
 import { assertTaskLifecycle } from '../../../src/lib/tasks/lifecycle.ts';
+import { taskPatch } from '../../../src/lib/task-chat-scope.mjs';
 export const taskPolicy = { prepareTaskCreate, prepareTaskUpdate, prepareTaskQuery, taskPublicDto };
 export const lifecyclePolicy = { assertTaskLifecycle };
 export { projectTaskList };
@@ -18,6 +19,23 @@ export function createTasks(storage) {
     ...service,
     listForView: (filters, members) => projectTaskList(storage.listForView(), filters, members),
     readForLifecycle: id => storage.read(id),
+    readScoped(id) {
+      const task = storage.read(id);
+      if (!task || task.archivedAt != null) throw new Error('任务不存在或已归档。');
+      return taskPublicDto(task);
+    },
+    updateScoped(key, id, input) {
+      const signature = 'updateCurrentTask:' + id + ':' + JSON.stringify(input);
+      const prior = storage.readReceipt(key, signature);
+      if (prior) return taskPublicDto(prior);
+      const before = storage.read(id);
+      if (!before || before.archivedAt != null) throw new Error('任务不存在或已归档。');
+      const patch = taskPatch(id, { ...input, id });
+      // taskPatch validates the same calendar rule as desktop; the pilot stores
+      // date-only values in UTC so all existing task displays retain the day.
+      if (input.dueDate !== undefined) patch.dueDate = input.dueDate ? new Date(input.dueDate).toISOString() : null;
+      return taskPublicDto(storage.commitTool(key, signature, { kind: 'task-update', id, expectedVersion: before.version, values: patch }));
+    },
     lifecycle(id, action, expectedVersion) {
       const before = storage.read(id);
       if (!before || (expectedVersion !== undefined && before.version !== expectedVersion)) throw new Error('Task changed');
@@ -44,7 +62,7 @@ export function createTasks(storage) {
 }
 
 const labels = { todo: '待办', doing: '进行中', blocked: '卡住了', done: '已完成', cancelled: '已取消' };
-export function attachTaskPanel(document, tasks, ownerStore) {
+export function attachTaskPanel(document, tasks, ownerStore, onOpenTask) {
   const form = document.getElementById('task-form'), message = document.getElementById('task-message'), filter = document.getElementById('task-filter');
   const category = document.getElementById('task-category'), owner = document.getElementById('task-owner');
   const ownersForm = document.getElementById('owners-form'), ownersInput = document.getElementById('owners-input');
@@ -79,7 +97,7 @@ export function attachTaskPanel(document, tasks, ownerStore) {
     catch { message.textContent = '操作失败，待办可能已发生变化，请重读后再试。'; return; }
     try { refresh(); message.textContent = action === 'archive' ? '已归档。' : '已恢复。'; }
     catch { message.textContent = '操作已完成，但列表重读失败，请重读。'; }
-  });
+  }, onOpenTask);
   document.getElementById('task-delete-cancel').addEventListener('click', () => deleteDialog.close());
   deleteDialog.addEventListener('close', () => { pendingDelete = null; });
   document.getElementById('task-delete-confirm').addEventListener('click', () => {

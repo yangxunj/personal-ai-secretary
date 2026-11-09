@@ -24,7 +24,7 @@
   </dialog>
   <dialog id="task-delete-dialog" aria-labelledby="task-delete-title" aria-describedby="task-delete-description">
     <h2 id="task-delete-title">永久删除待办？</h2>
-    <p id="task-delete-name"></p><p id="task-delete-description">这条已归档的待办将被永久删除，无法恢复。相关对话记录不会删除。</p>
+    <p id="task-delete-name"></p><p id="task-delete-description">这条已归档的待办将被永久删除，无法恢复。任务对话会保留在通用对话列表。</p>
     <p id="task-delete-error" role="alert"></p>
     <div class="conversation-delete-actions"><button id="task-delete-cancel" type="button" class="secondary">取消</button><button id="task-delete-confirm" type="button">永久删除</button></div>
   </dialog>
@@ -59,6 +59,22 @@
       </div>
       <p id="task-active-filters" class="task-active-filters" hidden></p>
       <p id="tasks-empty" class="task-empty">这个范围暂时没有待办。</p><div id="tasks"></div>
+    </section>
+    <section class="task-detail-panel" data-screen="/task-detail" hidden aria-labelledby="task-detail-heading">
+      <h2 id="task-detail-heading"></h2><p id="task-detail-meta"></p>
+      <h3>最初要求</h3><p id="task-detail-text"></p>
+      <div id="task-detail-result-section" hidden><h3>处理结果</h3><p id="task-detail-result"></p></div>
+      <p id="task-detail-error" role="status"></p>
+      <button id="task-discuss" type="button">和 AI 讨论这个任务</button>
+    </section>
+    <section class="task-chat-panel" data-screen="/task-chat" hidden aria-label="任务专属对话">
+      <ol id="task-chat-messages" aria-label="任务对话记录"></ol>
+      <p id="task-chat-status" role="status" aria-live="polite"></p>
+      <p id="task-chat-readonly" hidden>该任务已归档，对话记录保留。恢复任务后可以继续讨论。</p>
+      <form id="task-chat-form"><div class="pilot-composer">
+        <div id="task-chat-composer"></div><button id="task-chat-send" type="submit" aria-label="发送">↑</button>
+        <button id="task-chat-cancel" class="secondary" type="button" hidden>取消本轮</button>
+      </div></form>
     </section>
     <section data-screen="/collections" hidden aria-labelledby="add-title">
       <h2 id="add-title">添加阅读记录</h2>

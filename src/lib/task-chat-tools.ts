@@ -1,5 +1,4 @@
 import { tool } from 'ai';
-import { z } from 'zod';
 import { revalidatePath } from 'next/cache';
 import { db, withDatabaseTransaction } from '@/lib/db';
 import { buildAgentTools, type ToolContext } from '@/lib/agent-tools';
@@ -8,6 +7,7 @@ import { recordDescriptor } from '@/lib/agent-text';
 import { taskPatch } from '@/lib/task-chat-scope.mjs';
 import { makeT } from '@/lib/i18n/core';
 import { buildCollectionTools } from '@/lib/collections/tools';
+import { scopedTaskUpdateWithId } from '@/lib/tasks/scoped-contract';
 
 /** The scope is supplied from the persisted Conversation, never from the model. */
 export function buildChatTools(ctx: ToolContext & { taskId?: string | null;progressiveRead?:boolean }) {
@@ -38,13 +38,7 @@ export function buildChatTools(ctx: ToolContext & { taskId?: string | null;progr
     }),
     updateTask: tool({
       description: '只能修改当前任务。不得覆盖最初要求 detail；新要求或结论用 saveNote。成功修改会另外保留一条任务进展。',
-      inputSchema: z.object({
-        id: z.string(), title: z.string().trim().min(1).max(200).optional(),
-        status: z.enum(['todo', 'doing', 'blocked', 'done', 'cancelled']).optional(),
-        result: z.string().optional(), priority: z.number().int().min(1).max(3).optional(),
-        dueDate: z.string().optional().describe('YYYY-MM-DD；空字符串清除日期'),
-        owner: z.string().optional(),
-      }).strict(),
+      inputSchema: scopedTaskUpdateWithId,
       execute: async args => withDatabaseTransaction(async () => {
         const patch = taskPatch(taskId, args);
         const before = await db.task.findUniqueOrThrow({ where: { id: taskId } });

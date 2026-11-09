@@ -100,6 +100,13 @@ export function attachConversationPanel(document, bridge, nonce, messageUi, onSe
   }
   return {
     load(mode) { try { load(mode); } catch { fail(); } },
+    refreshList() {
+      if (!healthy || !current) return;
+      try {
+        items = decode(bridge.listConversations(mode)).map(row => ({ ...row, updatedAt: new Date(row.updatedAt ?? 0).toISOString() }));
+        renderControls();
+      } catch { /* The current conversation remains usable; retry on next open. */ }
+    },
     begin(id, text) {
       if (!healthy || !current) throw new Error('会话存储不可用，请重新打开应用。');
       const history = conversationHistory(current.snapshot);

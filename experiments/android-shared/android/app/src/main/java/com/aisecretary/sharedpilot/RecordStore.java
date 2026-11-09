@@ -14,7 +14,7 @@ import java.security.MessageDigest;
 
 /** Storage adapter only; field rules are executed by the shared TypeScript module. */
 final class RecordStore extends SQLiteOpenHelper {
-    RecordStore(Context context) { super(context, "shared-pilot.db", null, 6); }
+    RecordStore(Context context) { super(context, "shared-pilot.db", null, 7); }
 
     @Override public void onCreate(SQLiteDatabase db) {
         db.execSQL("CREATE TABLE records (id TEXT PRIMARY KEY, data TEXT NOT NULL, created_at INTEGER NOT NULL, version INTEGER NOT NULL DEFAULT 1)");
@@ -28,7 +28,7 @@ final class RecordStore extends SQLiteOpenHelper {
     }
 
     static void migrate(SQLiteDatabase db, int oldVersion, int newVersion) {
-        if (oldVersion >= 1 && oldVersion < newVersion && newVersion <= 6) {
+        if (oldVersion >= 1 && oldVersion < newVersion && newVersion <= 7) {
             if (oldVersion < 2 && newVersion >= 2) db.execSQL("ALTER TABLE records ADD COLUMN version INTEGER NOT NULL DEFAULT 1");
             if (oldVersion < 3 && newVersion >= 3) createReceipts(db);
             if (oldVersion < 4 && newVersion >= 4) TaskStore.createTable(db);
@@ -39,6 +39,14 @@ final class RecordStore extends SQLiteOpenHelper {
                     while (columns.moveToNext()) if ("archived_at".equals(columns.getString(columns.getColumnIndexOrThrow("name")))) found = true;
                 }
                 if (!found) db.execSQL("ALTER TABLE tasks ADD COLUMN archived_at INTEGER");
+            }
+            if (oldVersion < 7 && newVersion >= 7) {
+                boolean found = false;
+                try (Cursor columns = db.rawQuery("PRAGMA table_info(conversations)", null)) {
+                    while (columns.moveToNext()) if ("task_id".equals(columns.getString(columns.getColumnIndexOrThrow("name")))) found = true;
+                }
+                if (!found) db.execSQL("ALTER TABLE conversations ADD COLUMN task_id TEXT");
+                ConversationStore.createTaskIndex(db);
             }
             return;
         }
@@ -94,7 +102,13 @@ final class RecordStore extends SQLiteOpenHelper {
     synchronized JSONArray listTasks(String plan) throws Exception { return TaskStore.list(getReadableDatabase(), plan); }
     synchronized JSONArray listTasksForView() throws Exception { return TaskStore.listForView(getReadableDatabase()); }
     synchronized JSONArray listConversations(String mode) throws Exception { return ConversationStore.list(getReadableDatabase(), mode); }
-    synchronized JSONObject readConversation(String id) throws Exception { return ConversationStore.read(getReadableDatabase(), id); }
+    synchronized JSONObject readConversation(String id) throws Exception { return ConversationStore.readGeneral(getReadableDatabase(), id); }
+    synchronized JSONObject readTaskConversation(String taskId) throws Exception { return ConversationStore.readTask(getReadableDatabase(), taskId); }
+    synchronized JSONObject saveTaskConversation(String taskId, String id, int version, String data) throws Exception {
+        SQLiteDatabase db = getWritableDatabase(); db.beginTransaction();
+        try { JSONObject result = ConversationStore.saveTask(db, taskId, id, version, data); db.setTransactionSuccessful(); return result; }
+        finally { db.endTransaction(); }
+    }
     synchronized void deleteConversation(String id, String mode, int version) throws Exception { ConversationStore.delete(getWritableDatabase(), id, mode, version); }
     synchronized JSONObject setConversationTitle(String id, int version, String expectedTitle, String title) throws Exception {
         SQLiteDatabase db = getWritableDatabase(); db.beginTransaction();
@@ -110,7 +124,11 @@ final class RecordStore extends SQLiteOpenHelper {
     }
     synchronized JSONObject readTask(String id) throws Exception { return TaskStore.read(getReadableDatabase(), id); }
     synchronized JSONObject archiveTask(String id, int version, boolean archived) throws Exception { return TaskStore.setArchived(getWritableDatabase(), id, version, archived); }
-    synchronized void deleteArchivedTask(String id, int version) throws Exception { TaskStore.deleteArchived(getWritableDatabase(), id, version); }
+    synchronized void deleteArchivedTask(String id, int version) throws Exception {
+        SQLiteDatabase db = getWritableDatabase(); db.beginTransaction();
+        try { TaskStore.deleteArchived(db, id, version); ConversationStore.detachTask(db, id); db.setTransactionSuccessful(); }
+        finally { db.endTransaction(); }
+    }
     synchronized JSONObject writeTask(String serialized, String id, int version) throws Exception {
         SQLiteDatabase db = getWritableDatabase(); db.beginTransaction();
         try {

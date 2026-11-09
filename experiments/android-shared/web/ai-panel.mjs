@@ -143,4 +143,26 @@ export function attachAiPanel(document, host, records, definition, refresh, task
     }
   });
   showMode();
+  return {
+    beginTask(controller) {
+      if (active) return false;
+      active = controller;
+      try { setTasksBusy(true); } catch {}
+      conversations.busy(true); send.disabled = true;
+      document.getElementById('model-key').disabled = true;
+      for (const radio of document.querySelectorAll('input[name="ai-mode"]')) radio.disabled = true;
+      return true;
+    },
+    endTask(controller) {
+      if (active !== controller) return;
+      active = undefined;
+      try { refresh(); setTasksBusy(false); } catch { try { setTasksBusy(false); } catch {} }
+      conversations.busy(false);
+      document.getElementById('model-key').disabled = false;
+      for (const radio of document.querySelectorAll('input[name="ai-mode"]')) radio.disabled = false;
+    },
+    request: nativeRequest,
+    webRequest: nativeWebRequest,
+    refreshList: () => conversations.refreshList(),
+  };
 }

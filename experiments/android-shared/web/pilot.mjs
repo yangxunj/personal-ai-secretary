@@ -3,6 +3,7 @@ import { parseDefinition, validateValues, collectionError, CollectionError, MAX_
 import { prepareRecordWrite } from '../../../src/lib/collections/record-write.ts';
 import { runPilotAgent, demoModelRequest } from './pi-runtime.mjs';
 import { attachAiPanel } from './ai-panel.mjs';
+import { attachTaskChat } from './task-chat.mjs';
 import { topicPlugins } from '../../../src/topic-plugins/registry.mjs';
 import { mountTopicPlugins } from './topic-plugin-adapters.mjs';
 import { createTasks, attachTaskPanel, taskPolicy, lifecyclePolicy, projectTaskList, parseOwners } from './tasks.mjs';
@@ -167,19 +168,42 @@ export function startPage(document, host) {
     readReceipt: (key, signature) => decode(bridge.readToolReceipt(key, signature)),
     commitTool: (key, signature, operation) => decode(bridge.commitTool(key, signature, JSON.stringify(operation))),
   });
+  let selectedTaskId;
   const refreshTasks = attachTaskPanel(document, tasks, {
     read: () => decode(bridge.readOwners()),
     write: names => decode(bridge.writeOwners(JSON.stringify(names))),
-  });
+  }, id => { selectedTaskId = id; showScreen('/task-detail'); });
   host.Pilot.tasks = tasks;
   const navigation = host.PilotMessageUI.createAppShell(document.getElementById('pilot-shell'), document.getElementById('pilot-content-root'), showScreen, topicPlugins);
   navigation.initDrawer();
-  attachAiPanel(document, host, records, definition, () => { refresh(); refreshTasks(); }, tasks, navigation.closeDrawer, value => refreshTasks.setBusy(value));
+  const ai = attachAiPanel(document, host, records, definition, () => { refresh(); refreshTasks(); }, tasks, navigation.closeDrawer, value => refreshTasks.setBusy(value));
+  const taskChat = attachTaskChat(document, host, tasks, ai, refreshTasks);
   mountTopicPlugins(topicPlugins, { document, host, parent: document.querySelector('#pilot-content-root main') });
+  function renderTaskDetail() {
+    const task = tasks.readForLifecycle(selectedTaskId);
+    if (!task) return false;
+    const labels = { todo: '未开始', doing: '进行中', blocked: '卡住了', done: '已完成', cancelled: '已取消' };
+    navigation.setTaskTitle(task.title);
+    document.getElementById('task-detail-heading').textContent = task.title;
+    document.getElementById('task-detail-meta').textContent = [labels[task.status] || task.status, task.category, task.owner || '未指派', task.dueDate ? '截止 ' + String(task.dueDate).slice(0, 10) : '未设截止日', task.archivedAt != null ? '已归档' : ''].filter(Boolean).join(' · ');
+    document.getElementById('task-detail-text').textContent = task.detail || '暂无补充要求。';
+    document.getElementById('task-detail-result').textContent = task.result || '';
+    document.getElementById('task-detail-result-section').hidden = !task.result;
+    document.getElementById('task-detail-error').textContent = '';
+    document.getElementById('task-discuss').textContent = task.archivedAt != null ? '查看任务对话' : '和 AI 讨论这个任务';
+    return true;
+  }
+  document.getElementById('task-discuss').addEventListener('click', () => {
+    if (selectedTaskId && taskChat.open(selectedTaskId)) showScreen('/task-chat');
+    else document.getElementById('task-detail-error').textContent = '无法打开任务对话，请重试。';
+  });
   function showScreen(path) {
-    const target = ['/chat', '/tasks', '/collections', '/more', '/settings', '/topics', ...topicPlugins.map(plugin => plugin.path)].includes(path) ? path : '/unavailable';
+    let target = ['/chat', '/tasks', '/task-detail', '/task-chat', '/collections', '/more', '/settings', '/topics', ...topicPlugins.map(plugin => plugin.path)].includes(path) ? path : '/unavailable';
+    if (target === '/task-detail') try { if (!selectedTaskId || !renderTaskDetail()) target = '/tasks'; } catch { target = '/tasks'; }
+    if (target === '/task-chat' && !selectedTaskId) target = '/tasks';
+    if (target === '/chat') ai.refreshList();
     for (const section of document.querySelectorAll('[data-screen]')) section.hidden = section.dataset.screen !== target;
-    navigation.render(path);
+    navigation.render(target);
     host.scrollTo(0, 0);
   }
   for (const button of document.querySelectorAll('[data-open-screen]')) button.addEventListener('click', () => showScreen(button.dataset.openScreen));
@@ -188,14 +212,16 @@ export function startPage(document, host) {
   // a multi-line draft. Reserve exactly their rendered height for scrolling.
   const nav = document.querySelector('#pilot-navigation nav');
   const composer = document.getElementById('ai-form');
+  const taskComposer = document.getElementById('task-chat-form');
   const header = document.querySelector('#pilot-page-header header');
   if (host.ResizeObserver && nav && composer && header) {
     const observer = new host.ResizeObserver(() => {
       document.documentElement.style.setProperty('--pilot-nav-height', `${nav.getBoundingClientRect().height}px`);
       document.documentElement.style.setProperty('--pilot-composer-height', `${composer.getBoundingClientRect().height}px`);
+      document.documentElement.style.setProperty('--pilot-task-composer-height', `${taskComposer.getBoundingClientRect().height}px`);
       document.documentElement.style.setProperty('--pilot-header-height', `${header.getBoundingClientRect().height}px`);
     });
-    observer.observe(nav); observer.observe(composer); observer.observe(header);
+    observer.observe(nav); observer.observe(composer); observer.observe(taskComposer); observer.observe(header);
   }
 }
 

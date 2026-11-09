@@ -10,14 +10,16 @@ import org.json.JSONObject;
 /** Platform persistence for versioned Pi conversation snapshots. No model/key access. */
 final class ConversationStore {
     static void createTable(SQLiteDatabase db) {
-        db.execSQL("CREATE TABLE conversations (id TEXT PRIMARY KEY, mode TEXT NOT NULL, title TEXT NOT NULL, data TEXT NOT NULL, version INTEGER NOT NULL, updated_at INTEGER NOT NULL)");
+        db.execSQL("CREATE TABLE conversations (id TEXT PRIMARY KEY, mode TEXT NOT NULL, title TEXT NOT NULL, data TEXT NOT NULL, version INTEGER NOT NULL, updated_at INTEGER NOT NULL, task_id TEXT)");
+        createTaskIndex(db);
     }
+    static void createTaskIndex(SQLiteDatabase db) { db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS conversations_task_id ON conversations(task_id) WHERE task_id IS NOT NULL"); }
     private static void mode(String mode) {
         if (!"deepseek".equals(mode) && !"demo".equals(mode)) throw new IllegalArgumentException("Invalid conversation mode");
     }
     static JSONArray list(SQLiteDatabase db, String mode) throws Exception {
         mode(mode); JSONArray result = new JSONArray();
-        try (Cursor cursor = db.query("conversations", new String[]{"id", "title", "updated_at"}, "mode = ?", new String[]{mode}, null, null, "updated_at DESC, id ASC", "20")) {
+        try (Cursor cursor = db.query("conversations", new String[]{"id", "title", "updated_at"}, "mode = ? AND task_id IS NULL", new String[]{mode}, null, null, "updated_at DESC, id ASC", null)) {
             while (cursor.moveToNext()) result.put(new JSONObject().put("id", cursor.getString(0)).put("title", cursor.getString(1)).put("updatedAt", cursor.getLong(2)));
         }
         return result;
@@ -28,14 +30,29 @@ final class ConversationStore {
             return cursor.moveToFirst() ? new JSONObject().put("snapshot", new JSONObject(cursor.getString(0))).put("version", cursor.getInt(1)) : null;
         }
     }
+    private static String taskId(SQLiteDatabase db, String id) {
+        try (Cursor cursor = db.query("conversations", new String[]{"task_id"}, "id = ?", new String[]{id}, null, null, null)) {
+            return cursor.moveToFirst() && !cursor.isNull(0) ? cursor.getString(0) : null;
+        }
+    }
+    static JSONObject readGeneral(SQLiteDatabase db, String id) throws Exception {
+        JSONObject row = read(db, id);
+        return row != null && taskId(db, id) == null ? row : null;
+    }
+    static JSONObject readTask(SQLiteDatabase db, String taskId) throws Exception {
+        if (TaskStore.read(db, taskId) == null) throw new IllegalArgumentException("Task missing");
+        try (Cursor cursor = db.query("conversations", new String[]{"id"}, "task_id = ?", new String[]{taskId}, null, null, null)) {
+            return cursor.moveToFirst() ? read(db, cursor.getString(0)) : null;
+        }
+    }
     static void delete(SQLiteDatabase db, String id, String mode, int expectedVersion) throws Exception {
         mode(mode);
         if (id == null || !id.matches("[a-zA-Z0-9_-]{1,80}") || expectedVersion < 1) throw new IllegalArgumentException("Invalid conversation");
-        if (db.delete("conversations", "id = ? AND mode = ? AND version = ?", new String[]{id, mode, String.valueOf(expectedVersion)}) != 1) throw new RecordStore.StoreError("conflict");
+        if (db.delete("conversations", "id = ? AND mode = ? AND version = ? AND task_id IS NULL", new String[]{id, mode, String.valueOf(expectedVersion)}) != 1) throw new RecordStore.StoreError("conflict");
     }
     static JSONObject setTitle(SQLiteDatabase db, String id, int expectedVersion, String expectedTitle, String title) throws Exception {
         if (expectedVersion < 1 || expectedTitle == null || title == null || title.trim().isEmpty() || title.length() > 80 || title.contains("\n") || title.contains("\r")) throw new IllegalArgumentException("Invalid title");
-        JSONObject before = read(db, id);
+        JSONObject before = readGeneral(db, id);
         if (before == null || before.getInt("version") != expectedVersion) throw new RecordStore.StoreError("conflict");
         JSONObject snapshot = before.getJSONObject("snapshot");
         if (!"deepseek".equals(snapshot.getString("mode")) || !expectedTitle.equals(snapshot.getString("title"))) throw new RecordStore.StoreError("conflict");
@@ -52,13 +69,30 @@ final class ConversationStore {
         String title = snapshot.getString("title"); if (title.length() > 80) throw new IllegalArgumentException("Invalid conversation title");
         JSONObject before = read(db, id);
         if ((before == null ? 0 : before.getInt("version")) != expectedVersion) throw new RecordStore.StoreError("conflict");
+        if (before != null && taskId(db, id) != null) throw new RecordStore.StoreError("conflict");
         if (before != null && !mode.equals(before.getJSONObject("snapshot").getString("mode"))) throw new IllegalArgumentException("Conversation mode changed");
         ContentValues values = new ContentValues(); values.put("mode", mode); values.put("title", title); values.put("data", serialized);
         values.put("version", expectedVersion + 1); values.put("updated_at", System.currentTimeMillis());
         if (before == null) {
-            if (DatabaseUtils.longForQuery(db, "SELECT COUNT(*) FROM conversations WHERE mode = ?", new String[]{mode}) >= 20) throw new IllegalStateException("Conversation pilot limit");
+            if (DatabaseUtils.longForQuery(db, "SELECT COUNT(*) FROM conversations WHERE mode = ? AND task_id IS NULL", new String[]{mode}) >= 20) throw new IllegalStateException("Conversation pilot limit");
             values.put("id", id); db.insertOrThrow("conversations", null, values);
         } else if (db.update("conversations", values, "id = ? AND version = ?", new String[]{id, String.valueOf(expectedVersion)}) != 1) throw new RecordStore.StoreError("conflict");
         return read(db, id);
+    }
+    static JSONObject saveTask(SQLiteDatabase db, String taskId, String id, int expectedVersion, String serialized) throws Exception {
+        JSONObject task = TaskStore.read(db, taskId);
+        if (task == null || !task.isNull("archivedAt")) throw new RecordStore.StoreError("conflict");
+        if (id == null || !id.matches("[a-zA-Z0-9_-]{1,80}") || serialized == null || serialized.length() > 240000 || expectedVersion < 0) throw new IllegalArgumentException("Invalid conversation");
+        JSONObject snapshot = new JSONObject(serialized);
+        if (snapshot.getInt("schemaVersion") != 1 || !id.equals(snapshot.getString("id")) || !"deepseek".equals(snapshot.getString("mode")) || snapshot.getString("title").length() > 80) throw new IllegalArgumentException("Invalid conversation");
+        JSONObject before = read(db, id);
+        if ((before == null ? 0 : before.getInt("version")) != expectedVersion || (before != null && !taskId.equals(taskId(db, id)))) throw new RecordStore.StoreError("conflict");
+        ContentValues values = new ContentValues(); values.put("mode", "deepseek"); values.put("title", snapshot.getString("title")); values.put("data", serialized); values.put("version", expectedVersion + 1); values.put("updated_at", System.currentTimeMillis());
+        if (before == null) { values.put("id", id); values.put("task_id", taskId); db.insertOrThrow("conversations", null, values); }
+        else if (db.update("conversations", values, "id = ? AND version = ? AND task_id = ?", new String[]{id, String.valueOf(expectedVersion), taskId}) != 1) throw new RecordStore.StoreError("conflict");
+        return read(db, id);
+    }
+    static void detachTask(SQLiteDatabase db, String taskId) {
+        db.execSQL("UPDATE conversations SET task_id = NULL, version = version + 1 WHERE task_id = ?", new Object[]{taskId});
     }
 }

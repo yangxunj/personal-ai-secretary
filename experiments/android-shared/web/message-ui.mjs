@@ -53,7 +53,16 @@ function createConversationControls(listElement, inputElement, callbacks, closeD
     },
   };
 }
-function createTaskCards(element, onChange, onLifecycle) {
+function createTaskChatInput(element, callbacks) {
+  const root = createRoot(element);
+  return { render({ draft, busy, disabled }) {
+    flushSync(() => root.render(createElement(ChatTextInput, { id: 'task-chat-prompt', value: draft,
+      onDraftChange: callbacks.onDraftChange, onSend: callbacks.onSend, canSend: !disabled && !busy && !!draft.trim(),
+      disabled: disabled || busy, maxLength: 1000, rows: 1, placeholder: '讨论这个任务…',
+      className: 'w-full min-w-0 resize-none rounded-2xl border px-3.5 py-2.5 text-[15px] bg-transparent outline-none transition max-h-32' })));
+  } };
+}
+function createTaskCards(element, onChange, onLifecycle, onOpen) {
   const root = createRoot(element);
   const labels = { todo: '待办', doing: '进行中', blocked: '卡住了', done: '已完成', cancelled: '已取消' };
   return {
@@ -74,6 +83,7 @@ function createTaskCards(element, onChange, onLifecycle) {
             onChange: value => onChange(task.id, { owner: value ?? '' }) }),
           createElement(TaskStatusSelect, { status: task.status, disabled: archived || busy, t: text => text,
             onChange: value => onChange(task.id, { status: value }) }),
+          createElement('button', { type: 'button', className: 'secondary', disabled: busy, onClick: () => onOpen(task.id), 'aria-label': `查看详情：${task.title}` }, '详情'),
           createElement('button', { type: 'button', className: 'secondary', disabled: busy, onClick: () => onLifecycle(task.id, archived ? 'restore' : 'archive'), 'aria-label': `${archived ? '恢复' : '归档'}：${task.title}` }, archived ? '恢复' : '归档'),
           archived && createElement('button', { type: 'button', className: 'secondary task-delete', disabled: busy, onClick: () => onLifecycle(task.id, 'delete'), 'aria-label': `永久删除：${task.title}` }, '永久删除'))));
         return createElement('div', { key: group.status, className: 'shared-task-group' },
@@ -100,7 +110,7 @@ function createAppShell(element, content, onSelect, topicPlugins = []) {
   const more = createRoot(document.getElementById('pilot-more-navigation'));
   const topics = createRoot(document.getElementById('shared-topics-list'));
   const drawer = createRoot(document.getElementById('pilot-conversation-drawer'));
-  let drawerOpen = false, currentPath = '/chat';
+  let drawerOpen = false, currentPath = '/chat', taskTitle = '任务';
   function setDrawer(open) {
     drawerOpen = open;
     flushSync(() => drawer.render(createElement(ConversationDrawer, { open, onClose: closeDrawer, label: '对话列表', closeLabel: '关闭对话列表' },
@@ -109,11 +119,13 @@ function createAppShell(element, content, onSelect, topicPlugins = []) {
   }
   function closeDrawer() { setDrawer(false); }
   function renderHeader() {
-    const titles = { '/chat': '对话', '/tasks': '任务', '/collections': '栏目', '/more': '更多', '/settings': '设置', '/search': '搜索',
+    const titles = { '/chat': '对话', '/tasks': '任务', '/task-detail': taskTitle, '/task-chat': taskTitle, '/collections': '栏目', '/more': '更多', '/settings': '设置', '/search': '搜索',
       '/vault': '资料', '/finance': '财务', '/health': '健康', '/topics': '专题', '/files': '文件', '/pages': '页面', '/mail': '邮件' };
     for (const plugin of topicPlugins) titles[plugin.path] = plugin.title;
     flushSync(() => header.render(createElement(PageHeaderView, { title: titles[currentPath] || '栏目',
-      back: currentPath === '/chat' ? createElement('button', { type: 'button', 'aria-label': '对话列表', 'aria-expanded': drawerOpen,
+      back: currentPath === '/task-detail' || currentPath === '/task-chat' ? createElement('button', { type: 'button', 'aria-label': currentPath === '/task-chat' ? '返回任务详情' : '返回待办',
+        className: 'h-9 w-9 shrink-0 flex items-center justify-center rounded-lg muted', onClick: () => onSelect(currentPath === '/task-chat' ? '/task-detail' : '/tasks') },
+        createElement('svg', { viewBox: '0 0 24 24', width: 20, height: 20, fill: 'none', stroke: 'currentColor', strokeWidth: 1.8, strokeLinecap: 'round', strokeLinejoin: 'round', 'aria-hidden': true }, createElement('path', { d: 'm15 18-6-6 6-6' }))) : currentPath === '/chat' ? createElement('button', { type: 'button', 'aria-label': '对话列表', 'aria-expanded': drawerOpen,
         'aria-controls': 'pilot-conversation-drawer', className: 'h-9 w-9 shrink-0 flex items-center justify-center rounded-lg muted',
         onClick: () => setDrawer(!drawerOpen) }, createElement('svg', { viewBox: '0 0 24 24', className: 'h-5 w-5', fill: 'none', stroke: 'currentColor', strokeWidth: 1.8, strokeLinecap: 'round' }, createElement('path', { d: 'M4 6h16M4 12h16M4 18h10' }))) : undefined,
       actions: createElement('span', { className: 'contents lg:hidden' }, createElement(ThemeToggle),
@@ -131,8 +143,9 @@ function createAppShell(element, content, onSelect, topicPlugins = []) {
     currentPath = pathname;
     if (drawerOpen && pathname !== '/chat') closeDrawer();
     flushSync(() => {
-      bottom.render(createElement(BottomNavView, { pathname, t: text => text, renderItem: navItem }));
-      side.render(createElement(SideNavView, { pathname, t: text => text, renderItem: navItem,
+      const navigationPath = pathname === '/task-detail' || pathname === '/task-chat' ? '/tasks' : pathname;
+      bottom.render(createElement(BottomNavView, { pathname: navigationPath, t: text => text, renderItem: navItem }));
+      side.render(createElement(SideNavView, { pathname: navigationPath, t: text => text, renderItem: navItem,
         trailing: createElement('div', { className: 'shrink-0 border-t px-2 py-3 space-y-0.5', style: { borderColor: 'var(--border)' } },
           iconButton('搜索', SearchIcon, '/search'), iconButton('设置', SettingsIcon, '/settings'), createElement(ThemeToggle, { withLabel: true })) }));
       more.render(createElement(MoreNavigationView, { t: text => text,
@@ -143,6 +156,6 @@ function createAppShell(element, content, onSelect, topicPlugins = []) {
         createElement(TopicCardContent, { title: plugin.title, summary: plugin.summary, category: plugin.category }))));
     });
     renderHeader();
-  }, initDrawer() { setDrawer(false); }, closeDrawer };
+  }, setTaskTitle(title) { taskTitle = title || '任务'; }, initDrawer() { setDrawer(false); }, closeDrawer };
 }
-globalThis.PilotMessageUI = { createTranscript, createConversationControls, createTaskCards, createAppShell };
+globalThis.PilotMessageUI = { createTranscript, createConversationControls, createTaskChatInput, createTaskCards, createAppShell };

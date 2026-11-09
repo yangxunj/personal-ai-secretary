@@ -48,6 +48,8 @@ test('Android bundle contains the exact current shared source and its rules pass
     ['taskListViewSha256', 'tasks/list-view.ts'],
     ['ownersPolicySha256', 'tasks/owners-policy.ts'],
     ['taskLifecycleSha256', 'tasks/lifecycle.ts'],
+    ['taskChatScopeSha256', 'task-chat-scope.mjs'],
+    ['taskChatContractSha256', 'tasks/scoped-contract.ts'],
     ['conversationSha256', 'pi/conversation.mjs'],
     ['contextBudgetSha256', 'pi/context-budget.mjs'],
     ['webSearchSharedSha256', 'web-search/shared.mjs'],
@@ -374,6 +376,56 @@ test('offline task rehearsal and task receipt replay do not duplicate one tool w
   fixture.tasks.toolWrite('same:task', 'createTask', args); fixture.tasks.toolWrite('same:task', 'createTask', args);
   assert.equal(fixture.rows.length, 2);
   assert.throws(() => fixture.tasks.toolWrite('same:task', 'createTask', { title: '换内容' }), /mismatch/);
+});
+
+test('task chat writes only the scoped task, preserves original requirements and replays safely', () => {
+  const fixture = taskFixture();
+  const first = fixture.tasks.create({ title: 'first', detail: 'original requirements' });
+  const second = fixture.tasks.create({ title: 'second', detail: 'other requirements' });
+  assert.throws(() => fixture.tasks.updateScoped('bad', first.id, { detail: 'overwrite' }), /original task requirements/);
+  const updated = fixture.tasks.updateScoped('same', first.id, { id: second.id, status: 'done', result: 'complete', dueDate: '2026-12-25' });
+  assert.equal(updated.id, first.id); assert.equal(updated.dueDate, '2026-12-25');
+  assert.equal(first.detail, 'original requirements'); assert.equal(second.status, 'todo');
+  const version = first.version;
+  fixture.tasks.updateScoped('same', first.id, { id: second.id, status: 'done', result: 'complete', dueDate: '2026-12-25' });
+  assert.equal(first.version, version);
+  assert.throws(() => fixture.tasks.updateScoped('same', first.id, { status: 'doing' }), /receipt mismatch/);
+  first.archivedAt = 123;
+  assert.throws(() => fixture.tasks.readScoped(first.id), /已归档/);
+  assert.throws(() => fixture.tasks.updateScoped('new', first.id, { status: 'doing' }), /已归档/);
+});
+
+test('task chat only registers scoped business tools and sees fresh task context', async () => {
+  const fixture = taskFixture(), first = fixture.tasks.create({ title: 'current task', detail: 'original' });
+  const other = fixture.tasks.create({ title: 'another task' }); let step = 0, sourceToken;
+  const result = await core.runPilotAgent({ prompt: 'complete this task', taskScope: {
+    read: () => fixture.tasks.readScoped(first.id), update: (key, args) => fixture.tasks.updateScoped(key, first.id, args),
+  }, webRequest: async () => ({ results: [{ title: 'public source', url: 'https://example.com/a' }] }),
+  signal: new AbortController().signal, turnId: 'scoped', modelRequest: async body => {
+    const names = body.tools.map(tool => tool.function.name);
+    assert.ok(names.includes('getCurrentTask') && names.includes('updateCurrentTask'));
+    assert.ok(names.includes('webSearch') && names.includes('fetchWebPage'));
+    assert.ok(!names.includes('listTasks') && !names.includes('createTask') && !names.includes('describeCollection'));
+    assert.match(body.messages[0].content, /current task/); assert.doesNotMatch(body.messages[0].content, /another task/);
+    if (++step === 1) return { choices: [{ finish_reason: 'tool_calls', message: { content: null, tool_calls: [{ id: 'search', function: { name: 'webSearch', arguments: JSON.stringify({ query: 'public query', count: 1 }) } }] } }] };
+    if (step === 2) {
+      sourceToken = JSON.parse(body.messages.filter(message => message.role === 'tool').at(-1).content).results[0].citation.token;
+      return { choices: [{ finish_reason: 'tool_calls', message: { content: null, tool_calls: [{ id: 'save', function: { name: 'updateCurrentTask', arguments: JSON.stringify({ status: 'done', result: 'finished' }) } }] } }] };
+    }
+    return { choices: [{ finish_reason: 'stop', message: { content: `done [[cite:${sourceToken}]]` } }] };
+  } });
+  assert.match(result.reply, /https:\/\/example\.com\/a/); assert.equal(first.status, 'done'); assert.equal(first.detail, 'original'); assert.equal(other.status, 'todo');
+});
+
+test('task chat rejects a model request to overwrite the original task requirements', async () => {
+  const fixture = taskFixture(), first = fixture.tasks.create({ title: 'current', detail: 'original' }); let step = 0;
+  await core.runPilotAgent({ prompt: 'discuss', taskScope: {
+    read: () => fixture.tasks.readScoped(first.id), update: (key, args) => fixture.tasks.updateScoped(key, first.id, args),
+  }, signal: new AbortController().signal, turnId: 'invalid-scoped', modelRequest: async () => {
+    if (++step === 1) return { choices: [{ finish_reason: 'tool_calls', message: { content: null, tool_calls: [{ id: 'invalid', function: { name: 'updateCurrentTask', arguments: JSON.stringify({ detail: 'overwrite' }) } }] } }] };
+    return { choices: [{ finish_reason: 'stop', message: { content: 'not changed' } }] };
+  } });
+  assert.equal(first.detail, 'original'); assert.equal(first.version, 1); assert.equal(fixture.receipts.size, 0);
 });
 
 test('archive is separate from task status and deletion requires an archived record', () => {

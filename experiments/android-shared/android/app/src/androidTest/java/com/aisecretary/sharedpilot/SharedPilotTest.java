@@ -22,6 +22,31 @@ import java.util.UUID;
 /** Runs on Android; compiling this test is not a device-test pass. */
 @RunWith(AndroidJUnit4.class)
 public final class SharedPilotTest {
+    @Test public void taskConversationMigrationIsolationArchiveAndDetachment() throws Exception {
+        try (SQLiteDatabase db = SQLiteDatabase.create(null)) {
+            TaskStore.createTable(db);
+            db.execSQL("CREATE TABLE conversations (id TEXT PRIMARY KEY, mode TEXT NOT NULL, title TEXT NOT NULL, data TEXT NOT NULL, version INTEGER NOT NULL, updated_at INTEGER NOT NULL)");
+            JSONObject general = new JSONObject().put("schemaVersion", 1).put("id", "general").put("mode", "deepseek").put("title", "general").put("draft", "").put("turns", new JSONArray());
+            db.execSQL("INSERT INTO conversations VALUES (?,?,?,?,?,?)", new Object[]{"general", "deepseek", "general", general.toString(), 1, 100});
+            RecordStore.migrate(db, 6, 7);
+            JSONObject task = new JSONObject().put("title", "task").put("detail", "original").put("status", "todo").put("category", "其他").put("priority", 2).put("owner", JSONObject.NULL).put("dueDate", JSONObject.NULL).put("result", JSONObject.NULL);
+            String first = TaskStore.create(db, task.toString()).getString("id"), second = TaskStore.create(db, task.toString()).getString("id");
+            JSONObject snapshot = new JSONObject().put("schemaVersion", 1).put("id", "task-chat").put("mode", "deepseek").put("title", "task chat").put("draft", "keep draft").put("turns", new JSONArray());
+            ConversationStore.saveTask(db, first, "task-chat", 0, snapshot.toString());
+            assertEquals(1, ConversationStore.list(db, "deepseek").length()); assertNull(ConversationStore.readGeneral(db, "task-chat"));
+            assertEquals("keep draft", ConversationStore.readTask(db, first).getJSONObject("snapshot").getString("draft"));
+            assertNull(ConversationStore.readTask(db, second));
+            try { ConversationStore.saveTask(db, second, "task-chat", 1, snapshot.toString()); fail("Cross-task write accepted"); } catch (RecordStore.StoreError expected) { assertEquals("conflict", expected.code); }
+            try { ConversationStore.save(db, "task-chat", 1, snapshot.toString()); fail("General write to task chat accepted"); } catch (RecordStore.StoreError expected) { assertEquals("conflict", expected.code); }
+            TaskStore.setArchived(db, first, 1, true);
+            assertNotNull(ConversationStore.readTask(db, first));
+            try { ConversationStore.saveTask(db, first, "task-chat", 1, snapshot.toString()); fail("Archived chat write accepted"); } catch (RecordStore.StoreError expected) { assertEquals("conflict", expected.code); }
+            TaskStore.setArchived(db, first, 2, false); TaskStore.setArchived(db, first, 3, true);
+            db.beginTransaction(); try { TaskStore.deleteArchived(db, first, 4); ConversationStore.detachTask(db, first); db.setTransactionSuccessful(); } finally { db.endTransaction(); }
+            assertEquals("keep draft", ConversationStore.readGeneral(db, "task-chat").getJSONObject("snapshot").getString("draft"));
+            assertEquals(2, ConversationStore.list(db, "deepseek").length()); assertNotNull(TaskStore.read(db, second));
+        }
+    }
     @Test public void taskArchiveMigrationAndDeletePreserveExistingData() throws Exception {
         try (SQLiteDatabase db = SQLiteDatabase.create(null)) {
             db.execSQL("CREATE TABLE tasks (id TEXT PRIMARY KEY, data TEXT NOT NULL, title TEXT NOT NULL, status TEXT NOT NULL, category TEXT NOT NULL, priority INTEGER NOT NULL, due_date TEXT, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, version INTEGER NOT NULL DEFAULT 1)");

@@ -13,6 +13,8 @@ export const sharedEntries = [
   'src/lib/tasks/list-view.ts',
   'src/lib/tasks/owners-policy.ts',
   'src/lib/tasks/lifecycle.ts',
+  'src/lib/tasks/scoped-contract.ts',
+  'src/lib/task-chat-scope.mjs',
   'src/lib/pi/conversation.mjs',
   'src/lib/pi/context-budget.mjs',
   'src/lib/web-search/shared.mjs',

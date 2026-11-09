@@ -32,7 +32,20 @@ const { default: TaskCard } = await import('../../src/components/tasks/shared/Ta
 const { default: TaskStatusSelect } = await import('../../src/components/tasks/shared/TaskStatusSelect.tsx');
 const { default: TaskOwnerSelect } = await import('../../src/components/tasks/shared/TaskOwnerSelect.tsx');
 const { default: BottomNavView } = await import('../../src/components/navigation/shared/BottomNavView.tsx');
+const { scopedTaskUpdate, scopedTaskUpdateWithId } = await import('../../src/lib/tasks/scoped-contract.ts');
 const now = new Date(2026, 10, 4, 12), t = value => value;
+
+test('web and Android task chats share field rules while binding the task ID differently', () => {
+  const patch = { status: 'doing', title: '  Follow up  ', dueDate: '', owner: '' };
+  assert.deepEqual(scopedTaskUpdate.parse(patch), { ...patch, title: 'Follow up' });
+  assert.deepEqual(scopedTaskUpdateWithId.parse({ ...patch, id: 'task-1' }), { ...patch, title: 'Follow up', id: 'task-1' });
+  for (const bad of [{ detail: 'overwrite' }, { status: 'invalid' }, { priority: 4 }]) {
+    assert.equal(scopedTaskUpdate.safeParse(bad).success, false);
+    assert.equal(scopedTaskUpdateWithId.safeParse({ id: 'task-1', ...bad }).success, false);
+  }
+  assert.equal(scopedTaskUpdate.safeParse({ id: 'other' }).success, false);
+  assert.equal(scopedTaskUpdateWithId.safeParse({}).success, false);
+});
 
 test('shared conversation date buckets preserve incoming order and existing local-day semantics', () => {
   const rows = [0, 1, 4, 15, 40].map((days, index) => ({ id: String(index), title: 'row-' + index, updatedAt: new Date(2026, 10, 4 - days, 10).toISOString() }));

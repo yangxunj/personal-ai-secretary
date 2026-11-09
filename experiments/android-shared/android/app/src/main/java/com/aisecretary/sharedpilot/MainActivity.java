@@ -103,6 +103,15 @@ public final class MainActivity extends Activity {
             try { JSONObject result = store.readConversation(id); return new JSONObject().put("ok", true).put("data", result == null ? JSONObject.NULL : result).toString(); }
             catch (Exception error) { return failure(); }
         }
+        @JavascriptInterface public String readTaskConversation(String taskId) {
+            try { JSONObject row = store.readTaskConversation(taskId); return new JSONObject().put("ok", true).put("data", row == null ? JSONObject.NULL : row).toString(); }
+            catch (Exception error) { return failure(); }
+        }
+        @JavascriptInterface public String saveTaskConversation(String taskId, String id, int version, String data) {
+            try { return new JSONObject().put("ok", true).put("data", store.saveTaskConversation(taskId, id, version, data)).toString(); }
+            catch (RecordStore.StoreError error) { return "{\"ok\":false,\"code\":\"conflict\"}"; }
+            catch (Exception error) { return failure(); }
+        }
         @JavascriptInterface public String deleteConversation(String id, String mode, int version) {
             try { store.deleteConversation(id, mode, version); getSharedPreferences("title-attempts", MODE_PRIVATE).edit().remove(id).apply(); return new JSONObject().put("ok", true).toString(); }
             catch (Exception error) { return failure(); }
