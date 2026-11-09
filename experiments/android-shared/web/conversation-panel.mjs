@@ -107,13 +107,21 @@ export function attachConversationPanel(document, bridge, nonce, messageUi, onSe
         renderControls();
       } catch { /* The current conversation remains usable; retry on next open. */ }
     },
-    begin(id, text) {
+    begin(id, text, preserveDraft = false) {
       if (!healthy || !current) throw new Error('会话存储不可用，请重新打开应用。');
       const history = conversationHistory(current.snapshot);
-      save(beginConversationTurn(current.snapshot, id, text)); render(); return history;
+      const draftBefore = current.snapshot.draft;
+      const next = beginConversationTurn(current.snapshot, id, text);
+      if (preserveDraft) next.draft = draftBefore;
+      save(next); render(); return history;
     },
     record(message) { save(recordConversationMessage(current.snapshot, message)); },
-    finish(reply, complete) { save(finishConversationTurn(current.snapshot, reply, complete)); render(); },
+    finish(reply, complete, preserveDraft = false) {
+      const draftBefore = current.snapshot.draft;
+      const next = finishConversationTurn(current.snapshot, reply, complete);
+      if (preserveDraft) next.draft = draftBefore;
+      save(next); render();
+    },
     titleCandidate() { return healthy && current ? titleCandidate(current.snapshot) : null; },
     applyTitle(candidate, title) {
       const row = decode(bridge.readConversation(candidate.id));

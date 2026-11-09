@@ -29,6 +29,7 @@ export const sharedUiEntries = [
   'src/components/chat/shared/ConversationDrawer.tsx',
   'src/components/chat/shared/ChatTextInput.tsx',
   'src/components/chat/shared/ChatBubble.tsx',
+  'src/components/chat/VoiceConversation.tsx',
   'src/components/tasks/shared/TaskCard.tsx',
   'src/components/topics/shared/TopicCardContent.tsx',
   'src/components/tasks/shared/TaskStatusSelect.tsx',

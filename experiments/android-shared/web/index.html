@@ -96,6 +96,7 @@
       <ol id="ai-events" aria-label="工具执行结果"></ol>
       <p id="ai-output" role="status" aria-live="polite"></p>
       <form id="ai-form">
+        <div id="shared-voice"></div>
         <p id="demo-guide" hidden>固定演练：创建一条“安卓待办演练”，再查询确认。无需密钥，不产生 API 费用；这不是自然语言 AI 测试。</p>
         <div class="pilot-composer"><label for="ai-prompt" class="pilot-input-label">交代一件事</label>
           <div id="shared-composer" hidden></div>
@@ -123,7 +124,9 @@
       <p>使用你自己的 DeepSeek API Key；本轮请求、对话历史及工具查询结果会发送给服务商，并按其规则计费。</p>
       <p>需要实时信息时，对话可使用 DeepSeek 联网搜索及公开网页读取；搜索查询会发送给服务商，可能产生额外费用。</p>
       <p>同一对话可以连续追问，重开后保留；切换对话可继续。中断不自动重发，请先查询已保存结果。每个对话最多 40 轮，上下文过长时请新建；暂不自动压缩，不支持附件、专题或同步。</p>
-      <button class="secondary" type="button" id="model-key">设置 DeepSeek 密钥</button><p id="key-state"></p>
+        <button class="secondary" type="button" id="model-key">设置 DeepSeek 密钥</button><p id="key-state"></p>
+        <p>语音对话会将识别出的录音及回答文字发送阿里云，可能产生费用。</p>
+        <button class="secondary" type="button" id="voice-key">设置语音服务</button><p id="voice-key-state"></p>
     </section>
   </main>
   <footer data-screen="/more" hidden><p>本版尚无电脑数据导入、附件或跨设备同步；请只填写测试内容。卸载会删除本地试验记录。</p><details><summary>检查规则是否一致</summary><p>下方检查不会保存记录。</p><button class="secondary" id="verify" type="button">运行规则检查</button><pre id="checks" aria-live="polite"></pre></details></footer>

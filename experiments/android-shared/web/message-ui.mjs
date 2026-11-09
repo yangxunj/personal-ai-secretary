@@ -6,6 +6,7 @@ import ConversationListView from '../../../src/components/chat/shared/Conversati
 import ConversationDrawer from '../../../src/components/chat/shared/ConversationDrawer.tsx';
 import ChatTextInput from '../../../src/components/chat/shared/ChatTextInput.tsx';
 import ChatBubble from '../../../src/components/chat/shared/ChatBubble.tsx';
+import VoiceConversation from '../../../src/components/chat/VoiceConversation.tsx';
 import TaskCard from '../../../src/components/tasks/shared/TaskCard.tsx';
 import TaskStatusSelect from '../../../src/components/tasks/shared/TaskStatusSelect.tsx';
 import TaskOwnerSelect from '../../../src/components/tasks/shared/TaskOwnerSelect.tsx';
@@ -158,4 +159,13 @@ function createAppShell(element, content, onSelect, topicPlugins = []) {
     renderHeader();
   }, setTaskTitle(title) { taskTitle = title || '任务'; }, initDrawer() { setDrawer(false); }, closeDrawer };
 }
-globalThis.PilotMessageUI = { createTranscript, createConversationControls, createTaskChatInput, createTaskCards, createAppShell };
+function createVoiceConversation(element, callbacks, services) {
+  const root = createRoot(element);
+  return { render(active, disabled) {
+    flushSync(() => root.render(createElement(VoiceConversation, {
+      active, disabled, services, workletUrl: '/assets/voice-capture.js',
+      onRunningChange: callbacks.onRunningChange, onSubmit: callbacks.onSubmit,
+    })));
+  } };
+}
+globalThis.PilotMessageUI = { createTranscript, createConversationControls, createTaskChatInput, createTaskCards, createAppShell, createVoiceConversation };

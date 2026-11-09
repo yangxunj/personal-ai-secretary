@@ -17,7 +17,7 @@ const directory = fileURLToPath(new URL('.', import.meta.url));
 const root = path.resolve(directory, '../..');
 const sharedBoundary = checkSharedCore(root);
 const messageSource = 'src/components/MessageBody.tsx';
-const sharedUiBoundary = checkSharedCore(root, sharedUiEntries, ['react', 'react/jsx-runtime', 'react-markdown', 'remark-gfm']);
+const sharedUiBoundary = checkSharedCore(root, sharedUiEntries, ['react', 'react/jsx-runtime', 'react-markdown', 'remark-gfm', 'unified', 'remark-parse']);
 const output = path.join(directory, 'web-dist');
 const schema = 'src/lib/collections/schema.ts';
 const service = 'src/lib/collections/record-write.ts';
@@ -62,6 +62,7 @@ await writeFile(path.join(output, 'index.html'), (await readFile(path.join(direc
   .replace('<!-- TOPIC_PLUGIN_STYLES -->', pluginStyles.map(name => `<link rel="stylesheet" href="${name}">`).join('\n  ')));
 await copyFile(path.join(directory, 'web/pilot.css'), path.join(output, 'pilot.css'));
 await copyFile(path.join(root, 'src/styles/surface-theme.css'), path.join(output, 'surface-theme.css'));
+await copyFile(path.join(root, 'public/worklets/voice-capture.js'), path.join(output, 'voice-capture.js'));
 const stylesSource = path.join(directory, 'web/shared-message.css');
 const styles = await postcss([tailwindcss({ base: root, optimize: false })]).process(await readFile(stylesSource, 'utf8'), { from: stylesSource, to: path.join(output, 'shared-message.css'), map: false });
 await writeFile(path.join(output, 'shared-message.css'), styles.css);
@@ -75,6 +76,7 @@ const manifest = {
   messageBundleSha256: hash(await readFile(path.join(output, 'messages.js'))),
   messageStylesSha256: hash(await readFile(path.join(output, 'shared-message.css'))),
   surfaceThemeSha256: hash(await readFile(path.join(root, 'src/styles/surface-theme.css'))),
+  voiceWorkletSha256: hash(await readFile(path.join(root, 'public/worklets/voice-capture.js'))),
   pilot: config.version, sharedSource: schema,
   sharedSourceSha256: hash(await readFile(path.join(root, schema))),
   sharedService: service, sharedServiceSha256: hash(await readFile(path.join(root, service))),
@@ -108,7 +110,7 @@ await writeFile(path.join(output, 'build-manifest.json'), JSON.stringify(manifes
 const assets = path.join(directory, 'android/app/src/main/assets');
 await mkdir(assets, { recursive: true });
 await writeFile(path.join(assets, 'bundled-js-licenses.txt'), licenses.text);
-for (const file of ['index.html', 'pilot.css', 'pilot.js', 'messages.js', 'shared-message.css', 'surface-theme.css', 'build-manifest.json', ...pluginStyles]) await copyFile(path.join(output, file), path.join(assets, file));
+for (const file of ['index.html', 'pilot.css', 'pilot.js', 'messages.js', 'shared-message.css', 'surface-theme.css', 'voice-capture.js', 'build-manifest.json', ...pluginStyles]) await copyFile(path.join(output, file), path.join(assets, file));
 // Preserve notices for code shipped inside the APK (build tools are not shipped).
 await copyFile(path.join(root, 'node_modules/zod/LICENSE'), path.join(assets, 'zod-license.txt'));
 await copyFile(path.join(root, 'node_modules/typescript/LICENSE.txt'), path.join(assets, 'apache-2.0.txt'));

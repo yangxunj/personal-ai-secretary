@@ -202,6 +202,7 @@ export function startPage(document, host) {
     if (target === '/task-detail') try { if (!selectedTaskId || !renderTaskDetail()) target = '/tasks'; } catch { target = '/tasks'; }
     if (target === '/task-chat' && !selectedTaskId) target = '/tasks';
     if (target === '/chat') ai.refreshList();
+    ai.setScreenActive(target === '/chat');
     for (const section of document.querySelectorAll('[data-screen]')) section.hidden = section.dataset.screen !== target;
     navigation.render(target);
     host.scrollTo(0, 0);

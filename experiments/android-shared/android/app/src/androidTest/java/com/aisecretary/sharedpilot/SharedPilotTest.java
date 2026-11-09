@@ -36,6 +36,17 @@ public final class SharedPilotTest {
         assertFalse(MainActivity.allowsMicrophone(Uri.parse("https://appassets.androidplatform.net"), new String[]{video}));
         assertFalse(MainActivity.allowsMicrophone(null, new String[]{audio}));
     }
+    @Test public void voiceAudioValidationAndDownloadOrigin() throws Exception {
+        byte[] wav = new byte[8044]; java.nio.ByteBuffer b = java.nio.ByteBuffer.wrap(wav).order(java.nio.ByteOrder.LITTLE_ENDIAN);
+        b.put("RIFF".getBytes("US-ASCII")).putInt(wav.length - 8).put("WAVEfmt ".getBytes("US-ASCII"));
+        b.putInt(16).putShort((short) 1).putShort((short) 1).putInt(16000).putInt(32000).putShort((short) 2).putShort((short) 16);
+        b.put("data".getBytes("US-ASCII")).putInt(wav.length - 44);
+        assertTrue(VoiceClient.validWav(wav)); wav[24] = 0; assertFalse(VoiceClient.validWav(wav));
+        assertEquals("https", VoiceClient.trustedAudioUrl("http://dashscope-result-x.oss-cn-x.aliyuncs.com/a?signature=x").getProtocol());
+        for (String url : new String[]{"https://example.com/a", "https://dashscope-result-x.oss-cn-x.aliyuncs.com.evil.com/a", "https://user@dashscope-result-x.oss-cn-x.aliyuncs.com/a", "https://dashscope-result-x.oss-cn-x.aliyuncs.com:443/a"}) {
+            try { VoiceClient.trustedAudioUrl(url); fail("untrusted URL accepted"); } catch (IllegalArgumentException expected) { }
+        }
+    }
     @Test public void taskConversationMigrationIsolationArchiveAndDetachment() throws Exception {
         try (SQLiteDatabase db = SQLiteDatabase.create(null)) {
             TaskStore.createTable(db);

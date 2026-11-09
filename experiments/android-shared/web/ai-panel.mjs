@@ -1,6 +1,7 @@
 import { runPilotAgent, demoModelRequest } from './pi-runtime.mjs';
 import { attachConversationPanel } from './conversation-panel.mjs';
 import { generateTitle, titleCandidate } from './title-work.mjs';
+import { createVoiceServices } from './voice-services.mjs';
 
 const nonce = () => Array.from(crypto.getRandomValues(new Uint8Array(12)), byte => byte.toString(16).padStart(2, '0')).join('');
 
@@ -12,12 +13,25 @@ export function attachAiPanel(document, host, records, definition, refresh, task
   const cancel = document.getElementById('ai-cancel');
   const bridge = host.SecretaryStorage;
   const pending = new Map();
-  let active;
+  let active, voiceRunning = false, screenActive = true;
   const titleQueue = [], titleQueued = new Set();
   let titleActive;
   const conversations = attachConversationPanel(document, bridge, nonce, host.PilotMessageUI, () => form.requestSubmit(send), closeDrawer);
   const mode = () => document.querySelector('input[name="ai-mode"]:checked').value;
-  const settingsChanged = () => { document.getElementById('key-state').textContent = bridge.hasApiKey?.() ? '已保存密钥；是否有效需实际请求确认。' : '尚未配置密钥。'; };
+  const settingsChanged = () => { document.getElementById('key-state').textContent = bridge.hasApiKey?.() ? '已保存密钥；是否有效需实际请求确认。' : '尚未配置密钥。'; renderVoice(); };
+  const voiceSettingsChanged = () => {
+    document.getElementById('voice-key-state').textContent = bridge.hasVoiceKey?.() ? '已保存语音密钥；是否有效需实际请求确认。' : '尚未配置语音密钥。';
+    renderVoice();
+  };
+  const voiceServices = createVoiceServices(host, bridge, voiceSettingsChanged);
+  const voice = host.PilotMessageUI.createVoiceConversation(document.getElementById('shared-voice'), {
+    onRunningChange(value) {
+      voiceRunning = value;
+      conversations.busy(!!active || value);
+    },
+    onSubmit: text => execute(text, true),
+  }, voiceServices);
+  function renderVoice() { voice.render(screenActive && mode() === 'deepseek', !!active || !bridge.hasApiKey?.() || !bridge.hasVoiceKey?.()); }
   host.SecretaryAI = {
     receive(id, response) {
       const request = pending.get(id);
@@ -82,21 +96,29 @@ export function attachAiPanel(document, host, records, definition, refresh, task
     send.setAttribute('aria-label', real ? '发送' : '运行离线演练');
     settingsChanged();
     conversations.load(real ? 'deepseek' : 'demo');
+    renderVoice();
   }
   for (const radio of document.querySelectorAll('input[name="ai-mode"]')) radio.addEventListener('change', showMode);
   document.getElementById('model-key').addEventListener('click', () => bridge.openModelSettings());
+  document.getElementById('voice-key').addEventListener('click', () => bridge.openVoiceSettings());
   cancel.addEventListener('click', () => active?.abort());
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) { active?.abort(); titleActive?.abort(); for (const item of titleQueue.splice(0)) titleQueued.delete(item.id); }
   });
   form.addEventListener('submit', async event => {
-    event.preventDefault(); if (active) return;
+    event.preventDefault(); if (active || voiceRunning) return;
     const real = mode() === 'deepseek';
     const prompt = real ? conversations.draft.trim() : '创建一条固定的离线演练待办。';
-    if (real && !bridge.hasApiKey?.()) { output.textContent = '请先设置你自己的 DeepSeek 密钥。'; return; }
-    if (!prompt) { output.textContent = '请填写请求。'; return; }
-    if (typeof structuredClone !== 'function') { output.textContent = '当前 WebView 版本过旧，请先更新 Android System WebView。'; return; }
+    await execute(prompt, false);
+  });
+  async function execute(prompt, fromVoice) {
+    if (active || (fromVoice && !voiceRunning)) throw new Error('另一段对话正在处理。');
+    const real = mode() === 'deepseek';
+    if (real && !bridge.hasApiKey?.()) { output.textContent = '请先设置你自己的 DeepSeek 密钥。'; if (fromVoice) throw new Error(output.textContent); return; }
+    if (!prompt) { output.textContent = '请填写请求。'; if (fromVoice) throw new Error(output.textContent); return; }
+    if (typeof structuredClone !== 'function') { output.textContent = '当前 WebView 版本过旧，请先更新 Android System WebView。'; if (fromVoice) throw new Error(output.textContent); return; }
     active = new AbortController();
+    renderVoice();
     try { setTasksBusy(true); } catch { /* The task view must not prevent chat from starting. */ }
     conversations.busy(true);
     send.disabled = true; cancel.hidden = false;
@@ -108,7 +130,7 @@ export function attachAiPanel(document, host, records, definition, refresh, task
     let started = false;
     try {
       const turnId = nonce();
-      const history = conversations.begin(turnId, prompt); started = true;
+      const history = conversations.begin(turnId, prompt, fromVoice); started = true;
       const result = await runPilotAgent({ prompt, records, definition, tasks, history,
         modelRequest: real ? nativeRequest : demoModelRequest('tasks'), webRequest: real ? nativeWebRequest : undefined, signal: active.signal, turnId,
         onEvent(event) {
@@ -127,26 +149,31 @@ export function attachAiPanel(document, host, records, definition, refresh, task
         },
       });
       events.replaceChildren(); output.textContent = '';
-      conversations.finish(result.reply, true); started = false;
+      conversations.finish(result.reply, true, fromVoice); started = false;
       if (real) scheduleTitle(conversations.titleCandidate());
+      return result.reply;
     } catch (error) {
       events.replaceChildren();
-      if (started) try { conversations.finish('本轮未完整结束。', false); } catch { conversations.fail(); }
+      if (started) try { conversations.finish('本轮未完整结束。', false, fromVoice); } catch { conversations.fail(); }
       output.textContent = (active.signal.aborted ? '本轮已取消。' : error.message || '本轮未完成。') + ' 已保存的工具结果保留，请先查看待办和书单；请求草稿仍保留。';
+      if (fromVoice) throw error;
     } finally {
       try { refresh(); } catch {}
       active = undefined; send.disabled = !conversations.healthy; cancel.hidden = true;
+      renderVoice();
       try { setTasksBusy(false); } catch { /* Task controls will refresh when the panel is reopened. */ }
-      conversations.busy(false);
+      conversations.busy(voiceRunning);
       document.getElementById('model-key').disabled = false;
       for (const radio of document.querySelectorAll('input[name="ai-mode"]')) radio.disabled = false;
     }
-  });
+  }
   showMode();
+  voiceSettingsChanged();
   return {
     beginTask(controller) {
-      if (active) return false;
+      if (active || voiceRunning) return false;
       active = controller;
+      renderVoice();
       try { setTasksBusy(true); } catch {}
       conversations.busy(true); send.disabled = true;
       document.getElementById('model-key').disabled = true;
@@ -156,6 +183,7 @@ export function attachAiPanel(document, host, records, definition, refresh, task
     endTask(controller) {
       if (active !== controller) return;
       active = undefined;
+      renderVoice();
       try { refresh(); setTasksBusy(false); } catch { try { setTasksBusy(false); } catch {} }
       conversations.busy(false);
       document.getElementById('model-key').disabled = false;
@@ -164,5 +192,6 @@ export function attachAiPanel(document, host, records, definition, refresh, task
     request: nativeRequest,
     webRequest: nativeWebRequest,
     refreshList: () => conversations.refreshList(),
+    setScreenActive(value) { screenActive = value; renderVoice(); },
   };
 }

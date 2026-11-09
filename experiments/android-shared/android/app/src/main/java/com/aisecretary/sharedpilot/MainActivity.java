@@ -28,12 +28,21 @@ public final class MainActivity extends Activity {
     private RecordStore store;
     private DeepSeekClient modelClient;
     private DeepSeekClient titleClient;
+    private VoiceClient voiceClient;
     private TopicNativeRegistry topicPlugins;
 
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
         store = new RecordStore(this);
         webView = new WebView(this);
+        voiceClient = new VoiceClient(this, new VoiceClient.Callback() {
+            @Override public void complete(String id, String json) {
+                runScript("window.SecretaryVoice && window.SecretaryVoice.receive(" + quote(id) + "," + quote(json) + ")");
+            }
+            @Override public void settingsChanged() {
+                runScript("window.SecretaryVoice && window.SecretaryVoice.settingsChanged()");
+            }
+        });
         topicPlugins = new TopicNativeRegistry(this, (pluginId, id, response) -> runScript("window.SecretaryTopics && window.SecretaryTopics.receive(" + quote(pluginId) + "," + quote(id) + "," + quote(response) + ")"));
         modelClient = new DeepSeekClient(this, new DeepSeekClient.Callback() {
             @Override public void complete(String id, String json) {
@@ -235,6 +244,10 @@ public final class MainActivity extends Activity {
             });
         }
         @JavascriptInterface public void cancelModelRequest() { modelClient.cancel(); }
+        @JavascriptInterface public boolean hasVoiceKey() { return voiceClient.hasKey(); }
+        @JavascriptInterface public void openVoiceSettings() { voiceClient.showSettings(); }
+        @JavascriptInterface public void beginVoiceRequest(String id, String kind, String payload) { voiceClient.start(id, kind, payload); }
+        @JavascriptInterface public void cancelVoiceRequest(String id) { voiceClient.cancel(id); }
         @JavascriptInterface public void topicRequest(String pluginId, String id, String query) { topicPlugins.request(pluginId, id, query); }
         @JavascriptInterface public String topicReadCache(String pluginId) { return topicPlugins.readCache(pluginId); }
         @JavascriptInterface public boolean topicWriteCache(String pluginId, String value) { return topicPlugins.writeCache(pluginId, value); }
@@ -265,11 +278,12 @@ public final class MainActivity extends Activity {
         private String failure() { return "{\"ok\":false,\"error\":\"本地存储操作失败，请重试；已填写内容仍保留。\"}"; }
     }
 
-    @Override protected void onStart() { super.onStart(); foreground = true; if (modelClient != null) modelClient.foreground(true); if (titleClient != null) titleClient.foreground(true); }
-    @Override protected void onStop() { foreground = false; cancelMicrophonePermission(); if (modelClient != null) modelClient.foreground(false); if (titleClient != null) titleClient.foreground(false); super.onStop(); }
+    @Override protected void onStart() { super.onStart(); foreground = true; if (modelClient != null) modelClient.foreground(true); if (titleClient != null) titleClient.foreground(true); if (voiceClient != null) voiceClient.foreground(true); }
+    @Override protected void onStop() { foreground = false; cancelMicrophonePermission(); if (modelClient != null) modelClient.foreground(false); if (titleClient != null) titleClient.foreground(false); if (voiceClient != null) voiceClient.foreground(false); super.onStop(); }
     @Override protected void onDestroy() {
         if (modelClient != null) modelClient.close();
         if (titleClient != null) titleClient.close();
+        if (voiceClient != null) voiceClient.close();
         if (topicPlugins != null) topicPlugins.close();
         if (webView != null) {
             webView.removeJavascriptInterface("SecretaryStorage");
