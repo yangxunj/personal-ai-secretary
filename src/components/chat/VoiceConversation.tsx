@@ -6,15 +6,18 @@ import { beginVoiceSession, endVoiceSession, voiceSessionOwner } from '@/lib/voi
 import { encodeVoiceWav, VOICE_SAMPLE_RATE } from '@/lib/voice-audio';
 import { TurnDetector } from '@/lib/turn-detector';
 import { speechText, speechChunks } from '@/lib/speech-text';
+import { webVoiceServices, type VoiceServices } from '@/lib/voice-services';
 import { hasSpeechRecording, setSpeechRecording, stopSpeechPlayback } from './SpeechButton';
 
 type Phase = 'off' | 'requesting' | 'listening' | 'recording' | 'transcribing' | 'waiting' | 'speaking';
 
-export default function VoiceConversation({ active, disabled, onRunningChange, onSubmit }: {
+export default function VoiceConversation({ active, disabled, onRunningChange, onSubmit, services, workletUrl = '/worklets/voice-capture.js' }: {
   active: boolean;
   disabled: boolean;
   onRunningChange: (running: boolean) => void;
   onSubmit: (text: string, signal: AbortSignal) => Promise<string>;
+  services?: VoiceServices;
+  workletUrl?: string;
 }) {
   const t = useT();
   const [phase, setPhase] = useState<Phase>('off');
@@ -92,32 +95,18 @@ export default function VoiceConversation({ active, disabled, onRunningChange, o
       const source = offline.createBufferSource(); source.buffer = buffer; source.connect(offline.destination); source.start();
       const rendered = await offline.startRendering();
       if (!current(attempt)) return;
-      const response = await fetch('/api/asr', {
-        method: 'POST', headers: { 'Content-Type': 'audio/wav' }, body: encodeVoiceWav(rendered.getChannelData(0)),
-        signal: AbortSignal.any([signal, AbortSignal.timeout(55_000)]),
-      });
-      const data = await response.json().catch(() => null);
+      const voiceServices = services ?? webVoiceServices(t);
+      const text = await voiceServices.transcribe(encodeVoiceWav(rendered.getChannelData(0)), signal);
       if (!current(attempt)) return;
       // 无声/未识别时不提交 Agent，也不重发上一句话。
-      if (response.status === 422) { listen(attempt); return; }
-      if (!response.ok) throw new Error(typeof data?.error === 'string' ? data.error : t('语音识别失败，请重试'));
-      if (typeof data?.text !== 'string') throw new Error(t('语音识别失败，请重试'));
-      if (!data.text.trim()) { listen(attempt); return; }
-      setHeard(data.text.trim()); change('waiting');
-      const reply = await callbacks.current.onSubmit(data.text.trim(), signal);
+      if (!text?.trim()) { listen(attempt); return; }
+      setHeard(text.trim()); change('waiting');
+      const reply = await callbacks.current.onSubmit(text.trim(), signal);
       if (!current(attempt)) return;
       const parts = speechChunks(speechText(reply) || t('回答已显示在聊天中'));
       change('speaking');
       for (const text of parts) {
-        const speech = await fetch('/api/tts', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text }),
-          signal: AbortSignal.any([signal, AbortSignal.timeout(70_000)]),
-        });
-        if (!speech.ok || !speech.headers.get('content-type')?.startsWith('audio/')) {
-          const problem = await speech.json().catch(() => null);
-          throw new Error(typeof problem?.error === 'string' ? problem.error : t('语音合成失败，请重试'));
-        }
-        const bytes = await speech.arrayBuffer();
+        const bytes = await voiceServices.synthesize(text, signal);
         if (!current(attempt)) return;
         if (!bytes.byteLength || bytes.byteLength > 20 * 1024 * 1024) throw new Error(t('语音合成失败，请重试'));
         const decoded = await audio.decodeAudioData(bytes);
@@ -158,7 +147,7 @@ export default function VoiceConversation({ active, disabled, onRunningChange, o
       const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, channelCount: 1 } });
       if (!current(attempt)) { stream.getTracks().forEach(track => track.stop()); return; }
       media.current = stream;
-      await audio.audioWorklet.addModule('/worklets/voice-capture.js');
+      await audio.audioWorklet.addModule(workletUrl);
       if (!current(attempt)) return;
       const worklet = new AudioWorkletNode(audio, 'voice-capture', { outputChannelCount: [1] });
       capture.current = worklet; input.current = audio.createMediaStreamSource(stream);
