@@ -9,6 +9,8 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import static org.junit.Assert.*;
 import android.webkit.WebView;
+import android.webkit.PermissionRequest;
+import android.net.Uri;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import org.json.JSONArray;
@@ -22,6 +24,18 @@ import java.util.UUID;
 /** Runs on Android; compiling this test is not a device-test pass. */
 @RunWith(AndroidJUnit4.class)
 public final class SharedPilotTest {
+    @Test public void microphonePermissionOnlyForBundledOriginAndAudio() {
+        String audio = PermissionRequest.RESOURCE_AUDIO_CAPTURE;
+        String video = PermissionRequest.RESOURCE_VIDEO_CAPTURE;
+        assertTrue(MainActivity.allowsMicrophone(Uri.parse("https://appassets.androidplatform.net"), new String[]{audio}));
+        assertFalse(MainActivity.allowsMicrophone(Uri.parse("https://evil.example"), new String[]{audio}));
+        assertFalse(MainActivity.allowsMicrophone(Uri.parse("http://appassets.androidplatform.net"), new String[]{audio}));
+        assertFalse(MainActivity.allowsMicrophone(Uri.parse("https://appassets.androidplatform.net:444"), new String[]{audio}));
+        assertFalse(MainActivity.allowsMicrophone(Uri.parse("https://user@appassets.androidplatform.net"), new String[]{audio}));
+        assertFalse(MainActivity.allowsMicrophone(Uri.parse("https://appassets.androidplatform.net"), new String[]{audio, video}));
+        assertFalse(MainActivity.allowsMicrophone(Uri.parse("https://appassets.androidplatform.net"), new String[]{video}));
+        assertFalse(MainActivity.allowsMicrophone(null, new String[]{audio}));
+    }
     @Test public void taskConversationMigrationIsolationArchiveAndDetachment() throws Exception {
         try (SQLiteDatabase db = SQLiteDatabase.create(null)) {
             TaskStore.createTable(db);

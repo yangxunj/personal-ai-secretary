@@ -1,9 +1,13 @@
 package com.aisecretary.sharedpilot;
 
 import android.app.Activity;
+import android.Manifest;
+import android.content.pm.PackageManager;
 import android.os.Bundle;
 import android.net.Uri;
 import android.webkit.JavascriptInterface;
+import android.webkit.PermissionRequest;
+import android.webkit.WebChromeClient;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebResourceResponse;
 import android.webkit.WebSettings;
@@ -16,7 +20,11 @@ import java.util.Collections;
 
 public final class MainActivity extends Activity {
     private static final String ORIGIN = "appassets.androidplatform.net";
+    private static final int MICROPHONE_REQUEST = 4017;
     private WebView webView;
+    private PermissionRequest microphoneRequest;
+    private boolean microphonePermissionPending;
+    private boolean foreground;
     private RecordStore store;
     private DeepSeekClient modelClient;
     private DeepSeekClient titleClient;
@@ -50,6 +58,14 @@ public final class MainActivity extends Activity {
         settings.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
         settings.setSupportMultipleWindows(false);
         WebView.setWebContentsDebuggingEnabled(BuildConfig.DEBUG);
+        webView.setWebChromeClient(new WebChromeClient() {
+            @Override public void onPermissionRequest(PermissionRequest request) {
+                runOnUiThread(() -> requestMicrophone(request));
+            }
+            @Override public void onPermissionRequestCanceled(PermissionRequest request) {
+                runOnUiThread(() -> { if (microphoneRequest == request) microphoneRequest = null; });
+            }
+        });
         final WebViewAssetLoader assets = new WebViewAssetLoader.Builder()
                 .addPathHandler("/assets/", new WebViewAssetLoader.AssetsPathHandler(this)).build();
         webView.setWebViewClient(new WebViewClient() {
@@ -81,6 +97,44 @@ public final class MainActivity extends Activity {
     private static boolean trusted(Uri url) {
         return "https".equals(url.getScheme()) && ORIGIN.equals(url.getHost())
                 && url.getPort() == -1 && url.getPath() != null && url.getPath().startsWith("/assets/");
+    }
+
+    static boolean allowsMicrophone(Uri origin, String[] resources) {
+        boolean trustedOrigin = origin != null && "https".equals(origin.getScheme())
+                && ORIGIN.equals(origin.getHost()) && origin.getPort() == -1
+                && origin.getUserInfo() == null;
+        boolean audioOnly = resources != null && resources.length == 1
+                && PermissionRequest.RESOURCE_AUDIO_CAPTURE.equals(resources[0]);
+        return trustedOrigin && audioOnly;
+    }
+
+    private void requestMicrophone(PermissionRequest request) {
+        if (!foreground || !allowsMicrophone(request.getOrigin(), request.getResources()) || microphoneRequest != null || microphonePermissionPending) {
+            request.deny(); return;
+        }
+        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
+            request.grant(new String[]{PermissionRequest.RESOURCE_AUDIO_CAPTURE}); return;
+        }
+        microphoneRequest = request;
+        microphonePermissionPending = true;
+        requestPermissions(new String[]{Manifest.permission.RECORD_AUDIO}, MICROPHONE_REQUEST);
+    }
+
+    @Override public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode != MICROPHONE_REQUEST) return;
+        microphonePermissionPending = false;
+        PermissionRequest request = microphoneRequest; microphoneRequest = null;
+        if (request == null) return;
+        if (foreground && permissions.length == 1 && Manifest.permission.RECORD_AUDIO.equals(permissions[0])
+                && grantResults.length == 1 && grantResults[0] == PackageManager.PERMISSION_GRANTED)
+            request.grant(new String[]{PermissionRequest.RESOURCE_AUDIO_CAPTURE});
+        else request.deny();
+    }
+
+    private void cancelMicrophonePermission() {
+        PermissionRequest request = microphoneRequest; microphoneRequest = null;
+        if (request != null) request.deny();
     }
 
     private final class StorageBridge {
@@ -211,8 +265,8 @@ public final class MainActivity extends Activity {
         private String failure() { return "{\"ok\":false,\"error\":\"本地存储操作失败，请重试；已填写内容仍保留。\"}"; }
     }
 
-    @Override protected void onStart() { super.onStart(); if (modelClient != null) modelClient.foreground(true); if (titleClient != null) titleClient.foreground(true); }
-    @Override protected void onStop() { if (modelClient != null) modelClient.foreground(false); if (titleClient != null) titleClient.foreground(false); super.onStop(); }
+    @Override protected void onStart() { super.onStart(); foreground = true; if (modelClient != null) modelClient.foreground(true); if (titleClient != null) titleClient.foreground(true); }
+    @Override protected void onStop() { foreground = false; cancelMicrophonePermission(); if (modelClient != null) modelClient.foreground(false); if (titleClient != null) titleClient.foreground(false); super.onStop(); }
     @Override protected void onDestroy() {
         if (modelClient != null) modelClient.close();
         if (titleClient != null) titleClient.close();
