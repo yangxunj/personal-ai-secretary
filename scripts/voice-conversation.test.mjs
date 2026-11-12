@@ -11,6 +11,7 @@ const { TurnDetector } = await load('../src/lib/turn-detector.ts');
 const session = await load('../src/lib/voice-session.ts');
 const { createVoiceCapture } = await load('../src/lib/voice-capture.ts');
 const { openVoiceMicrophone, voiceErrorCode } = await load('../src/lib/voice-microphone.ts');
+const { VoiceManualBuffer } = await load('../src/lib/voice-manual-buffer.ts');
 const frame = (level, rate = 16000) => new Float32Array(rate * 0.02).fill(level);
 const feed = (detector, level, count, rate) => Array.from({ length: count }, () => detector.push(frame(level, rate)));
 
@@ -163,4 +164,25 @@ test('microphone diagnostics expose only a bounded error class', () => {
   assert.equal(voiceErrorCode(new DOMException('private details', 'NotReadableError')), 'NotReadableError');
   assert.equal(voiceErrorCode({ name: 'Error with private details' }), 'UnknownError');
   assert.equal(voiceErrorCode(null), 'UnknownError');
+});
+
+test('manual recording preserves quiet speech until user submits and clears it afterwards', () => {
+  const buffer = new VoiceManualBuffer(16000);
+  assert.equal(buffer.take().status, 'empty');
+  buffer.append(new Float32Array(800)); assert.equal(buffer.take().status, 'short');
+  const speech = new Float32Array(4000).fill(0.001);
+  buffer.append(speech); speech.fill(0);
+  const result = buffer.take();
+  assert.equal(result.status, 'ok'); assert.equal(result.audio.length, 4800);
+  assert.ok(result.audio[1000] > 0); assert.equal(buffer.take().status, 'empty');
+});
+
+test('manual recording distinguishes all-zero PCM and caps audio at 60 seconds', () => {
+  const buffer = new VoiceManualBuffer(100);
+  buffer.append(new Float32Array(100)); assert.equal(buffer.take().status, 'silent');
+  assert.equal(buffer.append(new Float32Array(5990).fill(0.01)), false);
+  assert.equal(buffer.append(new Float32Array(100).fill(0.02)), true);
+  const result = buffer.take();
+  assert.equal(result.status, 'ok'); assert.equal(result.audio.length, 6000);
+  assert.equal(buffer.take().status, 'empty');
 });

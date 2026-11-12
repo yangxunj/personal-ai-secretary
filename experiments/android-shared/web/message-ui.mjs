@@ -163,7 +163,7 @@ function createVoiceConversation(element, callbacks, services, nativeMicrophone)
   const root = createRoot(element);
   return { render(active, disabled) {
     flushSync(() => root.render(createElement(VoiceConversation, {
-      active, disabled, services, nativeMicrophone, workletUrl: '/assets/voice-capture.js',
+      active, disabled, services, nativeMicrophone, manualOnly: true, workletUrl: '/assets/voice-capture.js',
       onRunningChange: callbacks.onRunningChange, onSubmit: callbacks.onSubmit,
     })));
   } };

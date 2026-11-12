@@ -9,17 +9,19 @@ import { speechText, speechChunks } from '@/lib/speech-text';
 import { webVoiceServices, type VoiceServices } from '@/lib/voice-services';
 import { createVoiceCapture } from '@/lib/voice-capture';
 import { openVoiceMicrophone, voiceErrorCode, type NativeVoiceMicrophone } from '@/lib/voice-microphone';
+import { VoiceManualBuffer } from '@/lib/voice-manual-buffer';
 import { hasSpeechRecording, setSpeechRecording, stopSpeechPlayback } from './SpeechButton';
 
-type Phase = 'off' | 'requesting' | 'listening' | 'recording' | 'transcribing' | 'waiting' | 'speaking';
+type Phase = 'off' | 'requesting' | 'listening' | 'recording' | 'ready' | 'transcribing' | 'waiting' | 'speaking';
 
-export default function VoiceConversation({ active, disabled, onRunningChange, onSubmit, services, nativeMicrophone, workletUrl = '/worklets/voice-capture.js' }: {
+export default function VoiceConversation({ active, disabled, onRunningChange, onSubmit, services, nativeMicrophone, manualOnly = false, workletUrl = '/worklets/voice-capture.js' }: {
   active: boolean;
   disabled: boolean;
   onRunningChange: (running: boolean) => void;
   onSubmit: (text: string, signal: AbortSignal) => Promise<string>;
   services?: VoiceServices;
   nativeMicrophone?: NativeVoiceMicrophone;
+  manualOnly?: boolean;
   workletUrl?: string;
 }) {
   const t = useT();
@@ -36,6 +38,7 @@ export default function VoiceConversation({ active, disabled, onRunningChange, o
   const capture = useRef<(() => void) | null>(null);
   const player = useRef<AudioBufferSourceNode | null>(null);
   const detector = useRef<TurnDetector | null>(null);
+  const manualBuffer = useRef<VoiceManualBuffer | null>(null);
   const abort = useRef<AbortController | null>(null);
   const coolDown = useRef<ReturnType<typeof setTimeout> | null>(null);
   const callbacks = useRef({ onRunningChange, onSubmit });
@@ -57,6 +60,7 @@ export default function VoiceConversation({ active, disabled, onRunningChange, o
     const audio = context.current; context.current = null;
     if (audio) { audio.onstatechange = null; void audio.close().catch(() => {}); }
     detector.current?.reset(); detector.current = null;
+    manualBuffer.current?.reset(); manualBuffer.current = null;
     setSpeechRecording(owner.current, false); endVoiceSession(owner.current);
     callbacks.current.onRunningChange(false);
     if (update) setPhase('off');
@@ -78,6 +82,7 @@ export default function VoiceConversation({ active, disabled, onRunningChange, o
   function listen(attempt: number, delay = 0) {
     if (!current(attempt)) return;
     detector.current?.reset();
+    manualBuffer.current?.reset();
     const resume = () => {
       if (!current(attempt)) return;
       for (const track of media.current?.getAudioTracks() ?? []) track.enabled = true;
@@ -105,7 +110,7 @@ export default function VoiceConversation({ active, disabled, onRunningChange, o
       const text = await voiceServices.transcribe(encodeVoiceWav(rendered.getChannelData(0)), signal);
       if (!current(attempt)) return;
       // 无声/未识别时不提交 Agent，也不重发上一句话。
-      if (!text?.trim()) { listen(attempt); return; }
+      if (!text?.trim()) { if (manualOnly) setError(t('没有识别到语音，请靠近手机后再试')); listen(attempt); return; }
       setHeard(text.trim()); change('waiting');
       const reply = await callbacks.current.onSubmit(text.trim(), signal);
       if (!current(attempt)) return;
@@ -154,10 +159,14 @@ export default function VoiceConversation({ active, disabled, onRunningChange, o
       stage = 'microphone';
       const onFrame = (frame: Float32Array) => {
         if (!current(attempt) || !['listening', 'recording'].includes(phaseRef.current)) return;
+        if (manualOnly && manualBuffer.current?.append(frame)) {
+          for (const track of media.current?.getAudioTracks() ?? []) track.enabled = false;
+          nativeCapture.current?.setListening(false); change('ready'); return;
+        }
         const result = detector.current!.push(frame);
         if (result.started) change('recording');
-        if (result.discarded) change('listening');
-        if (result.audio) void converse(result.audio, attempt);
+        if (result.discarded || (manualOnly && result.audio)) change('listening');
+        if (result.audio && !manualOnly) void converse(result.audio, attempt);
       };
       const onCaptureError = () => { if (current(attempt)) fail(t('录音中断，请检查麦克风后重试')); };
       let stream: MediaStream | null = null;
@@ -171,11 +180,13 @@ export default function VoiceConversation({ active, disabled, onRunningChange, o
         if (!current(attempt)) { native.stop(); return; }
         nativeCapture.current = native; inputRate.current = native.sampleRate;
         detector.current = new TurnDetector(native.sampleRate);
+        if (manualOnly) manualBuffer.current = new VoiceManualBuffer(native.sampleRate);
       }
       if (stream) {
         if (!current(attempt)) { stream.getTracks().forEach(track => track.stop()); return; }
         media.current = stream; stage = 'capture'; inputRate.current = audio.sampleRate;
         detector.current = new TurnDetector(audio.sampleRate);
+        if (manualOnly) manualBuffer.current = new VoiceManualBuffer(audio.sampleRate);
         const stopCapture = await createVoiceCapture(audio, stream, workletUrl, onFrame, onCaptureError);
         if (!current(attempt)) { stopCapture(); return; }
         capture.current = stopCapture;
@@ -199,7 +210,8 @@ export default function VoiceConversation({ active, disabled, onRunningChange, o
   }
 
   const labels: Record<Phase, string> = {
-    off: '', requesting: t('等待麦克风权限…'), listening: t('正在聆听，你可以说话'), recording: t('听到你在说话，停顿后会自动发送'),
+    off: '', requesting: t('等待麦克风权限…'), listening: t('正在聆听，你可以说话'), recording: manualOnly ? t('正在录音，说完请点击发送语音') : t('听到你在说话，停顿后会自动发送'),
+    ready: t('已录满 60 秒，请点击发送语音'),
     transcribing: t('正在识别语音…'), waiting: t('AI 正在处理，请稍等'), speaking: t('正在合成并朗读，播完后继续听'),
   };
   return <div className="mb-2 text-xs" data-voice-conversation>
@@ -207,9 +219,16 @@ export default function VoiceConversation({ active, disabled, onRunningChange, o
       <button type="button" onClick={phase === 'off' ? start : () => dispose()} disabled={phase === 'off' && (!active || disabled)}
         aria-pressed={phase !== 'off'} className="rounded-full border px-3 py-2 text-brand-600 dark:text-brand-300 disabled:opacity-30"
         style={{ borderColor: 'var(--border)' }}>{phase === 'off' ? t('开启语音对话') : t('退出语音对话')}</button>
+      {manualOnly && ['listening', 'recording', 'ready'].includes(phase) && <button type="button" className="rounded-full border px-3 py-2 text-brand-600 dark:text-brand-300" style={{ borderColor: 'var(--border)' }} onClick={() => {
+        const result = manualBuffer.current?.take();
+        if (!result || result.status === 'empty') { setError(t('尚未收到麦克风音频，请检查录音权限后重试')); return; }
+        if (result.status === 'short') { setError(t('录音太短，请先说话再发送')); return; }
+        if (result.status === 'silent') { setError(t('麦克风返回了静音，请检查手机的麦克风设置')); if (phaseRef.current === 'ready') listen(generation.current); return; }
+        setError(''); detector.current?.reset(); void converse(result.audio!, generation.current);
+      }}>{t('发送语音')}</button>}
       {phase !== 'off' && <span className="muted" role="status" aria-live="polite">{labels[phase]}</span>}
     </div>
-    {phase !== 'off' && <p className="muted mt-1 leading-relaxed">{t('说完停顿约 1.2 秒后自动发送，每轮最长 60 秒。AI 回答时暂停收音。')}</p>}
+    {phase !== 'off' && <p className="muted mt-1 leading-relaxed">{manualOnly ? t('说完请点击发送语音，每轮最长 60 秒。AI 回答时暂停收音。') : t('说完停顿约 1.2 秒后自动发送，每轮最长 60 秒。AI 回答时暂停收音。')}</p>}
     {phase !== 'off' && <p className="muted mt-1 leading-relaxed">{t('当前草稿和附件会保留，语音对话只发送你说的话。')}</p>}
     {phase !== 'off' && heard && <p className="muted mt-1 break-words">{t('已听到：{text}', { text: heard })}</p>}
     {error && <p className="text-red-500 mt-1" role="alert">{error}</p>}
