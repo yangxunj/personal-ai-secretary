@@ -45,6 +45,8 @@ export const chat: Dict = {
   回答已显示在聊天中: 'The reply is shown in the chat.',
   '当前浏览器不支持连续语音，请使用新版 Chrome、Edge 或 Safari': 'Continuous voice is not supported. Use a recent version of Chrome, Edge or Safari.',
   '无法开启语音对话，请检查麦克风和浏览器支持': 'Could not start voice conversation. Check your microphone and browser support.',
+  '录音模块启动失败，请更新 Android System WebView 后重试': 'Could not start audio capture. Update Android System WebView and try again.',
+  '无法开启音频播放，请检查手机声音设置后重试': 'Could not start audio playback. Check the device audio settings and try again.',
   '音频已暂停，请重新开启语音对话': 'Audio was suspended. Please start voice conversation again.',
   '语音对话中断，请检查网络后重新开启': 'Voice conversation was interrupted. Check your network and start it again.',
   'AI 处理未完成，请先查看聊天记录，不要重复提交': 'The AI did not finish. Check the chat before submitting again.',

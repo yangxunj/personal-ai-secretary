@@ -9,6 +9,7 @@ const load = async (file) => import('data:text/javascript;base64,' + Buffer.from
 ).outputText).toString('base64'));
 const { TurnDetector } = await load('../src/lib/turn-detector.ts');
 const session = await load('../src/lib/voice-session.ts');
+const { createVoiceCapture } = await load('../src/lib/voice-capture.ts');
 const frame = (level, rate = 16000) => new Float32Array(rate * 0.02).fill(level);
 const feed = (detector, level, count, rate) => Array.from({ length: count }, () => detector.push(frame(level, rate)));
 
@@ -82,4 +83,55 @@ test('a new continuous session closes the old owner; late cleanup cannot close t
   session.endVoiceSession(first); assert.equal(session.voiceSessionOwner(), second);
   session.endVoiceSession(second); assert.equal(session.voiceSessionOwner(), null);
   assert.ok(changed >= 3); unsubscribe();
+});
+
+test('capture falls back when worklet loading fails and produces silent output and independent input frames', async () => {
+  const previous = globalThis.AudioWorkletNode;
+  globalThis.AudioWorkletNode = class {};
+  let node, disconnected = 0;
+  const audio = { state: 'running', destination: {}, audioWorklet: { addModule: async () => { throw new Error('unavailable'); } },
+    createMediaStreamSource: () => ({ connect() {}, disconnect() { disconnected++; } }),
+    createScriptProcessor: () => (node = { connect() {}, disconnect() { disconnected++; } }) };
+  const frames = [];
+  try {
+    const dispose = await createVoiceCapture(audio, {}, '/assets/voice-capture.js', frame => frames.push(frame), () => {});
+    const samples = new Float32Array([0.1, 0.2]), output = new Float32Array([1, 1]);
+    node.onaudioprocess({ inputBuffer: { numberOfChannels: 1, getChannelData: () => samples },
+      outputBuffer: { numberOfChannels: 1, getChannelData: () => output } });
+    samples.fill(0);
+    assert.ok(frames[0][0] > 0.09); assert.deepEqual([...output], [0, 0]);
+    dispose(); assert.equal(node.onaudioprocess, null); assert.equal(disconnected, 2);
+  } finally { globalThis.AudioWorkletNode = previous; }
+});
+
+test('capture prefers the worklet and releases its callbacks and nodes', async () => {
+  const previous = globalThis.AudioWorkletNode;
+  let node, disconnected = 0, fallbackStarted = false;
+  globalThis.AudioWorkletNode = class {
+    constructor() { node = this; this.port = {}; }
+    connect() {} disconnect() { disconnected++; }
+  };
+  const audio = { state: 'running', destination: {}, audioWorklet: { addModule: async () => {} },
+    createMediaStreamSource: () => ({ connect() {}, disconnect() { disconnected++; } }),
+    createScriptProcessor: () => { fallbackStarted = true; } };
+  const frames = [];
+  try {
+    const dispose = await createVoiceCapture(audio, {}, '/assets/voice-capture.js', frame => frames.push(frame), () => {});
+    node.port.onmessage({ data: new Float32Array([0.25]) });
+    assert.equal(frames[0][0], 0.25); assert.equal(fallbackStarted, false);
+    dispose(); assert.equal(node.port.onmessage, null); assert.equal(disconnected, 2);
+  } finally { globalThis.AudioWorkletNode = previous; }
+});
+
+test('capture does not restart recording after the audio context is closed during worklet loading', async () => {
+  const previous = globalThis.AudioWorkletNode;
+  globalThis.AudioWorkletNode = class {};
+  let fallbackStarted = false, disconnected = false;
+  const audio = { state: 'running', destination: {}, audioWorklet: { async addModule() { audio.state = 'closed'; } },
+    createMediaStreamSource: () => ({ disconnect() { disconnected = true; } }),
+    createScriptProcessor: () => { fallbackStarted = true; } };
+  try {
+    await assert.rejects(createVoiceCapture(audio, {}, '/test.js', () => {}, () => {}));
+    assert.equal(fallbackStarted, false); assert.equal(disconnected, true);
+  } finally { globalThis.AudioWorkletNode = previous; }
 });

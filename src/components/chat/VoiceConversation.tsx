@@ -7,6 +7,7 @@ import { encodeVoiceWav, VOICE_SAMPLE_RATE } from '@/lib/voice-audio';
 import { TurnDetector } from '@/lib/turn-detector';
 import { speechText, speechChunks } from '@/lib/speech-text';
 import { webVoiceServices, type VoiceServices } from '@/lib/voice-services';
+import { createVoiceCapture } from '@/lib/voice-capture';
 import { hasSpeechRecording, setSpeechRecording, stopSpeechPlayback } from './SpeechButton';
 
 type Phase = 'off' | 'requesting' | 'listening' | 'recording' | 'transcribing' | 'waiting' | 'speaking';
@@ -28,8 +29,7 @@ export default function VoiceConversation({ active, disabled, onRunningChange, o
   const generation = useRef(0);
   const context = useRef<AudioContext | null>(null);
   const media = useRef<MediaStream | null>(null);
-  const input = useRef<MediaStreamAudioSourceNode | null>(null);
-  const capture = useRef<AudioWorkletNode | null>(null);
+  const capture = useRef<(() => void) | null>(null);
   const player = useRef<AudioBufferSourceNode | null>(null);
   const detector = useRef<TurnDetector | null>(null);
   const abort = useRef<AbortController | null>(null);
@@ -46,8 +46,7 @@ export default function VoiceConversation({ active, disabled, onRunningChange, o
     coolDown.current = null;
     if (player.current) { try { player.current.stop(); } catch {} player.current.disconnect(); }
     player.current = null;
-    if (capture.current) { capture.current.port.onmessage = null; capture.current.onprocessorerror = null; capture.current.disconnect(); }
-    capture.current = null; input.current?.disconnect(); input.current = null;
+    capture.current?.(); capture.current = null;
     for (const track of media.current?.getTracks() ?? []) { track.onended = null; track.stop(); }
     media.current = null;
     const audio = context.current; context.current = null;
@@ -131,7 +130,7 @@ export default function VoiceConversation({ active, disabled, onRunningChange, o
     if (!active || disabled || phaseRef.current !== 'off') return;
     if (hasSpeechRecording() && !voiceSessionOwner()) { setError(t('请先完成或取消当前录音')); return; }
     if (!window.isSecureContext) { setError(t('语音输入需要 HTTPS，请使用安全地址或在本机打开')); return; }
-    if (!navigator.mediaDevices?.getUserMedia || typeof AudioContext === 'undefined' || typeof AudioWorkletNode === 'undefined') {
+    if (!navigator.mediaDevices?.getUserMedia || typeof AudioContext === 'undefined') {
       setError(t('当前浏览器不支持连续语音，请使用新版 Chrome、Edge 或 Safari')); return;
     }
     dispose(); setError(''); setHeard('');
@@ -139,35 +138,40 @@ export default function VoiceConversation({ active, disabled, onRunningChange, o
     stopSpeechPlayback(); setSpeechRecording(owner.current, true);
     abort.current = new AbortController(); change('requesting'); callbacks.current.onRunningChange(true);
     const attempt = generation.current;
+    let stage: 'audio' | 'microphone' | 'capture' = 'audio';
     try {
       // 开启按钮内解锁同一个音频上下文，后续轮次通过 Web Audio 自动播放。
       const audio = new AudioContext(); context.current = audio;
       await audio.resume();
       if (!current(attempt)) return;
+      stage = 'microphone';
       const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, channelCount: 1 } });
       if (!current(attempt)) { stream.getTracks().forEach(track => track.stop()); return; }
       media.current = stream;
-      await audio.audioWorklet.addModule(workletUrl);
-      if (!current(attempt)) return;
-      const worklet = new AudioWorkletNode(audio, 'voice-capture', { outputChannelCount: [1] });
-      capture.current = worklet; input.current = audio.createMediaStreamSource(stream);
-      worklet.onprocessorerror = () => { if (current(attempt)) fail(t('语音检测中断，请重新开启语音对话')); };
+      stage = 'capture';
       detector.current = new TurnDetector(audio.sampleRate);
-      worklet.port.onmessage = (event: MessageEvent<Float32Array>) => {
+      const stopCapture = await createVoiceCapture(audio, stream, workletUrl, frame => {
         if (!current(attempt) || !['listening', 'recording'].includes(phaseRef.current)) return;
-        const result = detector.current!.push(event.data);
+        const result = detector.current!.push(frame);
         if (result.started) change('recording');
         if (result.discarded) change('listening');
         if (result.audio) void converse(result.audio, attempt);
-      };
-      input.current.connect(worklet); worklet.connect(audio.destination);
+      }, () => { if (current(attempt)) fail(t('语音检测中断，请重新开启语音对话')); });
+      if (!current(attempt)) { stopCapture(); return; }
+      capture.current = stopCapture;
       for (const track of stream.getAudioTracks()) track.onended = () => { if (current(attempt)) fail(t('录音中断，请检查麦克风后重试')); };
       audio.onstatechange = () => { if (current(attempt) && audio.state !== 'running') fail(t('音频已暂停，请重新开启语音对话')); };
       listen(attempt);
     } catch (e) {
       if (!current(attempt)) return;
-      fail(e instanceof Error && ['NotAllowedError', 'SecurityError'].includes(e.name)
-        ? t('无法访问麦克风，请在浏览器和系统设置中允许录音') : t('无法开启语音对话，请检查麦克风和浏览器支持'));
+      const name = e && typeof e === 'object' && 'name' in e ? String(e.name) : '';
+      fail(stage === 'microphone' && ['NotAllowedError', 'SecurityError'].includes(name)
+        ? t('无法访问麦克风，请在浏览器和系统设置中允许录音')
+        : stage === 'microphone' && ['NotFoundError', 'DevicesNotFoundError'].includes(name)
+          ? t('没有找到麦克风，请连接后重试')
+          : stage === 'microphone' ? t('无法启动录音，请检查麦克风是否被占用')
+            : stage === 'capture' ? t('录音模块启动失败，请更新 Android System WebView 后重试')
+              : t('无法开启音频播放，请检查手机声音设置后重试'));
     }
   }
 
