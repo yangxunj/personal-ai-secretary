@@ -28,6 +28,7 @@
     "@ai-sdk/react": "^4.0.105",
     "@earendil-works/pi-ai": "1.4.0",
     "@earendil-works/pi-coding-agent": "1.4.0",
+    "@marp-team/marp-core": "4.4.0",
     "@napi-rs/canvas": "^1.0.9",
     "@prisma/client": "^6.3.0",
     "@xmldom/xmldom": "0.8.15",

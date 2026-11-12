@@ -14,13 +14,14 @@ import java.security.MessageDigest;
 
 /** Storage adapter only; field rules are executed by the shared TypeScript module. */
 final class RecordStore extends SQLiteOpenHelper {
-    RecordStore(Context context) { super(context, "shared-pilot.db", null, 7); }
+    RecordStore(Context context) { super(context, "shared-pilot.db", null, 8); }
 
     @Override public void onCreate(SQLiteDatabase db) {
         db.execSQL("CREATE TABLE records (id TEXT PRIMARY KEY, data TEXT NOT NULL, created_at INTEGER NOT NULL, version INTEGER NOT NULL DEFAULT 1)");
         createReceipts(db);
         TaskStore.createTable(db);
         ConversationStore.createTable(db);
+        SlideStore.createTable(db);
     }
 
     @Override public void onUpgrade(SQLiteDatabase db, int oldVersion, int newVersion) {
@@ -28,7 +29,7 @@ final class RecordStore extends SQLiteOpenHelper {
     }
 
     static void migrate(SQLiteDatabase db, int oldVersion, int newVersion) {
-        if (oldVersion >= 1 && oldVersion < newVersion && newVersion <= 7) {
+        if (oldVersion >= 1 && oldVersion < newVersion && newVersion <= 8) {
             if (oldVersion < 2 && newVersion >= 2) db.execSQL("ALTER TABLE records ADD COLUMN version INTEGER NOT NULL DEFAULT 1");
             if (oldVersion < 3 && newVersion >= 3) createReceipts(db);
             if (oldVersion < 4 && newVersion >= 4) TaskStore.createTable(db);
@@ -48,6 +49,7 @@ final class RecordStore extends SQLiteOpenHelper {
                 if (!found) db.execSQL("ALTER TABLE conversations ADD COLUMN task_id TEXT");
                 ConversationStore.createTaskIndex(db);
             }
+            if (oldVersion < 8 && newVersion >= 8) SlideStore.createTable(db);
             return;
         }
         // Refuse unknown migrations rather than deleting user records.
@@ -89,6 +91,7 @@ final class RecordStore extends SQLiteOpenHelper {
                 else if ("update".equals(kind)) result = update(operation.getString("id"), operation.getInt("expectedVersion"), values);
                 else if ("task-create".equals(kind)) result = TaskStore.create(db, values);
                 else if ("task-update".equals(kind)) result = TaskStore.update(db, operation.getString("id"), operation.getInt("expectedVersion"), values);
+                else if ("slide-create".equals(kind)) result = SlideStore.create(db, values);
                 else throw new IllegalArgumentException("Unknown tool operation");
                 ContentValues row = new ContentValues();
                 row.put("call_id", key); row.put("request_hash", fingerprint(signature)); row.put("result", result.toString());
@@ -100,6 +103,8 @@ final class RecordStore extends SQLiteOpenHelper {
     }
 
     synchronized JSONArray listTasks(String plan) throws Exception { return TaskStore.list(getReadableDatabase(), plan); }
+    synchronized JSONArray listSlides() throws Exception { return SlideStore.list(getReadableDatabase()); }
+    synchronized JSONObject readSlide(String id) throws Exception { return SlideStore.read(getReadableDatabase(), id); }
     synchronized JSONArray listTasksForView() throws Exception { return TaskStore.listForView(getReadableDatabase()); }
     synchronized JSONArray listConversations(String mode) throws Exception { return ConversationStore.list(getReadableDatabase(), mode); }
     synchronized JSONObject readConversation(String id) throws Exception { return ConversationStore.readGeneral(getReadableDatabase(), id); }

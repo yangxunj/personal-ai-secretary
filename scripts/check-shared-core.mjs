@@ -21,6 +21,7 @@ export const sharedEntries = [
   'src/lib/agent-citations.mjs',
   'src/lib/system-prompt.ts',
   'src/lib/title-content.mjs',
+  'src/lib/slides/contracts.ts',
   'src/topic-plugins/registry.mjs',
 ];
 export const sharedUiEntries = [
@@ -30,6 +31,7 @@ export const sharedUiEntries = [
   'src/components/chat/shared/ChatTextInput.tsx',
   'src/components/chat/shared/ChatBubble.tsx',
   'src/components/chat/VoiceConversation.tsx',
+  'src/components/slides/SlideViewer.tsx',
   'src/components/tasks/shared/TaskCard.tsx',
   'src/components/topics/shared/TopicCardContent.tsx',
   'src/components/tasks/shared/TaskStatusSelect.tsx',

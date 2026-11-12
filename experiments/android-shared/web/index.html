@@ -105,9 +105,20 @@
         </div>
       </form>
     </section>
+    <section class="slides-panel" data-screen="/slides" hidden aria-labelledby="slides-heading">
+      <h2 id="slides-heading" class="pilot-section-title">知识幻灯片</h2>
+      <p>在对话中提出要学习的知识点，即可创建幻灯片。</p>
+      <p id="slides-status" role="status"></p><p id="slides-empty">还没有幻灯片。</p>
+      <div id="slides-list"></div>
+    </section>
+    <section class="slides-panel" data-screen="/slides/view" hidden aria-label="幻灯片阅读">
+      <button id="slides-back" class="secondary" type="button">返回列表</button>
+      <div id="slides-viewer"></div>
+    </section>
     <section class="pilot-more" data-screen="/more" hidden aria-labelledby="more-title">
       <h2 id="more-title" class="pilot-section-title">更多</h2><div id="pilot-more-navigation" class="space-y-3"></div>
       <button class="secondary" type="button" data-open-screen="/collections">书单</button>
+      <button class="secondary" type="button" data-open-screen="/slides">知识幻灯片</button>
     </section>
     <section class="pilot-topics" data-screen="/topics" hidden aria-labelledby="topics-title">
       <h2 id="topics-title" class="pilot-section-title">专题</h2>

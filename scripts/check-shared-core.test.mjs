@@ -12,10 +12,10 @@ test('current shared runtime closure uses only source modules and reviewed Zod',
 });
 
 test('production message, conversation and input components stay inside the reviewed shared UI boundary', () => {
-  const result = checkSharedCore(undefined, sharedUiEntries, ['react', 'react/jsx-runtime', 'react-markdown', 'remark-gfm', 'unified', 'remark-parse']);
+  const result = checkSharedCore(undefined, sharedUiEntries, ['react', 'react/jsx-runtime', 'react-markdown', 'remark-gfm', 'unified', 'remark-parse', '@marp-team/marp-core']);
   for (const file of sharedUiEntries) assert.ok(result.files.includes(file));
   assert.ok(result.files.includes('src/components/chat/shared/conversation-list.ts'));
-  assert.deepEqual(result.packages, ['react', 'react-markdown', 'react/jsx-runtime', 'remark-gfm', 'remark-parse', 'unified']);
+  assert.deepEqual(result.packages, ['@marp-team/marp-core', 'react', 'react-markdown', 'react/jsx-runtime', 'remark-gfm', 'remark-parse', 'unified']);
 });
 
 test('dependency guard follows aliases and transitive exports, erases types and rejects platform imports', t => {

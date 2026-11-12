@@ -6,7 +6,7 @@ import { createNativeMicrophone } from './native-microphone.mjs';
 
 const nonce = () => Array.from(crypto.getRandomValues(new Uint8Array(12)), byte => byte.toString(16).padStart(2, '0')).join('');
 
-export function attachAiPanel(document, host, records, definition, refresh, tasks, closeDrawer, setTasksBusy = () => {}) {
+export function attachAiPanel(document, host, records, definition, refresh, tasks, closeDrawer, setTasksBusy = () => {}, slides) {
   const form = document.getElementById('ai-form');
   const output = document.getElementById('ai-output');
   const events = document.getElementById('ai-events');
@@ -133,12 +133,12 @@ export function attachAiPanel(document, host, records, definition, refresh, task
     try {
       const turnId = nonce();
       const history = conversations.begin(turnId, prompt, fromVoice); started = true;
-      const result = await runPilotAgent({ prompt, records, definition, tasks, history,
+      const result = await runPilotAgent({ prompt, records, definition, tasks, slides: real ? slides : undefined, history,
         modelRequest: real ? nativeRequest : demoModelRequest('tasks'), webRequest: real ? nativeWebRequest : undefined, signal: active.signal, turnId,
         onEvent(event) {
           if (event.type === 'message_end') conversations.record(event.message);
           if (event.type === 'tool_execution_start' || event.type === 'tool_execution_end') {
-            const labels = { describeCollection: '读取栏目定义', readCollectionRecord: '读取记录', createCollectionRecord: '创建书单记录', updateCollectionRecord: '修改书单记录', createTask: '创建待办', listTasks: '查询待办', updateTask: '修改待办', webSearch: '联网搜索', fetchWebPage: '读取网页' };
+            const labels = { describeCollection: '读取栏目定义', readCollectionRecord: '读取记录', createCollectionRecord: '创建书单记录', updateCollectionRecord: '修改书单记录', createTask: '创建待办', listTasks: '查询待办', updateTask: '修改待办', createSlideDeck: '创建知识幻灯片', webSearch: '联网搜索', fetchWebPage: '读取网页' };
             if (event.type === 'tool_execution_start') {
               const item = document.createElement('li');
               item.textContent = `${labels[event.toolName] || '工具操作'}：执行中`;
@@ -157,7 +157,7 @@ export function attachAiPanel(document, host, records, definition, refresh, task
     } catch (error) {
       events.replaceChildren();
       if (started) try { conversations.finish('本轮未完整结束。', false, fromVoice); } catch { conversations.fail(); }
-      output.textContent = (active.signal.aborted ? '本轮已取消。' : error.message || '本轮未完成。') + ' 已保存的工具结果保留，请先查看待办和书单；请求草稿仍保留。';
+      output.textContent = (active.signal.aborted ? '本轮已取消。' : error.message || '本轮未完成。') + ' 已保存的工具结果保留，请先查看待办、书单和知识幻灯片；请求草稿仍保留。';
       if (fromVoice) throw error;
     } finally {
       try { refresh(); } catch {}

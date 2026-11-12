@@ -9,6 +9,8 @@ const files = new Map([
   ['/messages.js', ['messages.js', 'text/javascript; charset=utf-8']],
   ['/shared-message.css', ['shared-message.css', 'text/css; charset=utf-8']],
   ['/surface-theme.css', ['surface-theme.css', 'text/css; charset=utf-8']],
+  ['/assets/marp-theme.css', ['marp-theme.css', 'text/css; charset=utf-8']],
+  ['/assets/slide-view.css', ['slide-view.css', 'text/css; charset=utf-8']],
 ]);
 for (const plugin of topicPlugins) files.set(`/topic-plugin-${plugin.id}.css`, [`topic-plugin-${plugin.id}.css`, 'text/css; charset=utf-8']);
 const server = http.createServer(async (request, response) => {

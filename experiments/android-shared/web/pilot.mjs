@@ -4,6 +4,7 @@ import { prepareRecordWrite } from '../../../src/lib/collections/record-write.ts
 import { runPilotAgent, demoModelRequest } from './pi-runtime.mjs';
 import { attachAiPanel } from './ai-panel.mjs';
 import { attachTaskChat } from './task-chat.mjs';
+import { createSlides, attachSlides } from './slides.mjs';
 import { topicPlugins } from '../../../src/topic-plugins/registry.mjs';
 import { mountTopicPlugins } from './topic-plugin-adapters.mjs';
 import { createTasks, attachTaskPanel, taskPolicy, lifecyclePolicy, projectTaskList, parseOwners } from './tasks.mjs';
@@ -174,9 +175,16 @@ export function startPage(document, host) {
     write: names => decode(bridge.writeOwners(JSON.stringify(names))),
   }, id => { selectedTaskId = id; showScreen('/task-detail'); });
   host.Pilot.tasks = tasks;
+  const slides = createSlides({
+    list: () => decode(bridge.listSlides()), read: id => decode(bridge.readSlide(id)),
+    readReceipt: (key, signature) => decode(bridge.readToolReceipt(key, signature)),
+    commitTool: (key, signature, operation) => decode(bridge.commitTool(key, signature, JSON.stringify(operation))),
+  });
+  host.Pilot.slides = slides;
   const navigation = host.PilotMessageUI.createAppShell(document.getElementById('pilot-shell'), document.getElementById('pilot-content-root'), showScreen, topicPlugins);
   navigation.initDrawer();
-  const ai = attachAiPanel(document, host, records, definition, () => { refresh(); refreshTasks(); }, tasks, navigation.closeDrawer, value => refreshTasks.setBusy(value));
+  const slidePanel = attachSlides(document, host, slides, showScreen);
+  const ai = attachAiPanel(document, host, records, definition, () => { refresh(); refreshTasks(); }, tasks, navigation.closeDrawer, value => refreshTasks.setBusy(value), slides);
   const taskChat = attachTaskChat(document, host, tasks, ai, refreshTasks);
   mountTopicPlugins(topicPlugins, { document, host, parent: document.querySelector('#pilot-content-root main') });
   function renderTaskDetail() {
@@ -198,10 +206,11 @@ export function startPage(document, host) {
     else document.getElementById('task-detail-error').textContent = '无法打开任务对话，请重试。';
   });
   function showScreen(path) {
-    let target = ['/chat', '/tasks', '/task-detail', '/task-chat', '/collections', '/more', '/settings', '/topics', ...topicPlugins.map(plugin => plugin.path)].includes(path) ? path : '/unavailable';
+    let target = ['/chat', '/tasks', '/task-detail', '/task-chat', '/slides', '/slides/view', '/collections', '/more', '/settings', '/topics', ...topicPlugins.map(plugin => plugin.path)].includes(path) ? path : '/unavailable';
     if (target === '/task-detail') try { if (!selectedTaskId || !renderTaskDetail()) target = '/tasks'; } catch { target = '/tasks'; }
     if (target === '/task-chat' && !selectedTaskId) target = '/tasks';
     if (target === '/chat') ai.refreshList();
+    if (target === '/slides') slidePanel.refresh();
     ai.setScreenActive(target === '/chat');
     for (const section of document.querySelectorAll('[data-screen]')) section.hidden = section.dataset.screen !== target;
     navigation.render(target);
@@ -226,5 +235,5 @@ export function startPage(document, host) {
   }
 }
 
-globalThis.PilotCore = { definition, validateValues, prepareRecordWrite, runRuleChecks, createRecords, createTasks, taskPolicy, lifecyclePolicy, projectTaskList, parseOwners, conversation, titleWork, startPage, runPilotAgent, demoModelRequest };
+globalThis.PilotCore = { definition, validateValues, prepareRecordWrite, runRuleChecks, createRecords, createTasks, createSlides, taskPolicy, lifecyclePolicy, projectTaskList, parseOwners, conversation, titleWork, startPage, runPilotAgent, demoModelRequest };
 if (typeof document !== 'undefined') startPage(document, globalThis);

@@ -35,6 +35,34 @@ vm.runInContext(readFileSync(new URL('web-dist/pilot.js', import.meta.url), 'utf
 const core = browser.PilotCore;
 const plain = value => JSON.parse(JSON.stringify(value));
 
+test('slide creation uses the shared contract and transaction receipt to avoid duplicate records', () => {
+  const receipts = new Map(), rows = [];
+  const slides = core.createSlides({ list: () => rows, read: id => rows.find(row => row.id === id),
+    readReceipt: (key, signature) => { const prior = receipts.get(key); if (prior && prior.signature !== signature) throw new Error('conflict'); return prior?.result; },
+    commitTool(key, signature, operation) { const row = { id: 'test-id', ...operation.values }; rows.push(row); const result = { id: row.id, title: row.title }; receipts.set(key, { signature, result }); return result; },
+  });
+  const args = { title: '光合作用', markdown: '# 光合作用\n\n---\n\n# 能量转换' };
+  assert.equal(slides.create('turn:call', args).id, 'test-id');
+  assert.equal(slides.create('turn:call', args).id, 'test-id'); assert.equal(rows.length, 1);
+  assert.throws(() => slides.create('turn:call', { ...args, title: '其他' }));
+  assert.throws(() => slides.create('other', { title: '', markdown: 'x' }));
+  assert.equal(rows.length, 1);
+});
+
+test('conversation agent can write a slide deck and return its saved result', async () => {
+  const saved = [], books = agentFixture(); let step = 0;
+  const slides = { create: (key, args) => { saved.push({ key, args }); return { id: 'slide-id', title: args.title }; } };
+  const result = await core.runPilotAgent({ prompt: '制作光合作用幻灯片', records: books.records, definition: core.definition, slides,
+    signal: new AbortController().signal, turnId: 'slide-turn', modelRequest: async body => {
+      assert.ok(body.tools.some(tool => tool.function.name === 'createSlideDeck'));
+      if (++step === 1) return { choices: [{ finish_reason: 'tool_calls', message: { content: null, tool_calls: [{ id: 'slide-call', function: { name: 'createSlideDeck', arguments: JSON.stringify({ title: '光合作用', markdown: '# 光合作用\n\n---\n\n# 能量转换' }) } }] } }] };
+      assert.ok(body.messages.some(message => message.role === 'tool' && message.content.includes('slide-id')));
+      return { choices: [{ finish_reason: 'stop', message: { content: '已创建，请在知识幻灯片查看。' } }] };
+    } });
+  assert.equal(saved.length, 1); assert.equal(saved[0].key, 'slide-turn:slide-call');
+  assert.match(result.reply, /已创建/);
+});
+
 test('Android bundle contains the exact current shared source and its rules pass', () => {
   const manifest = JSON.parse(readFileSync(new URL('web-dist/build-manifest.json', import.meta.url), 'utf8'));
   assert.equal(manifest.sharedSourceSha256, createHash('sha256').update(readFileSync(sourceUrl)).digest('hex'));

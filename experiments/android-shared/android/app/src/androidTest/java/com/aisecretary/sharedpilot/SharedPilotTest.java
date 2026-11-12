@@ -24,6 +24,18 @@ import java.util.UUID;
 /** Runs on Android; compiling this test is not a device-test pass. */
 @RunWith(AndroidJUnit4.class)
 public final class SharedPilotTest {
+    @Test public void slidesMigrationPreservesExistingRowsAndStoresMarkdown() throws Exception {
+        try (SQLiteDatabase db = SQLiteDatabase.create(null)) {
+            db.execSQL("CREATE TABLE existing_data (value TEXT NOT NULL)");
+            db.execSQL("INSERT INTO existing_data VALUES ('preserved')");
+            RecordStore.migrate(db, 7, 8);
+            JSONObject created = SlideStore.create(db, new JSONObject().put("title", "测试").put("markdown", "# 第一页\n\n---\n\n# 第二页").toString());
+            assertEquals(1, SlideStore.list(db).length());
+            assertTrue(SlideStore.read(db, created.getString("id")).getString("markdown").contains("第二页"));
+            try (Cursor cursor = db.rawQuery("SELECT value FROM existing_data", null)) { assertTrue(cursor.moveToFirst()); assertEquals("preserved", cursor.getString(0)); }
+            try { SlideStore.create(db, new JSONObject().put("title", "").put("markdown", "x").toString()); fail("Empty title accepted"); } catch (IllegalArgumentException expected) { }
+        }
+    }
     @Test public void microphonePermissionOnlyForBundledOriginAndAudio() {
         String audio = PermissionRequest.RESOURCE_AUDIO_CAPTURE;
         String video = PermissionRequest.RESOURCE_VIDEO_CAPTURE;

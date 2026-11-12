@@ -8,6 +8,7 @@ import postcss from 'postcss';
 import tailwindcss from '@tailwindcss/postcss';
 import { bundleLicenses } from './bundle-licenses.mjs';
 import { topicPlugins } from '../../src/topic-plugins/registry.mjs';
+import { Marp } from '@marp-team/marp-core';
 
 const require = createRequire(import.meta.url);
 const compiled = require('next/dist/compiled/webpack/webpack');
@@ -17,7 +18,7 @@ const directory = fileURLToPath(new URL('.', import.meta.url));
 const root = path.resolve(directory, '../..');
 const sharedBoundary = checkSharedCore(root);
 const messageSource = 'src/components/MessageBody.tsx';
-const sharedUiBoundary = checkSharedCore(root, sharedUiEntries, ['react', 'react/jsx-runtime', 'react-markdown', 'remark-gfm', 'unified', 'remark-parse']);
+const sharedUiBoundary = checkSharedCore(root, sharedUiEntries, ['react', 'react/jsx-runtime', 'react-markdown', 'remark-gfm', 'unified', 'remark-parse', '@marp-team/marp-core']);
 const output = path.join(directory, 'web-dist');
 const schema = 'src/lib/collections/schema.ts';
 const service = 'src/lib/collections/record-write.ts';
@@ -63,6 +64,8 @@ await writeFile(path.join(output, 'index.html'), (await readFile(path.join(direc
 await copyFile(path.join(directory, 'web/pilot.css'), path.join(output, 'pilot.css'));
 await copyFile(path.join(root, 'src/styles/surface-theme.css'), path.join(output, 'surface-theme.css'));
 await copyFile(path.join(root, 'public/worklets/voice-capture.js'), path.join(output, 'voice-capture.js'));
+await writeFile(path.join(output, 'marp-theme.css'), new Marp({ html: false, inlineSVG: false }).render('# Preview').css);
+await copyFile(path.join(directory, 'web/slide-view.css'), path.join(output, 'slide-view.css'));
 const stylesSource = path.join(directory, 'web/shared-message.css');
 const styles = await postcss([tailwindcss({ base: root, optimize: false })]).process(await readFile(stylesSource, 'utf8'), { from: stylesSource, to: path.join(output, 'shared-message.css'), map: false });
 await writeFile(path.join(output, 'shared-message.css'), styles.css);
@@ -110,7 +113,7 @@ await writeFile(path.join(output, 'build-manifest.json'), JSON.stringify(manifes
 const assets = path.join(directory, 'android/app/src/main/assets');
 await mkdir(assets, { recursive: true });
 await writeFile(path.join(assets, 'bundled-js-licenses.txt'), licenses.text);
-for (const file of ['index.html', 'pilot.css', 'pilot.js', 'messages.js', 'shared-message.css', 'surface-theme.css', 'voice-capture.js', 'build-manifest.json', ...pluginStyles]) await copyFile(path.join(output, file), path.join(assets, file));
+for (const file of ['index.html', 'pilot.css', 'pilot.js', 'messages.js', 'shared-message.css', 'surface-theme.css', 'voice-capture.js', 'marp-theme.css', 'slide-view.css', 'build-manifest.json', ...pluginStyles]) await copyFile(path.join(output, file), path.join(assets, file));
 // Preserve notices for code shipped inside the APK (build tools are not shipped).
 await copyFile(path.join(root, 'node_modules/zod/LICENSE'), path.join(assets, 'zod-license.txt'));
 await copyFile(path.join(root, 'node_modules/typescript/LICENSE.txt'), path.join(assets, 'apache-2.0.txt'));

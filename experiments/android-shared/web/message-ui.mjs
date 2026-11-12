@@ -7,6 +7,7 @@ import ConversationDrawer from '../../../src/components/chat/shared/Conversation
 import ChatTextInput from '../../../src/components/chat/shared/ChatTextInput.tsx';
 import ChatBubble from '../../../src/components/chat/shared/ChatBubble.tsx';
 import VoiceConversation from '../../../src/components/chat/VoiceConversation.tsx';
+import SlideViewer from '../../../src/components/slides/SlideViewer.tsx';
 import TaskCard from '../../../src/components/tasks/shared/TaskCard.tsx';
 import TaskStatusSelect from '../../../src/components/tasks/shared/TaskStatusSelect.tsx';
 import TaskOwnerSelect from '../../../src/components/tasks/shared/TaskOwnerSelect.tsx';
@@ -120,7 +121,7 @@ function createAppShell(element, content, onSelect, topicPlugins = []) {
   }
   function closeDrawer() { setDrawer(false); }
   function renderHeader() {
-    const titles = { '/chat': '对话', '/tasks': '任务', '/task-detail': taskTitle, '/task-chat': taskTitle, '/collections': '栏目', '/more': '更多', '/settings': '设置', '/search': '搜索',
+    const titles = { '/chat': '对话', '/tasks': '任务', '/task-detail': taskTitle, '/task-chat': taskTitle, '/slides': '知识幻灯片', '/slides/view': '幻灯片', '/collections': '栏目', '/more': '更多', '/settings': '设置', '/search': '搜索',
       '/vault': '资料', '/finance': '财务', '/health': '健康', '/topics': '专题', '/files': '文件', '/pages': '页面', '/mail': '邮件' };
     for (const plugin of topicPlugins) titles[plugin.path] = plugin.title;
     flushSync(() => header.render(createElement(PageHeaderView, { title: titles[currentPath] || '栏目',
@@ -147,6 +148,7 @@ function createAppShell(element, content, onSelect, topicPlugins = []) {
       const navigationPath = pathname === '/task-detail' || pathname === '/task-chat' ? '/tasks' : pathname;
       bottom.render(createElement(BottomNavView, { pathname: navigationPath, t: text => text, renderItem: navItem }));
       side.render(createElement(SideNavView, { pathname: navigationPath, t: text => text, renderItem: navItem,
+        collections: createElement('button', { type: 'button', className: 'flex items-center gap-3 rounded-xl px-3 py-2.5 text-[14px]', onClick: () => onSelect('/slides') }, '知识幻灯片'),
         trailing: createElement('div', { className: 'shrink-0 border-t px-2 py-3 space-y-0.5', style: { borderColor: 'var(--border)' } },
           iconButton('搜索', SearchIcon, '/search'), iconButton('设置', SettingsIcon, '/settings'), createElement(ThemeToggle, { withLabel: true })) }));
       more.render(createElement(MoreNavigationView, { t: text => text,
@@ -168,4 +170,8 @@ function createVoiceConversation(element, callbacks, services, nativeMicrophone)
     })));
   } };
 }
-globalThis.PilotMessageUI = { createTranscript, createConversationControls, createTaskChatInput, createTaskCards, createAppShell, createVoiceConversation };
+function createSlideViewer(element) {
+  const root = createRoot(element);
+  return { render(deck) { flushSync(() => root.render(createElement(SlideViewer, { key: deck.id, title: deck.title, markdown: deck.markdown }))); } };
+}
+globalThis.PilotMessageUI = { createTranscript, createConversationControls, createTaskChatInput, createTaskCards, createAppShell, createVoiceConversation, createSlideViewer };

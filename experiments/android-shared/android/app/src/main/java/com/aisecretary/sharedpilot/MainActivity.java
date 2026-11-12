@@ -206,6 +206,14 @@ public final class MainActivity extends Activity {
             try { return new JSONObject().put("ok", true).put("data", store.listTasks(plan)).toString(); }
             catch (Exception error) { return failure(); }
         }
+        @JavascriptInterface public String listSlides() {
+            try { return new JSONObject().put("ok", true).put("data", store.listSlides()).toString(); }
+            catch (Exception error) { return failure(); }
+        }
+        @JavascriptInterface public String readSlide(String id) {
+            try { JSONObject row = store.readSlide(id); return new JSONObject().put("ok", true).put("data", row == null ? JSONObject.NULL : row).toString(); }
+            catch (Exception error) { return failure(); }
+        }
         @JavascriptInterface public String listTasksForView() {
             try { return new JSONObject().put("ok", true).put("data", store.listTasksForView()).toString(); }
             catch (Exception error) { return failure(); }
