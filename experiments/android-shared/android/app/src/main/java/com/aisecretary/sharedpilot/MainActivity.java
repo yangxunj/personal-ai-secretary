@@ -63,6 +63,8 @@ public final class MainActivity extends Activity {
         }, true);
         WebSettings settings = webView.getSettings();
         settings.setJavaScriptEnabled(true);
+        // The shared settings and theme use origin-scoped Web Storage.
+        settings.setDomStorageEnabled(true);
         settings.setAllowFileAccess(false);
         settings.setAllowContentAccess(false);
         settings.setAllowFileAccessFromFileURLs(false);

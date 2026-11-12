@@ -160,6 +160,27 @@ public final class SharedPilotTest {
         return result.get();
     }
 
+    @Test public void moduleSettingsPersistAcrossWebViewReload() throws Exception {
+        Activity activity = start();
+        String previous = evaluate(activity, "localStorage.getItem('secretary-module-settings-v1')");
+        try {
+            String before = evaluate(activity, "document.querySelectorAll('#module-settings input')[2].checked");
+            evaluate(activity, "document.querySelectorAll('#module-settings input')[2].click()");
+            String after = evaluate(activity, "document.querySelectorAll('#module-settings input')[2].checked");
+            assertNotEquals(before, after);
+            assertTrue(evaluate(activity, "document.querySelector('#module-settings-status').textContent").contains("设置已保存"));
+            evaluate(activity, "location.reload()");
+            for (int attempts = 0; attempts < 80; attempts++) {
+                if ("4".equals(evaluate(activity, "document.querySelectorAll('#module-settings input').length"))) break;
+                Thread.sleep(100);
+            }
+            assertEquals(after, evaluate(activity, "document.querySelectorAll('#module-settings input')[2].checked"));
+        } finally {
+            evaluate(activity, "const saved=" + previous + "; if(saved===null) localStorage.removeItem('secretary-module-settings-v1'); else localStorage.setItem('secretary-module-settings-v1',saved)");
+            getInstrumentation().runOnMainSync(activity::finish);
+        }
+    }
+
     @Test public void mobileNavigationSwitchesScreensWithoutDiscardingDraft() throws Exception {
         Activity activity = start();
         try {
