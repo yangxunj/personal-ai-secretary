@@ -2,6 +2,7 @@ import { runPilotAgent, demoModelRequest } from './pi-runtime.mjs';
 import { attachConversationPanel } from './conversation-panel.mjs';
 import { generateTitle, titleCandidate } from './title-work.mjs';
 import { createVoiceServices } from './voice-services.mjs';
+import { createNativeMicrophone } from './native-microphone.mjs';
 
 const nonce = () => Array.from(crypto.getRandomValues(new Uint8Array(12)), byte => byte.toString(16).padStart(2, '0')).join('');
 
@@ -24,13 +25,14 @@ export function attachAiPanel(document, host, records, definition, refresh, task
     renderVoice();
   };
   const voiceServices = createVoiceServices(host, bridge, voiceSettingsChanged);
+  const nativeMicrophone = bridge.startNativeMicrophone ? createNativeMicrophone(host, bridge) : undefined;
   const voice = host.PilotMessageUI.createVoiceConversation(document.getElementById('shared-voice'), {
     onRunningChange(value) {
       voiceRunning = value;
       conversations.busy(!!active || value);
     },
     onSubmit: text => execute(text, true),
-  }, voiceServices);
+  }, voiceServices, nativeMicrophone);
   function renderVoice() { voice.render(screenActive && mode() === 'deepseek', !!active || !bridge.hasApiKey?.() || !bridge.hasVoiceKey?.()); }
   host.SecretaryAI = {
     receive(id, response) {

@@ -8,17 +8,18 @@ import { TurnDetector } from '@/lib/turn-detector';
 import { speechText, speechChunks } from '@/lib/speech-text';
 import { webVoiceServices, type VoiceServices } from '@/lib/voice-services';
 import { createVoiceCapture } from '@/lib/voice-capture';
-import { openVoiceMicrophone, voiceErrorCode } from '@/lib/voice-microphone';
+import { openVoiceMicrophone, voiceErrorCode, type NativeVoiceMicrophone } from '@/lib/voice-microphone';
 import { hasSpeechRecording, setSpeechRecording, stopSpeechPlayback } from './SpeechButton';
 
 type Phase = 'off' | 'requesting' | 'listening' | 'recording' | 'transcribing' | 'waiting' | 'speaking';
 
-export default function VoiceConversation({ active, disabled, onRunningChange, onSubmit, services, workletUrl = '/worklets/voice-capture.js' }: {
+export default function VoiceConversation({ active, disabled, onRunningChange, onSubmit, services, nativeMicrophone, workletUrl = '/worklets/voice-capture.js' }: {
   active: boolean;
   disabled: boolean;
   onRunningChange: (running: boolean) => void;
   onSubmit: (text: string, signal: AbortSignal) => Promise<string>;
   services?: VoiceServices;
+  nativeMicrophone?: NativeVoiceMicrophone;
   workletUrl?: string;
 }) {
   const t = useT();
@@ -30,6 +31,8 @@ export default function VoiceConversation({ active, disabled, onRunningChange, o
   const generation = useRef(0);
   const context = useRef<AudioContext | null>(null);
   const media = useRef<MediaStream | null>(null);
+  const nativeCapture = useRef<{ sampleRate: number; setListening(value: boolean): void; stop(): void } | null>(null);
+  const inputRate = useRef(VOICE_SAMPLE_RATE);
   const capture = useRef<(() => void) | null>(null);
   const player = useRef<AudioBufferSourceNode | null>(null);
   const detector = useRef<TurnDetector | null>(null);
@@ -48,6 +51,7 @@ export default function VoiceConversation({ active, disabled, onRunningChange, o
     if (player.current) { try { player.current.stop(); } catch {} player.current.disconnect(); }
     player.current = null;
     capture.current?.(); capture.current = null;
+    nativeCapture.current?.stop(); nativeCapture.current = null;
     for (const track of media.current?.getTracks() ?? []) { track.onended = null; track.stop(); }
     media.current = null;
     const audio = context.current; context.current = null;
@@ -77,6 +81,7 @@ export default function VoiceConversation({ active, disabled, onRunningChange, o
     const resume = () => {
       if (!current(attempt)) return;
       for (const track of media.current?.getAudioTracks() ?? []) track.enabled = true;
+      nativeCapture.current?.setListening(true);
       change('listening');
     };
     if (delay) coolDown.current = setTimeout(resume, delay);
@@ -87,10 +92,11 @@ export default function VoiceConversation({ active, disabled, onRunningChange, o
     const audio = context.current!, signal = abort.current!.signal;
     change('transcribing');
     for (const track of media.current?.getAudioTracks() ?? []) track.enabled = false;
+    nativeCapture.current?.setListening(false);
     try {
-      const length = Math.min(VOICE_SAMPLE_RATE * 60, Math.floor(samples.length / audio.sampleRate * VOICE_SAMPLE_RATE));
+      const length = Math.min(VOICE_SAMPLE_RATE * 60, Math.floor(samples.length / inputRate.current * VOICE_SAMPLE_RATE));
       const offline = new OfflineAudioContext(1, length, VOICE_SAMPLE_RATE);
-      const buffer = offline.createBuffer(1, samples.length, audio.sampleRate);
+      const buffer = offline.createBuffer(1, samples.length, inputRate.current);
       buffer.copyToChannel(new Float32Array(samples), 0);
       const source = offline.createBufferSource(); source.buffer = buffer; source.connect(offline.destination); source.start();
       const rendered = await offline.startRendering();
@@ -131,7 +137,7 @@ export default function VoiceConversation({ active, disabled, onRunningChange, o
     if (!active || disabled || phaseRef.current !== 'off') return;
     if (hasSpeechRecording() && !voiceSessionOwner()) { setError(t('请先完成或取消当前录音')); return; }
     if (!window.isSecureContext) { setError(t('语音输入需要 HTTPS，请使用安全地址或在本机打开')); return; }
-    if (!navigator.mediaDevices?.getUserMedia || typeof AudioContext === 'undefined') {
+    if ((!navigator.mediaDevices?.getUserMedia && !nativeMicrophone) || typeof AudioContext === 'undefined') {
       setError(t('当前浏览器不支持连续语音，请使用新版 Chrome、Edge 或 Safari')); return;
     }
     dispose(); setError(''); setHeard('');
@@ -146,21 +152,35 @@ export default function VoiceConversation({ active, disabled, onRunningChange, o
       await audio.resume();
       if (!current(attempt)) return;
       stage = 'microphone';
-      const stream = await openVoiceMicrophone(navigator.mediaDevices, () => current(attempt));
-      if (!current(attempt)) { stream.getTracks().forEach(track => track.stop()); return; }
-      media.current = stream;
-      stage = 'capture';
-      detector.current = new TurnDetector(audio.sampleRate);
-      const stopCapture = await createVoiceCapture(audio, stream, workletUrl, frame => {
+      const onFrame = (frame: Float32Array) => {
         if (!current(attempt) || !['listening', 'recording'].includes(phaseRef.current)) return;
         const result = detector.current!.push(frame);
         if (result.started) change('recording');
         if (result.discarded) change('listening');
         if (result.audio) void converse(result.audio, attempt);
-      }, () => { if (current(attempt)) fail(t('语音检测中断，请重新开启语音对话')); });
-      if (!current(attempt)) { stopCapture(); return; }
-      capture.current = stopCapture;
-      for (const track of stream.getAudioTracks()) track.onended = () => { if (current(attempt)) fail(t('录音中断，请检查麦克风后重试')); };
+      };
+      const onCaptureError = () => { if (current(attempt)) fail(t('录音中断，请检查麦克风后重试')); };
+      let stream: MediaStream | null = null;
+      try {
+        if (!navigator.mediaDevices?.getUserMedia) throw new DOMException('Unavailable', 'NotSupportedError');
+        stream = await openVoiceMicrophone(navigator.mediaDevices, () => current(attempt));
+      } catch (error) {
+        if (!current(attempt)) return;
+        if (!nativeMicrophone || !['NotReadableError', 'TrackStartError', 'NotSupportedError'].includes(voiceErrorCode(error))) throw error;
+        const native = await nativeMicrophone.start(abort.current!.signal, onFrame, onCaptureError);
+        if (!current(attempt)) { native.stop(); return; }
+        nativeCapture.current = native; inputRate.current = native.sampleRate;
+        detector.current = new TurnDetector(native.sampleRate);
+      }
+      if (stream) {
+        if (!current(attempt)) { stream.getTracks().forEach(track => track.stop()); return; }
+        media.current = stream; stage = 'capture'; inputRate.current = audio.sampleRate;
+        detector.current = new TurnDetector(audio.sampleRate);
+        const stopCapture = await createVoiceCapture(audio, stream, workletUrl, onFrame, onCaptureError);
+        if (!current(attempt)) { stopCapture(); return; }
+        capture.current = stopCapture;
+        for (const track of stream.getAudioTracks()) track.onended = onCaptureError;
+      }
       audio.onstatechange = () => { if (current(attempt) && audio.state !== 'running') fail(t('音频已暂停，请重新开启语音对话')); };
       listen(attempt);
     } catch (e) {

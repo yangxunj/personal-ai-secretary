@@ -15,3 +15,10 @@ export function voiceErrorCode(error: unknown): string {
   const name = error && typeof error === 'object' && 'name' in error ? String(error.name) : '';
   return /^[A-Za-z][A-Za-z0-9]{0,39}$/.test(name) ? name : 'UnknownError';
 }
+
+/** The host owns permission and audio capture; domain detection remains shared. */
+export type NativeVoiceMicrophone = {
+  start(signal: AbortSignal, onFrame: (frame: Float32Array) => void, onError: () => void): Promise<{
+    sampleRate: number; setListening(value: boolean): void; stop(): void;
+  }>;
+};

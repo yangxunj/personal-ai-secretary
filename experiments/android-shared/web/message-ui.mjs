@@ -159,11 +159,11 @@ function createAppShell(element, content, onSelect, topicPlugins = []) {
     renderHeader();
   }, setTaskTitle(title) { taskTitle = title || '任务'; }, initDrawer() { setDrawer(false); }, closeDrawer };
 }
-function createVoiceConversation(element, callbacks, services) {
+function createVoiceConversation(element, callbacks, services, nativeMicrophone) {
   const root = createRoot(element);
   return { render(active, disabled) {
     flushSync(() => root.render(createElement(VoiceConversation, {
-      active, disabled, services, workletUrl: '/assets/voice-capture.js',
+      active, disabled, services, nativeMicrophone, workletUrl: '/assets/voice-capture.js',
       onRunningChange: callbacks.onRunningChange, onSubmit: callbacks.onSubmit,
     })));
   } };
