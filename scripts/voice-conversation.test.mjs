@@ -10,6 +10,7 @@ const load = async (file) => import('data:text/javascript;base64,' + Buffer.from
 const { TurnDetector } = await load('../src/lib/turn-detector.ts');
 const session = await load('../src/lib/voice-session.ts');
 const { createVoiceCapture } = await load('../src/lib/voice-capture.ts');
+const { openVoiceMicrophone, voiceErrorCode } = await load('../src/lib/voice-microphone.ts');
 const frame = (level, rate = 16000) => new Float32Array(rate * 0.02).fill(level);
 const feed = (detector, level, count, rate) => Array.from({ length: count }, () => detector.push(frame(level, rate)));
 
@@ -134,4 +135,32 @@ test('capture does not restart recording after the audio context is closed durin
     await assert.rejects(createVoiceCapture(audio, {}, '/test.js', () => {}, () => {}));
     assert.equal(fallbackStarted, false); assert.equal(disconnected, true);
   } finally { globalThis.AudioWorkletNode = previous; }
+});
+
+test('microphone retries with basic audio only when constraints are rejected', async () => {
+  const calls = [], stream = {};
+  const media = { async getUserMedia(options) {
+    calls.push(options);
+    if (calls.length === 1) throw new DOMException('unsupported constraints', 'OverconstrainedError');
+    return stream;
+  } };
+  assert.equal(await openVoiceMicrophone(media, () => true), stream);
+  assert.equal(calls.length, 2); assert.equal(calls[1].audio, true);
+});
+
+test('microphone does not retry denied, unavailable or cancelled capture requests', async () => {
+  for (const name of ['NotAllowedError', 'NotReadableError']) {
+    let calls = 0;
+    await assert.rejects(openVoiceMicrophone({ async getUserMedia() { calls++; throw new DOMException('not available', name); } }, () => true), { name });
+    assert.equal(calls, 1);
+  }
+  let calls = 0;
+  await assert.rejects(openVoiceMicrophone({ async getUserMedia() { calls++; throw new DOMException('bad constraints', 'OverconstrainedError'); } }, () => false), { name: 'AbortError' });
+  assert.equal(calls, 1);
+});
+
+test('microphone diagnostics expose only a bounded error class', () => {
+  assert.equal(voiceErrorCode(new DOMException('private details', 'NotReadableError')), 'NotReadableError');
+  assert.equal(voiceErrorCode({ name: 'Error with private details' }), 'UnknownError');
+  assert.equal(voiceErrorCode(null), 'UnknownError');
 });

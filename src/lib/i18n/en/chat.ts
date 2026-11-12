@@ -94,6 +94,8 @@ export const chat: Dict = {
   '无法访问麦克风，请在浏览器和系统设置中允许录音': 'Microphone access was denied. Allow recording in your browser and system settings.',
   '没有找到麦克风，请连接后重试': 'No microphone found. Connect one and try again.',
   '无法启动录音，请检查麦克风是否被占用': 'Could not start recording. Check whether the microphone is in use.',
+  '无法读取麦克风，请检查是否被其他应用占用（{code}）': 'Could not read the microphone. Check whether another app is using it ({code}).',
+  '录音启动失败，错误代码：{code}': 'Could not start recording. Error code: {code}.',
   '录音中断，请检查麦克风后重试': 'Recording was interrupted. Check the microphone and try again.',
   '录音太短，请重新录音': 'Recording is too short. Please record again.',
   '没有录到声音，请检查麦克风后重试': 'No sound was recorded. Check the microphone and try again.',

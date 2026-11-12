@@ -8,6 +8,7 @@ import { TurnDetector } from '@/lib/turn-detector';
 import { speechText, speechChunks } from '@/lib/speech-text';
 import { webVoiceServices, type VoiceServices } from '@/lib/voice-services';
 import { createVoiceCapture } from '@/lib/voice-capture';
+import { openVoiceMicrophone, voiceErrorCode } from '@/lib/voice-microphone';
 import { hasSpeechRecording, setSpeechRecording, stopSpeechPlayback } from './SpeechButton';
 
 type Phase = 'off' | 'requesting' | 'listening' | 'recording' | 'transcribing' | 'waiting' | 'speaking';
@@ -145,7 +146,7 @@ export default function VoiceConversation({ active, disabled, onRunningChange, o
       await audio.resume();
       if (!current(attempt)) return;
       stage = 'microphone';
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, channelCount: 1 } });
+      const stream = await openVoiceMicrophone(navigator.mediaDevices, () => current(attempt));
       if (!current(attempt)) { stream.getTracks().forEach(track => track.stop()); return; }
       media.current = stream;
       stage = 'capture';
@@ -164,12 +165,14 @@ export default function VoiceConversation({ active, disabled, onRunningChange, o
       listen(attempt);
     } catch (e) {
       if (!current(attempt)) return;
-      const name = e && typeof e === 'object' && 'name' in e ? String(e.name) : '';
+      const name = voiceErrorCode(e);
       fail(stage === 'microphone' && ['NotAllowedError', 'SecurityError'].includes(name)
         ? t('无法访问麦克风，请在浏览器和系统设置中允许录音')
         : stage === 'microphone' && ['NotFoundError', 'DevicesNotFoundError'].includes(name)
           ? t('没有找到麦克风，请连接后重试')
-          : stage === 'microphone' ? t('无法启动录音，请检查麦克风是否被占用')
+          : stage === 'microphone' && ['NotReadableError', 'TrackStartError'].includes(name)
+            ? t('无法读取麦克风，请检查是否被其他应用占用（{code}）', { code: name })
+          : stage === 'microphone' ? t('录音启动失败，错误代码：{code}', { code: name })
             : stage === 'capture' ? t('录音模块启动失败，请更新 Android System WebView 后重试')
               : t('无法开启音频播放，请检查手机声音设置后重试'));
     }
