@@ -3,12 +3,17 @@ import { newConversation, parseConversation, recoverConversation, conversationHi
 import { publicWebUrl } from '../../../src/lib/web-search/url.mjs';
 import { titleCandidate } from './title-work.mjs';
 
-export function attachConversationPanel(document, bridge, nonce, messageUi, onSend, closeDrawer) {
+export function attachConversationPanel(document, bridge, nonce, messageUi, onSend, closeDrawer, onCreated) {
   const status = document.getElementById('conversation-status');
   if (!messageUi?.createConversationControls) throw new Error('共用会话界面未加载，请重新打开应用。');
   const transcript = messageUi.createTranscript(document.getElementById('conversation-messages'), url => {
     try { bridge.openWebLink(publicWebUrl(url)); }
     catch { document.getElementById('message-link-status').textContent = '无法打开此链接。'; }
+  }, link => {
+    try {
+      if (!onCreated?.(link)) document.getElementById('message-link-status').textContent = '无法打开这份幻灯片，内容可能已不存在。';
+      else document.getElementById('message-link-status').textContent = '';
+    } catch { document.getElementById('message-link-status').textContent = '无法打开这份幻灯片，请稍后重试。'; }
   });
   let current, mode = 'demo', busy = false, healthy = true, draft = '', items = [], pendingDelete;
   const deleteDialog = document.getElementById('conversation-delete-dialog');

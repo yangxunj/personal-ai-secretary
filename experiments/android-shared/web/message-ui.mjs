@@ -19,10 +19,11 @@ import PageHeaderView from '../../../src/components/navigation/shared/PageHeader
 import { SearchIcon, SettingsIcon } from '../../../src/components/navigation/shared/HeaderIcons.tsx';
 import MoreNavigationView from '../../../src/components/navigation/shared/MoreNavigationView.tsx';
 import ThemeToggle from '../../../src/components/ThemeToggle.tsx';
+import { createdLinks } from '../../../src/lib/chat/created-links.mjs';
 
 // Only the platform mount and navigation policy live here. Markdown rendering
 // remains the existing production component, imported without a fork.
-function createTranscript(element, onLink) {
+function createTranscript(element, onLink, onCreated) {
   const root = createRoot(element);
   element.addEventListener('click', event => {
     const link = event.target.closest?.('a');
@@ -32,9 +33,14 @@ function createTranscript(element, onLink) {
     render(turns, interruptedNotice) {
       flushSync(() => root.render(turns.map(turn => createElement('li', { key: turn.id },
         createElement(ChatBubble, { role: 'user' }, turn.prompt),
-        createElement(ChatBubble, { role: 'assistant' }, turn.status === 'complete'
-          ? createElement('div', { className: 'shared-message' }, createElement(MessageBody, null, turn.reply))
-          : turn.status === 'running' ? '正在处理…' : interruptedNotice),
+        createElement(ChatBubble, { role: 'assistant' },
+          turn.status === 'complete'
+            ? createElement('div', { className: 'shared-message' }, createElement(MessageBody, null, turn.reply))
+            : turn.status === 'running' ? '正在处理…' : interruptedNotice,
+          typeof onCreated === 'function' && createdLinks(turn).map(link => createElement('button', {
+            key: `${link.kind}:${link.id}`, type: 'button', className: 'chat-created-link',
+            onClick: () => onCreated(link), 'aria-label': `打开幻灯片：${link.title}`,
+          }, `打开幻灯片：${link.title}`))),
       ))));
     },
   };

@@ -184,7 +184,8 @@ export function startPage(document, host) {
   const navigation = host.PilotMessageUI.createAppShell(document.getElementById('pilot-shell'), document.getElementById('pilot-content-root'), showScreen, topicPlugins);
   navigation.initDrawer();
   const slidePanel = attachSlides(document, host, slides, showScreen);
-  const ai = attachAiPanel(document, host, records, definition, () => { refresh(); refreshTasks(); }, tasks, navigation.closeDrawer, value => refreshTasks.setBusy(value), slides);
+  const ai = attachAiPanel(document, host, records, definition, () => { refresh(); refreshTasks(); }, tasks, navigation.closeDrawer, value => refreshTasks.setBusy(value), slides,
+    link => link.kind === 'slide' && slidePanel.open(link.id));
   const taskChat = attachTaskChat(document, host, tasks, ai, refreshTasks);
   mountTopicPlugins(topicPlugins, { document, host, parent: document.querySelector('#pilot-content-root main') });
   function renderTaskDetail() {
