@@ -23,6 +23,7 @@ export const sharedEntries = [
   'src/lib/title-content.mjs',
   'src/lib/slides/contracts.ts',
   'src/lib/chat/created-links.mjs',
+  'src/lib/modules/registry.mjs',
   'src/topic-plugins/registry.mjs',
 ];
 export const sharedUiEntries = [

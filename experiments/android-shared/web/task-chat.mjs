@@ -5,7 +5,7 @@ import { publicWebUrl } from '../../../src/lib/web-search/url.mjs';
 
 const nonce = () => Array.from(crypto.getRandomValues(new Uint8Array(12)), byte => byte.toString(16).padStart(2, '0')).join('');
 
-export function attachTaskChat(document, host, tasks, ai, refresh) {
+export function attachTaskChat(document, host, tasks, ai, refresh, moduleEnabled = () => true) {
   const bridge = host.SecretaryStorage, panel = document.querySelector('.task-chat-panel');
   const form = document.getElementById('task-chat-form'), status = document.getElementById('task-chat-status');
   const send = document.getElementById('task-chat-send'), cancel = document.getElementById('task-chat-cancel');
@@ -71,7 +71,7 @@ export function attachTaskChat(document, host, tasks, ai, refresh) {
       tasks.readScoped(currentTaskId);
       const turnId = nonce(), prompt = draft.trim(), history = conversationHistory(current.snapshot);
       save(beginConversationTurn(current.snapshot, turnId, prompt)); started = true; render();
-      const result = await runPilotAgent({ prompt, history, turnId, signal: controller.signal,
+      const result = await runPilotAgent({ prompt, history, turnId, signal: controller.signal, moduleEnabled,
         taskScope: { read: () => tasks.readScoped(currentTaskId), update: (key, args) => tasks.updateScoped(key, currentTaskId, args) },
         modelRequest: ai.request, webRequest: ai.webRequest,
         onEvent(event) {

@@ -20,6 +20,7 @@ import { SearchIcon, SettingsIcon } from '../../../src/components/navigation/sha
 import MoreNavigationView from '../../../src/components/navigation/shared/MoreNavigationView.tsx';
 import ThemeToggle from '../../../src/components/ThemeToggle.tsx';
 import { createdLinks } from '../../../src/lib/chat/created-links.mjs';
+import { TABS } from '../../../src/components/nav-tabs.tsx';
 
 // Only the platform mount and navigation policy live here. Markdown rendering
 // remains the existing production component, imported without a fork.
@@ -101,7 +102,7 @@ function createTaskCards(element, onChange, onLifecycle, onOpen) {
     },
   };
 }
-function createAppShell(element, content, onSelect, topicPlugins = []) {
+function createAppShell(element, content, onSelect, topicPlugins = [], getModules = () => ({ tasks: { enabled: true, pinned: true }, slides: { enabled: true, pinned: false } })) {
   try {
     const pref = localStorage.getItem('theme') || 'system';
     document.documentElement.dataset.theme = pref === 'dark' || (pref === 'system' && matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light';
@@ -150,17 +151,28 @@ function createAppShell(element, content, onSelect, topicPlugins = []) {
   return { render(pathname) {
     currentPath = pathname;
     if (drawerOpen && pathname !== '/chat') closeDrawer();
+    const settings = getModules();
+    const base = TABS.filter(tab => !('wideOnly' in tab && tab.wideOnly));
+    const pinned = [base[0], ...(settings.tasks.enabled && settings.tasks.pinned ? [base[1]] : []),
+      ...(settings.slides.enabled && settings.slides.pinned ? [{ href: '/slides', label: '幻灯片', icon: 'page' }] : [])];
+    const remainder = base.filter(tab => !['/chat', '/tasks'].includes(tab.href));
+    const tabs = [...pinned, ...remainder].slice(0, 6);
+    const overflow = remainder.filter(tab => tab.href !== '/files' && !tabs.some(item => item.href === tab.href));
     flushSync(() => {
       const navigationPath = pathname === '/task-detail' || pathname === '/task-chat' ? '/tasks' : pathname;
-      bottom.render(createElement(BottomNavView, { pathname: navigationPath, t: text => text, renderItem: navItem }));
+      bottom.render(createElement(BottomNavView, { pathname: navigationPath, tabs, t: text => text, renderItem: navItem }));
       side.render(createElement(SideNavView, { pathname: navigationPath, t: text => text, renderItem: navItem,
-        collections: createElement('button', { type: 'button', className: 'flex items-center gap-3 rounded-xl px-3 py-2.5 text-[14px]', onClick: () => onSelect('/slides') }, '知识幻灯片'),
+        hiddenPaths: settings.tasks.enabled ? [] : ['/tasks'],
+        collections: settings.slides.enabled && createElement('button', { type: 'button', className: 'flex items-center gap-3 rounded-xl px-3 py-2.5 text-[14px]', onClick: () => onSelect('/slides') }, '知识幻灯片'),
         trailing: createElement('div', { className: 'shrink-0 border-t px-2 py-3 space-y-0.5', style: { borderColor: 'var(--border)' } },
           iconButton('搜索', SearchIcon, '/search'), iconButton('设置', SettingsIcon, '/settings'), createElement(ThemeToggle, { withLabel: true })) }));
-      more.render(createElement(MoreNavigationView, { t: text => text,
+      more.render(createElement('div', { className: 'space-y-3' },
+        [...(settings.tasks.enabled && !settings.tasks.pinned ? [{ href: '/tasks', label: '待办' }] : []), ...overflow].map(tab =>
+          createElement('button', { key: tab.href, type: 'button', className: 'surface flex items-center gap-3 rounded-xl border p-4', onClick: () => onSelect(tab.href) }, tab.label)),
+        createElement(MoreNavigationView, { t: text => text,
         renderItem: ({ href, label, children }) => createElement('button', { key: href, type: 'button',
           className: 'surface flex items-center gap-3 rounded-xl border p-4', style: { borderColor: 'var(--border)' },
-          onClick: () => onSelect(href, label) }, children) }));
+          onClick: () => onSelect(href, label) }, children) })));
       topics.render(topicPlugins.map(plugin => createElement('button', { key: plugin.id, type: 'button', className: 'pilot-topic-card surface border rounded-2xl p-4', onClick: () => onSelect(plugin.path) },
         createElement(TopicCardContent, { title: plugin.title, summary: plugin.summary, category: plugin.category }))));
     });

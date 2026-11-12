@@ -11,7 +11,9 @@ export function attachConversationPanel(document, bridge, nonce, messageUi, onSe
     catch { document.getElementById('message-link-status').textContent = '无法打开此链接。'; }
   }, link => {
     try {
-      if (!onCreated?.(link)) document.getElementById('message-link-status').textContent = '无法打开这份幻灯片，内容可能已不存在。';
+      const result = onCreated?.(link);
+      if (result === 'disabled') document.getElementById('message-link-status').textContent = '知识幻灯片栏目已关闭，请在设置的栏目管理中开启。';
+      else if (!result) document.getElementById('message-link-status').textContent = '无法打开这份幻灯片，内容可能已不存在。';
       else document.getElementById('message-link-status').textContent = '';
     } catch { document.getElementById('message-link-status').textContent = '无法打开这份幻灯片，请稍后重试。'; }
   });

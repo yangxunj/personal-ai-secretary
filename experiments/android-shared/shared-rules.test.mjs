@@ -63,6 +63,32 @@ test('conversation agent can write a slide deck and return its saved result', as
   assert.match(result.reply, /已创建/);
 });
 
+test('disabled modules do not expose tools or module-specific system instructions to the model', async () => {
+  const books = agentFixture();
+  const settings = { tasks: false, slides: false };
+  await core.runPilotAgent({ prompt: '你好', records: books.records, definition: core.definition,
+    tasks: { listTasks() { throw new Error('unexpected'); } }, slides: { create() { throw new Error('unexpected'); } },
+    moduleEnabled: id => settings[id], signal: new AbortController().signal, turnId: 'disabled-modules',
+    modelRequest: async body => {
+      const names = body.tools.map(tool => tool.function.name);
+      for (const name of ['createTask', 'listTasks', 'updateTask', 'createSlideDeck']) assert.ok(!names.includes(name));
+      assert.doesNotMatch(body.messages[0].content, /知识幻灯片|待办/);
+      return { choices: [{ finish_reason: 'stop', message: { content: '你好' } }] };
+    } });
+  await assert.rejects(core.runPilotAgent({ prompt: '你好', taskScope: {}, moduleEnabled: () => false, signal: new AbortController().signal }), /待办栏目已关闭/);
+});
+
+test('turn in progress cannot write a slide after its module is disabled', async () => {
+  const books = agentFixture(); let enabled = true, writes = 0, calls = 0;
+  await core.runPilotAgent({ prompt: '做幻灯片', records: books.records, definition: core.definition,
+    slides: { create() { writes++; return { id: 'x', title: 'x' }; } }, moduleEnabled: () => enabled,
+    signal: new AbortController().signal, turnId: 'disabled-during-turn', modelRequest: async () => {
+      if (++calls === 1) { enabled = false; return { choices: [{ finish_reason: 'tool_calls', message: { content: null, tool_calls: [{ id: 'call', function: { name: 'createSlideDeck', arguments: JSON.stringify({ title: '测试', markdown: '# 测试' }) } }] } }] }; }
+      return { choices: [{ finish_reason: 'stop', message: { content: '未创建。' } }] };
+    } });
+  assert.equal(writes, 0);
+});
+
 test('Android bundle contains the exact current shared source and its rules pass', () => {
   const manifest = JSON.parse(readFileSync(new URL('web-dist/build-manifest.json', import.meta.url), 'utf8'));
   assert.equal(manifest.sharedSourceSha256, createHash('sha256').update(readFileSync(sourceUrl)).digest('hex'));

@@ -57,8 +57,11 @@ function responseStream(result) {
   return stream;
 }
 
-export async function runPilotAgent({ prompt, records, definition, tasks, slides, taskScope, history = [], modelRequest, webRequest, signal, onEvent = () => {}, turnId }) {
+export async function runPilotAgent({ prompt, records, definition, tasks, slides, taskScope, moduleEnabled = () => true, history = [], modelRequest, webRequest, signal, onEvent = () => {}, turnId }) {
   if (!prompt.trim() || prompt.length > 1000) throw new Error('请填写 1～1000 字的请求。');
+  if (taskScope && !moduleEnabled('tasks')) throw new Error('待办栏目已关闭。');
+  if (!moduleEnabled('tasks')) tasks = undefined;
+  if (!moduleEnabled('slides')) slides = undefined;
   signal.throwIfAborted();
   const now = new Date(), today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
   let calls = 0, requests = 0;
@@ -72,6 +75,7 @@ export async function runPilotAgent({ prompt, records, definition, tasks, slides
       // Pi's validation may coerce arguments; always run the authoritative Zod contract too.
       const args = contract.inputSchema.parse(input);
       if (name in taskToolContracts) {
+        if (!moduleEnabled('tasks')) throw new Error('待办栏目已关闭。');
         const result = name === 'listTasks' ? await tasks.listTasks(args)
           : await tasks.toolWrite(turnId + ':' + callId, name, args);
         return { content: [{ type: 'text', text: JSON.stringify(result) }], details: {} };
@@ -95,6 +99,7 @@ export async function runPilotAgent({ prompt, records, definition, tasks, slides
     description: '仅当用户明确要求制作幻灯片时调用。使用 Marp Markdown：每页以单独一行 --- 分隔。初版制作约3至5页、内容简洁；不要使用 HTML、图片或外部资源。将完整标题和 Markdown 交给工具保存。',
     parameters: z.toJSONSchema(createSlideDeckInput, { target: 'draft-7' }), executionMode: 'sequential',
     async execute(callId, input) {
+      if (!moduleEnabled('slides')) throw new Error('知识幻灯片栏目已关闭。');
       signal.throwIfAborted(); if (++calls > 8) throw new Error('本轮工具调用已达上限。');
       const result = slides.create(turnId + ':' + callId, createSlideDeckInput.parse(input));
       return { content: [{ type: 'text', text: JSON.stringify({ ok: true, deck: result }) }], details: {} };
@@ -107,6 +112,7 @@ export async function runPilotAgent({ prompt, records, definition, tasks, slides
     ];
     for (const [name, schema, description] of scoped) tools.push({ name, label: name, description, parameters: z.toJSONSchema(schema, { target: 'draft-7' }), executionMode: 'sequential',
       async execute(callId, input) {
+        if (!moduleEnabled('tasks')) throw new Error('待办栏目已关闭。');
         signal.throwIfAborted(); if (++calls > 8) throw new Error('本轮工具调用已达上限。');
         const args = schema.parse(input);
         const result = name === 'getCurrentTask' ? taskScope.read() : taskScope.update(turnId + ':' + callId, args);

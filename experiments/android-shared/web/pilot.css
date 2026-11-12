@@ -64,3 +64,7 @@ body.pilot-body{max-width:none;margin:0;padding:0;background:var(--bg);color:var
 .slides-controls { display: flex; align-items: center; justify-content: center; gap: 20px; margin: 14px 0; }
 .slides-controls button:disabled { opacity: .4; }
 .chat-created-link { display: block; margin-top: 10px; max-width: 100%; text-align: left; white-space: normal; overflow-wrap: anywhere; font-size: 14px; }
+.module-settings-card { margin: 12px 0; padding: 4px 14px; border: 1px solid var(--border); border-radius: 12px; }
+.module-settings-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 48px; margin: 0; }
+.module-settings-row input[type="checkbox"] { width: 20px; height: 20px; min-width: 20px; margin: 0; padding: 0; accent-color: #5274f5; }
+.module-settings-row:has(input:disabled) { opacity: .55; }

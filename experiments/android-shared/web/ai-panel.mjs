@@ -6,7 +6,7 @@ import { createNativeMicrophone } from './native-microphone.mjs';
 
 const nonce = () => Array.from(crypto.getRandomValues(new Uint8Array(12)), byte => byte.toString(16).padStart(2, '0')).join('');
 
-export function attachAiPanel(document, host, records, definition, refresh, tasks, closeDrawer, setTasksBusy = () => {}, slides, onCreated) {
+export function attachAiPanel(document, host, records, definition, refresh, tasks, closeDrawer, setTasksBusy = () => {}, slides, onCreated, moduleEnabled = () => true) {
   const form = document.getElementById('ai-form');
   const output = document.getElementById('ai-output');
   const events = document.getElementById('ai-events');
@@ -133,7 +133,7 @@ export function attachAiPanel(document, host, records, definition, refresh, task
     try {
       const turnId = nonce();
       const history = conversations.begin(turnId, prompt, fromVoice); started = true;
-      const result = await runPilotAgent({ prompt, records, definition, tasks, slides: real ? slides : undefined, history,
+      const result = await runPilotAgent({ prompt, records, definition, tasks: moduleEnabled('tasks') ? tasks : undefined, slides: real && moduleEnabled('slides') ? slides : undefined, moduleEnabled, history,
         modelRequest: real ? nativeRequest : demoModelRequest('tasks'), webRequest: real ? nativeWebRequest : undefined, signal: active.signal, turnId,
         onEvent(event) {
           if (event.type === 'message_end') conversations.record(event.message);

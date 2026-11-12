@@ -118,7 +118,7 @@
     <section class="pilot-more" data-screen="/more" hidden aria-labelledby="more-title">
       <h2 id="more-title" class="pilot-section-title">更多</h2><div id="pilot-more-navigation" class="space-y-3"></div>
       <button class="secondary" type="button" data-open-screen="/collections">书单</button>
-      <button class="secondary" type="button" data-open-screen="/slides">知识幻灯片</button>
+      <button class="secondary" type="button" data-open-screen="/slides" id="slides-more-entry">知识幻灯片</button>
     </section>
     <section class="pilot-topics" data-screen="/topics" hidden aria-labelledby="topics-title">
       <h2 id="topics-title" class="pilot-section-title">专题</h2>
@@ -129,6 +129,10 @@
     </section>
     <section class="pilot-settings" data-screen="/settings" hidden aria-labelledby="pilot-settings-title">
       <h2 id="pilot-settings-title">设置</h2>
+      <h3>栏目管理</h3>
+      <p>关闭栏目会隐藏入口并停用相关 AI 工具，已保存的数据不会删除。设置仅保存在本机。</p>
+      <div id="module-settings"></div>
+      <p id="module-settings-status" role="status"></p>
       <h3>模型与设置</h3>
       <label class="mode-choice"><input type="radio" name="ai-mode" value="deepseek" checked>DeepSeek Flash</label>
       <label class="mode-choice"><input type="radio" name="ai-mode" value="demo">离线演练（不调用 AI 模型）</label>

@@ -10,6 +10,7 @@ import { mountTopicPlugins } from './topic-plugin-adapters.mjs';
 import { createTasks, attachTaskPanel, taskPolicy, lifecyclePolicy, projectTaskList, parseOwners } from './tasks.mjs';
 import * as conversation from '../../../src/lib/pi/conversation.mjs';
 import * as titleWork from './title-work.mjs';
+import { modules, normalizeModuleSettings, moduleForPath } from '../../../src/lib/modules/registry.mjs';
 
 export const definition = parseDefinition({
   title: '平板书单', view: 'cards', titleFieldId: 'name', fields: [
@@ -181,12 +182,40 @@ export function startPage(document, host) {
     commitTool: (key, signature, operation) => decode(bridge.commitTool(key, signature, JSON.stringify(operation))),
   });
   host.Pilot.slides = slides;
-  const navigation = host.PilotMessageUI.createAppShell(document.getElementById('pilot-shell'), document.getElementById('pilot-content-root'), showScreen, topicPlugins);
+  const moduleKey = 'secretary-module-settings-v1';
+  let moduleSettings;
+  try { moduleSettings = normalizeModuleSettings(JSON.parse(host.localStorage.getItem(moduleKey) || '{}')); }
+  catch { moduleSettings = normalizeModuleSettings({}); }
+  const moduleEnabled = id => moduleSettings[id]?.enabled === true;
+  const navigation = host.PilotMessageUI.createAppShell(document.getElementById('pilot-shell'), document.getElementById('pilot-content-root'), showScreen, topicPlugins, () => moduleSettings);
   navigation.initDrawer();
   const slidePanel = attachSlides(document, host, slides, showScreen);
   const ai = attachAiPanel(document, host, records, definition, () => { refresh(); refreshTasks(); }, tasks, navigation.closeDrawer, value => refreshTasks.setBusy(value), slides,
-    link => link.kind === 'slide' && slidePanel.open(link.id));
-  const taskChat = attachTaskChat(document, host, tasks, ai, refreshTasks);
+    link => link.kind === 'slide' && (!moduleEnabled('slides') ? 'disabled' : slidePanel.open(link.id)), moduleEnabled);
+  const taskChat = attachTaskChat(document, host, tasks, ai, refreshTasks, moduleEnabled);
+  function renderModuleSettings() {
+    const container = document.getElementById('module-settings'); container.replaceChildren();
+    for (const module of modules) {
+      const block = document.createElement('div'); block.className = 'module-settings-card';
+      for (const [key, text] of [['enabled', `启用${module.title}`], ['pinned', '显示在底栏']]) {
+        const label = document.createElement('label'), input = document.createElement('input'); label.className = 'module-settings-row';
+        input.type = 'checkbox'; input.checked = moduleSettings[module.id][key];
+        input.disabled = key === 'pinned' && !moduleEnabled(module.id);
+        input.addEventListener('change', () => {
+          const next = normalizeModuleSettings(moduleSettings); next[module.id][key] = input.checked;
+          try { host.localStorage.setItem(moduleKey, JSON.stringify(next)); moduleSettings = next; document.getElementById('module-settings-status').textContent = '设置已保存；正在进行的工具调用会检查最新设置。'; }
+          catch { document.getElementById('module-settings-status').textContent = '设置保存失败，请重试。'; }
+          renderModuleSettings(); navigation.render('/settings');
+          document.getElementById('slides-more-entry').hidden = !moduleEnabled('slides');
+        });
+        const caption = document.createElement('span'); caption.textContent = text;
+        label.append(caption, input); block.append(label);
+      }
+      container.append(block);
+    }
+  }
+  renderModuleSettings();
+  document.getElementById('slides-more-entry').hidden = !moduleEnabled('slides');
   mountTopicPlugins(topicPlugins, { document, host, parent: document.querySelector('#pilot-content-root main') });
   function renderTaskDetail() {
     const task = tasks.readForLifecycle(selectedTaskId);
@@ -207,6 +236,8 @@ export function startPage(document, host) {
     else document.getElementById('task-detail-error').textContent = '无法打开任务对话，请重试。';
   });
   function showScreen(path) {
+    const module = moduleForPath(path);
+    if (module && !moduleEnabled(module.id)) { showScreen('/settings'); document.getElementById('module-settings-status').textContent = `${module.title}栏目已关闭，请先开启。`; return; }
     let target = ['/chat', '/tasks', '/task-detail', '/task-chat', '/slides', '/slides/view', '/collections', '/more', '/settings', '/topics', ...topicPlugins.map(plugin => plugin.path)].includes(path) ? path : '/unavailable';
     if (target === '/task-detail') try { if (!selectedTaskId || !renderTaskDetail()) target = '/tasks'; } catch { target = '/tasks'; }
     if (target === '/task-chat' && !selectedTaskId) target = '/tasks';
