@@ -1,4 +1,3 @@
-import { defineTool } from '@deepseek-ai/dsh-tools';
 import { createStore } from './store.js';
 import { listView, deckView, splitPages } from './views.js';
 
@@ -8,9 +7,21 @@ export function apply(ctx, options = {}) {
   const store = createStore(options.directory), selection = new Map();
   const scopeKey = scope => scope?.sessionId || 'features';
   const output = { schema: { type: 'string' }, render: (_args, value) => [{ type: 'text', text: value }] };
-  const register = (name, description, parameters, execute) => ctx.tools.register(defineTool({
-    name, description, parameters, output, isConcurrencySafe: () => false, execute,
-  }));
+  const register = (name, description, fields, execute) => {
+    const properties = Object.fromEntries(Object.entries(fields).map(([key, spec]) => [key, { type: spec.type, description: spec.description }]));
+    const required = Object.entries(fields).filter(([, spec]) => spec.required).map(([key]) => key);
+    return ctx.tools.register({
+      name, description, parameters: { type: 'object', properties, required, additionalProperties: false },
+      output, isConcurrencySafe: () => false,
+      execute(args) {
+        if (!args || typeof args !== 'object' || Array.isArray(args) ||
+            Object.keys(args).some(key => !Object.hasOwn(properties, key)) ||
+            Object.entries(args).some(([key, value]) => typeof value !== properties[key].type) ||
+            required.some(key => !Object.hasOwn(args, key))) throw new Error('幻灯片工具参数无效');
+        return execute(args);
+      },
+    });
+  };
   register('secretary_create_slides', 'Create a knowledge slide deck only when the user asks for one. Write concise text-only Marp Markdown; separate slides with a line containing ---; do not include HTML, images or external resources. Save once, then tell the user to open 知识幻灯片 from the desktop sidebar or the DSH Go plugin panel. Only claim success when the tool succeeds.',
     { title: { type: 'string', required: true, description: 'Title, 1–100 characters.' }, markdown: { type: 'string', required: true, description: 'Complete slide Markdown, 1–12000 characters.' } },
     args => { const deck = store.create(args); try { ctx.dshGo?.refresh('slides'); } catch {} return JSON.stringify({ ok: true, id: deck.id, title: deck.title, pages: splitPages(deck.markdown).length }); });
