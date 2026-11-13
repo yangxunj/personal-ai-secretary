@@ -11,7 +11,7 @@ export function apply(ctx, options = {}) {
   const register = (name, description, parameters, execute) => ctx.tools.register(defineTool({
     name, description, parameters, output, isConcurrencySafe: () => false, execute,
   }));
-  register('secretary_create_slides', 'Create a knowledge slide deck only when the user asks for one. Write concise text-only Marp Markdown; separate slides with a line containing ---; do not include HTML, images or external resources. Save once, then tell the user to open 知识幻灯片 from the plugin panel. Only claim success when the tool succeeds.',
+  register('secretary_create_slides', 'Create a knowledge slide deck only when the user asks for one. Write concise text-only Marp Markdown; separate slides with a line containing ---; do not include HTML, images or external resources. Save once, then tell the user to open 知识幻灯片 from the desktop sidebar or the DSH Go plugin panel. Only claim success when the tool succeeds.',
     { title: { type: 'string', required: true, description: 'Title, 1–100 characters.' }, markdown: { type: 'string', required: true, description: 'Complete slide Markdown, 1–12000 characters.' } },
     args => { const deck = store.create(args); try { ctx.dshGo?.refresh('slides'); } catch {} return JSON.stringify({ ok: true, id: deck.id, title: deck.title, pages: splitPages(deck.markdown).length }); });
   register('secretary_list_slides', 'List saved knowledge slide decks from this pilot, newest first.', {},
@@ -19,6 +19,23 @@ export function apply(ctx, options = {}) {
   register('secretary_read_slides', 'Read a saved knowledge slide deck by its ID from secretary_list_slides.',
     { id: { type: 'string', required: true, description: 'Deck ID.' } },
     args => JSON.stringify({ ok: true, deck: store.read(args.id) }));
+  ctx.inject(['connection'], scoped => {
+    for (const action of ['list', 'read']) scoped.connection.fetch.register({
+      path: '/api/secretary-slides/' + action, methods: ['POST'], requestBody: 'buffered',
+      async fetch(request) {
+        let message;
+        try { message = await request.json(); } catch { return new Response('invalid request', { status: 400 }); }
+        if (message?.type !== 'client-request' || typeof message.rpcId !== 'string' || message.rpcId.length > 100 || message.method !== 'secretary-slides/' + action)
+          return new Response('invalid request', { status: 400 });
+        let result;
+        try {
+          const value = action === 'list' ? store.list().slice(0, 50).map(({ id, title, createdAt }) => ({ id, title, createdAt })) : store.read(message.payload?.id);
+          result = { ok: true, value };
+        } catch { result = { ok: false, error: { code: 'storage', message: '无法读取幻灯片', details: {} } }; }
+        return Response.json({ type: 'server-response', rpcId: message.rpcId, result });
+      },
+    });
+  });
   ctx.inject(['dshGo'], scoped => {
     scoped.dshGo.panel('slides', {
       view(scope) {

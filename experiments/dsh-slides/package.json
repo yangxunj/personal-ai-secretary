@@ -1,11 +1,11 @@
 {
   "name": "dsh-secretary-slides-pilot",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "license": "AGPL-3.0-or-later",
   "type": "module",
   "main": "./lib/index.js",
-  "exports": { ".": "./lib/index.js", "./package.json": "./package.json", "./cordis.patch.yml": "./cordis.patch.yml" },
+  "exports": { ".": "./lib/index.js", "./client": "./lib/client.js", "./package.json": "./package.json", "./cordis.patch.yml": "./cordis.patch.yml" },
   "files": ["lib", "cordis.patch.yml", "README.md"],
   "engines": { "node": ">=24.9", "dsh": "0.2.2-rc.1" },
   "dependencies": {
@@ -20,7 +20,7 @@
     "@deepseek-ai/dsh-user-approval": "0.2.2-rc.1",
     "zod": "4.6.5"
   },
-  "dsh": { "bundle": { "patch": "./cordis.patch.yml" } },
+  "dsh": { "bundle": { "patch": "./cordis.patch.yml" }, "client": { "platform": "web", "inject": ["@deepseek-ai/dsh-client-connection", "@deepseek-ai/dsh-client-ui-layout", "@deepseek-ai/dsh-client-ui-sidebar"] } },
   "dshGo": { "v": 1, "title": "知识幻灯片", "icon": "slides", "contributes": {
     "panels": [{ "id": "slides", "title": "知识幻灯片", "icon": "slides", "placement": ["features", "chat.panel"] }],
     "composer.actions": [{ "id": "open-slides", "label": "幻灯片", "icon": "slides", "effect": { "type": "open", "page": "panel:slides" } }]

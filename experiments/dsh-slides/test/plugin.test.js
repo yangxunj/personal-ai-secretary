@@ -12,8 +12,10 @@ import ts from 'typescript';
 test('DSH tools create durable isolated slides and the native panel opens and pages them', async () => {
   const directory = mkdtempSync(join(tmpdir(), 'dsh-slides-test-'));
   try {
-    const tools = [], panels = new Map();
-    const ctx = { tools: { register: tool => tools.push(tool) }, inject: (_deps, fn) => fn({ dshGo: { panel: (id, panel) => panels.set(id, panel) } }) };
+    const tools = [], panels = new Map(), routes = new Map();
+    const ctx = { tools: { register: tool => tools.push(tool) }, inject: (deps, fn) => deps[0] === 'connection'
+      ? fn({ connection: { fetch: { register: route => routes.set(route.path, route) } } })
+      : fn({ dshGo: { panel: (id, panel) => panels.set(id, panel) } }) };
     apply(ctx, { directory });
     const create = tools.find(tool => tool.name === 'secretary_create_slides');
     const list = tools.find(tool => tool.name === 'secretary_list_slides');
@@ -22,6 +24,9 @@ test('DSH tools create durable isolated slides and the native panel opens and pa
     assert.deepEqual(validateJsonSchemaValue(create.output.schema, response, 'value'), []);
     const created = JSON.parse(response); assert.equal(created.ok, true); assert.equal(created.pages, 2);
     assert.equal(JSON.parse(await list.execute({})).decks[0].id, created.id);
+    const call = async (action, payload) => (await (await routes.get('/api/secretary-slides/' + action).fetch(new Request('https://local/api', { method: 'POST', body: JSON.stringify({ type: 'client-request', rpcId: 'test', method: 'secretary-slides/' + action, payload }) }))).json()).result;
+    assert.equal((await call('list', {})).value[0].id, created.id);
+    assert.equal((await call('read', { id: created.id })).value.title, '光合作用');
     assert.match(JSON.parse(await read.execute({ id: created.id })).deck.markdown, /第二页/);
     assert.equal(createStore(directory).list().length, 1);
     const panel = panels.get('slides'), scope = { sessionId: 'test' };
