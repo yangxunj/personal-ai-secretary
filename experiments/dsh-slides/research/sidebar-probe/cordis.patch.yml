@@ -1,0 +1,3 @@
+- insert:
+    - id: sidebar-replacement-probe
+      name: dsh-sidebar-replacement-probe
