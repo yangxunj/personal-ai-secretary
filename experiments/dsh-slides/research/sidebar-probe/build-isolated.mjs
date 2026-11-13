@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(here, '../../../..');
-const output = path.join(root, 'experiments/android-shared/artifacts/dsh-sidebar-custom-rc2');
+const output = path.join(root, `experiments/android-shared/artifacts/${process.argv.includes('--desktop') ? 'dsh-sidebar-desktop-custom-rc2' : 'dsh-sidebar-custom-rc2'}`);
 const asarPath = process.argv[2];
 if (!asarPath) throw new Error('用法: node build-isolated.mjs <DSH app.asar 路径>');
 const asar = await readFile(asarPath);
@@ -66,4 +66,8 @@ for (const [name, contents] of files) {
   await mkdir(path.dirname(file), {recursive:true});
   await writeFile(file, contents);
 }
+await writeFile(path.join(output, '.secretary-build.json'), JSON.stringify({
+  version: pkg.version,
+  clientSha256: createHash('sha256').update(client).digest('hex'),
+}) + '\n');
 console.log(`隔离侧栏包已生成: ${output}`);
