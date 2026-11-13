@@ -18,7 +18,7 @@ function safeNode(node: Node): Node | null {
   return copy;
 }
 
-export default function SlideViewer({ title, markdown }: { title: string; markdown: string }) {
+export default function SlideViewer({ title, markdown, inlineStyles }: { title: string; markdown: string; inlineStyles?: { theme: string; adaptive: string } }) {
   const [page, setPage] = useState(0);
   const host = useRef<HTMLDivElement>(null);
   const result = useMemo(() => {
@@ -33,15 +33,17 @@ export default function SlideViewer({ title, markdown }: { title: string; markdo
   useEffect(() => {
     const element = host.current; if (!element || !result.sections.length) return;
     const shadow = element.shadowRoot || element.attachShadow({ mode: 'open' });
-    const theme = document.createElement('link'); theme.rel = 'stylesheet'; theme.href = '/assets/marp-theme.css';
-    const adaptive = document.createElement('link'); adaptive.rel = 'stylesheet'; adaptive.href = '/assets/slide-view.css';
+    const theme = inlineStyles ? document.createElement('style') : document.createElement('link');
+    const adaptive = inlineStyles ? document.createElement('style') : document.createElement('link');
+    if (inlineStyles) { theme.textContent = inlineStyles.theme; adaptive.textContent = inlineStyles.adaptive; }
+    else { (theme as HTMLLinkElement).rel = 'stylesheet'; (theme as HTMLLinkElement).href = '/assets/marp-theme.css'; (adaptive as HTMLLinkElement).rel = 'stylesheet'; (adaptive as HTMLLinkElement).href = '/assets/slide-view.css'; }
     const wrapper = document.createElement('div'); wrapper.className = 'marpit';
     const section = document.createElement('section');
     for (const child of result.sections[Math.min(page, result.sections.length - 1)].childNodes) {
       const safe = safeNode(child); if (safe) section.appendChild(safe);
     }
     wrapper.appendChild(section); shadow.replaceChildren(theme, adaptive, wrapper);
-  }, [result, page]);
+  }, [result, page, inlineStyles]);
   if (result.error) return <p role="alert">无法渲染这份幻灯片，请检查内容。</p>;
   return <div className="slides-reader">
     <h3>{title}</h3><div ref={host} aria-label="幻灯片内容" />
