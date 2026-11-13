@@ -1,0 +1,18 @@
+services:
+  banana:
+    image: ${BANANA_SLIDES_IMAGE:-secretary-banana-slides:local}
+    env_file:
+      - banana.env
+    environment:
+      DATABASE_PATH: /app/backend/instance/database.db
+      UPLOAD_FOLDER: /app/uploads
+    ports:
+      - "127.0.0.1:${SECRETARY_PPT_PORT:-15392}:5000"
+    volumes:
+      - secretary-ppt-db:/app/backend/instance
+      - secretary-ppt-uploads:/app/uploads
+    restart: unless-stopped
+
+volumes:
+  secretary-ppt-db:
+  secretary-ppt-uploads:

@@ -25,11 +25,13 @@ export const TABS = [
   { href: '/pages', label: '页面', icon: 'page', wideOnly: true },
   { href: '/mail', label: '邮件', icon: 'mail', wideOnly: true },
   { href: '/collections', label: '栏目', icon: 'page', wideOnly: true },
+  { href: '/ppt', label: 'PPT 制作', icon: 'ppt', wideOnly: true },
 ] as const satisfies readonly { href: string; label: string; icon: string; wideOnly?: boolean }[];
 
 export type TabIcon = (typeof TABS)[number]['icon'];
 
 const PATHS: Record<string, React.ReactNode> = {
+  ppt: <><rect x="3" y="4" width="18" height="13" rx="2" /><path d="M12 17v3m-4 1h8M7 13l3-3 2 2 4-4" /></>,
   mail: <><rect x="3" y="5" width="18" height="14" rx="2" /><path d="m3 6 9 7 9-7" /></>,
   chat: <path d="M21 12a8 8 0 0 1-8 8H7l-4 3V12a8 8 0 0 1 8-8h2a8 8 0 0 1 8 8Z" />,
   check: <path d="M4 6h16M4 12h16M4 18h10" />,

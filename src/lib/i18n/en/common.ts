@@ -22,6 +22,7 @@ export const common: Dict = {
   专题: 'Topics',
   文件: 'Files',
   页面: 'Pages',
+  'PPT 制作': 'PPT Studio',
   搜索: 'Search',
   设置: 'Settings',
   // 任务状态（lib/format.ts TASK_STATUS）
