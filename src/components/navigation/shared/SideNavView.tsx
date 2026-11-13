@@ -1,10 +1,10 @@
-import type { CSSProperties, ReactNode } from 'react';
+import { Fragment, type CSSProperties, type ReactNode } from 'react';
 import { TABS, NavIcon } from '../../nav-tabs';
 
 type Item = { href: string; label: string; active: boolean; className: string; style: CSSProperties; children: ReactNode };
-export default function SideNavView({ pathname, badge, t, renderItem, collections, trailing, hiddenPaths = [] }: {
+export default function SideNavView({ pathname, badge, t, renderItem, collections, afterChat, trailing, hiddenPaths = [] }: {
   pathname: string; badge?: number; t: (text: string) => string;
-  renderItem: (item: Item) => ReactNode; collections?: ReactNode; trailing?: ReactNode;
+  renderItem: (item: Item) => ReactNode; collections?: ReactNode; afterChat?: ReactNode; trailing?: ReactNode;
   hiddenPaths?: readonly string[];
 }) {
   return <nav aria-label={t('主导航')} className="shared-side-nav hidden lg:flex fixed inset-y-0 left-0 z-40 w-56 flex-col border-r surface" style={{ borderColor: 'var(--border)' }}>
@@ -14,9 +14,10 @@ export default function SideNavView({ pathname, badge, t, renderItem, collection
         const active = pathname === tab.href || tab.href !== '/collections' && pathname.startsWith(tab.href + '/');
         const children = <><NavIcon name={tab.icon} className="h-[20px] w-[20px] shrink-0" /><span className="font-medium">{t(tab.label)}</span>
           {tab.href === '/tasks' && !!badge && badge > 0 && <span className="ml-auto min-w-5 h-5 px-1.5 rounded-full bg-red-500 text-white text-[11px] leading-5 text-center">{badge}</span>}</>;
-        return renderItem({ href: tab.href, label: tab.label, active,
+        const item = renderItem({ href: tab.href, label: tab.label, active,
           className: `flex items-center gap-3 rounded-xl px-3 py-2.5 text-[14px] transition ${active ? 'bg-brand-500/10' : ''}`,
           style: { color: active ? 'var(--color-brand-500)' : 'var(--muted)' }, children });
+        return <Fragment key={tab.href}>{item}{tab.href === '/chat' ? afterChat : null}</Fragment>;
       })}
       {collections}
     </div>

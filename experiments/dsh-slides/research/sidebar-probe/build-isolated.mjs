@@ -30,6 +30,10 @@ const original = files.get('lib/client.js');
 if (!original || createHash('sha256').update(original).digest('hex') !== '3e2327e5f6773a35c7b06a8403d49fc944c0afe5493a8b464e2c4c7897800a66') throw new Error('DSH 侧栏版本不匹配，停止构建');
 const pkg = JSON.parse(files.get('package.json').toString());
 if (pkg.version !== '0.2.2-rc.2') throw new Error('DSH 版本不匹配');
+if (process.argv.includes('--verify-only')) {
+  console.log('DSH 侧栏版本校验通过');
+  process.exit(0);
+}
 
 const require = createRequire(import.meta.url), compiled = require('next/dist/compiled/webpack/webpack');
 compiled.init();
@@ -51,9 +55,11 @@ if (!code) throw new Error('导航编译失败');
 let client = original.toString();
 const insertion = 'function SidebarRoot(';
 const target = 'children:renderSlot(`sidebar.workspaces`,{wide,expandSidebar:()=>{if(collapsed)toggleSidebar()}},{hookContext:sectionHookContext})';
-if (client.split(insertion).length !== 2 || client.split(target).length !== 2) throw new Error('侧栏结构已变更，停止构建');
+const panelFilter = 'panels.filter(({id})=>id===`plugins`||!hasEntryActions||!unpinned.includes(id))';
+if ([insertion, target, panelFilter].some(value => client.split(value).length !== 2)) throw new Error('侧栏结构已变更，停止构建');
 client = client.replace(insertion, `const SecretaryContainer=(()=>{const module={exports:{}};const exports=module.exports;${code};return module.exports.default})();${insertion}`);
 client = client.replace(target, 'children:(0,react_jsx_runtime.jsx)(SecretaryContainer,{wide,activePanelId,panels,selectPanel,children:renderSlot(`sidebar.workspaces`,{wide,expandSidebar:()=>{if(collapsed)toggleSidebar()}},{hookContext:sectionHookContext})})');
+client = client.replace(panelFilter, 'panels.filter(({id})=>(!wide||![`secretary-slides-pilot`,`secretary-shell-pilot`].includes(id))&&(id===`plugins`||!hasEntryActions||!unpinned.includes(id)))');
 files.set('lib/client.js', Buffer.from(client));
 for (const [name, contents] of files) {
   const file = path.join(output, name);
