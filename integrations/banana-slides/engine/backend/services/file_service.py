@@ -1,0 +1,664 @@
+"""
+File Service - handles all file operations
+"""
+import os
+import uuid
+from pathlib import Path
+from typing import Optional
+from werkzeug.utils import secure_filename
+from PIL import Image
+from models import Project
+from models import db
+
+
+def convert_image_to_rgb(image: Image.Image) -> Image.Image:
+    """
+    Convert image to RGB mode for JPEG compatibility.
+    Handles RGBA, LA, P (palette) and other modes by compositing onto white background.
+
+    Args:
+        image: PIL Image object
+
+    Returns:
+        PIL Image in RGB mode
+    """
+    if image.mode in ('RGBA', 'LA', 'P'):
+        # Create white background for transparent images
+        background = Image.new('RGB', image.size, (255, 255, 255))
+
+        # Convert palette mode to RGBA to handle transparency
+        if image.mode == 'P':
+            image = image.convert('RGBA')
+
+        # Paste image onto white background using alpha channel as mask
+        # For RGBA and LA modes, the last channel is the alpha/transparency channel
+        if image.mode in ('RGBA', 'LA'):
+            background.paste(image, mask=image.split()[-1])
+        else:
+            # This shouldn't happen after P->RGBA conversion, but handle just in case
+            background.paste(image)
+
+        return background
+    elif image.mode != 'RGB':
+        return image.convert('RGB')
+    return image
+
+
+def resize_image_for_thumbnail(image: Image.Image, max_width: int = 1920) -> Image.Image:
+    """
+    Resize image for thumbnail if it exceeds max width.
+    Maintains aspect ratio.
+    
+    Args:
+        image: PIL Image object
+        max_width: Maximum width in pixels (default 1920)
+        
+    Returns:
+        Resized PIL Image (or original if already smaller)
+    """
+    if image.width > max_width:
+        ratio = max_width / image.width
+        new_height = int(image.height * ratio)
+        return image.resize((max_width, new_height), Image.Resampling.LANCZOS)
+    return image
+
+
+class FileService:
+    """Service for file management"""
+    
+    def __init__(self, upload_folder: str):
+        """Initialize file service"""
+        self.upload_folder = Path(upload_folder)
+        self.upload_folder.mkdir(exist_ok=True, parents=True)
+    
+    def _get_project_dir(self, project_id: str) -> Path:
+        """Get project directory"""
+        project_dir = self.upload_folder / project_id
+        project_dir.mkdir(exist_ok=True, parents=True)
+        return project_dir
+    
+    def _get_template_dir(self, project_id: str) -> Path:
+        """Get template directory for project"""
+        template_dir = self._get_project_dir(project_id) / "template"
+        template_dir.mkdir(exist_ok=True, parents=True)
+        return template_dir
+    
+    def _get_pages_dir(self, project_id: str) -> Path:
+        """Get pages directory for project"""
+        pages_dir = self._get_project_dir(project_id) / "pages"
+        pages_dir.mkdir(exist_ok=True, parents=True)
+        return pages_dir
+
+    def _get_exports_dir(self, project_id: str) -> Path:
+        """Get exports directory for project (for generated PPT/PDF files)"""
+        exports_dir = self._get_project_dir(project_id) / "exports"
+        exports_dir.mkdir(exist_ok=True, parents=True)
+        return exports_dir
+
+    def _get_template_assets_dir(self, project_id: str) -> Path:
+        """Get the per-project template asset library directory."""
+        assets_dir = self._get_project_dir(project_id) / "template-assets"
+        assets_dir.mkdir(exist_ok=True, parents=True)
+        return assets_dir
+
+    def _get_template_asset_dir(self, project_id: str, asset_id: str) -> Path:
+        """Get the directory of a single template asset."""
+        asset_dir = self._get_template_assets_dir(project_id) / asset_id
+        asset_dir.mkdir(exist_ok=True, parents=True)
+        return asset_dir
+
+    def _get_template_pdf_dir(self, project_id: str) -> Path:
+        """Get the directory for template PDF uploads + per-task page renders."""
+        pdf_dir = self._get_project_dir(project_id) / "template-pdf"
+        pdf_dir.mkdir(exist_ok=True, parents=True)
+        return pdf_dir
+
+    def _get_materials_dir(self, project_id: str) -> Path:
+        """Get materials directory for project (for standalone generated assets)"""
+        materials_dir = self._get_project_dir(project_id) / "materials"
+        materials_dir.mkdir(exist_ok=True, parents=True)
+        return materials_dir
+
+    def get_materials_dir(self, project_id: str) -> Path:
+        """Get materials directory for project."""
+        return self._get_materials_dir(project_id)
+
+    def _save_validated_image_upload(self, file, destination: Path) -> None:
+        """
+        Save an uploaded image only after Pillow confirms the file contents.
+
+        The upload is first written to a sibling temp file so an invalid upload
+        cannot replace an existing valid template.
+        """
+        tmp_path = destination.with_name(f".{destination.name}.{uuid.uuid4().hex}.tmp")
+        try:
+            file.save(str(tmp_path))
+            with Image.open(str(tmp_path)) as image:
+                image.verify()
+            os.replace(tmp_path, destination)
+        except Exception as exc:
+            try:
+                tmp_path.unlink(missing_ok=True)
+            except Exception:
+                pass
+            raise ValueError("Invalid image file. Please upload a valid PNG, JPG, GIF, or WEBP image.") from exc
+    
+    def save_template_image(self, file, project_id: str) -> str:
+        """
+        Save template image file
+        
+        Args:
+            file: FileStorage object from Flask request
+            project_id: Project ID
+        
+        Returns:
+            Relative file path from upload folder
+        """
+        template_dir = self._get_template_dir(project_id)
+        
+        # Secure filename and add unique suffix
+        original_filename = secure_filename(file.filename)
+        ext = original_filename.rsplit('.', 1)[1].lower() if '.' in original_filename else 'png'
+        filename = f"template.{ext}"
+        
+        filepath = template_dir / filename
+        self._save_validated_image_upload(file, filepath)
+        
+        # Return relative path
+        return filepath.relative_to(self.upload_folder).as_posix()
+    
+    def save_generated_image(self, image: Image.Image, project_id: str,
+                           page_id: str, image_format: str = 'PNG',
+                           version_number: int = None) -> str:
+        """
+        Save generated image with version support
+
+        Args:
+            image: PIL Image object
+            project_id: Project ID
+            page_id: Page ID
+            image_format: Image format (PNG, JPEG, etc.)
+            version_number: Optional version number. If None, uses timestamp-based naming
+
+        Returns:
+            Relative file path from upload folder
+        """
+        pages_dir = self._get_pages_dir(project_id)
+
+        # Use lowercase extension
+        ext = image_format.lower()
+
+        # Generate filename with version number or timestamp
+        if version_number is not None:
+            filename = f"{page_id}_v{version_number}.{ext}"
+        else:
+            # Use timestamp for unique filename
+            import time
+            timestamp = int(time.time() * 1000)  # milliseconds
+            filename = f"{page_id}_{timestamp}.{ext}"
+
+        filepath = pages_dir / filename
+
+        # Save image - format is determined by file extension or explicitly specified
+        # Some PIL Image objects may not support format parameter, so we use extension
+        image.save(str(filepath))
+
+        # Return relative path
+        return filepath.relative_to(self.upload_folder).as_posix()
+
+    def get_cached_image_path(self, project_id: str, page_id: str, version_number: int) -> str:
+        """
+        Generate the relative path for a cached thumbnail image.
+
+        This method centralizes the path generation logic for cached images,
+        ensuring consistency across the codebase (DRY principle).
+
+        Args:
+            project_id: Project ID
+            page_id: Page ID
+            version_number: Version number
+
+        Returns:
+            Relative file path from upload folder (e.g., "project_id/pages/page_id_v1_thumb.jpg")
+        """
+        filename = f"{page_id}_v{version_number}_thumb.jpg"
+        return f"{project_id}/pages/{filename}"
+
+    def save_cached_image(self, image: Image.Image, project_id: str,
+                         page_id: str, version_number: int,
+                         quality: int = 85, max_width: int = 1920) -> str:
+        """
+        Save compressed JPG thumbnail for faster frontend loading
+
+        Args:
+            image: PIL Image object
+            project_id: Project ID
+            page_id: Page ID
+            version_number: Version number
+            quality: JPEG quality (1-100), default 85
+            max_width: Maximum thumbnail width in pixels (default 1920)
+
+        Returns:
+            Relative file path from upload folder
+        """
+        pages_dir = self._get_pages_dir(project_id)
+
+        # Use centralized path generation
+        relative_path = self.get_cached_image_path(project_id, page_id, version_number)
+        filename = Path(relative_path).name
+        filepath = pages_dir / filename
+
+        # Resize image if too large (for faster loading)
+        image = resize_image_for_thumbnail(image, max_width)
+
+        # Convert to RGB using shared function
+        image = convert_image_to_rgb(image)
+
+        # Save as compressed JPEG
+        image.save(str(filepath), 'JPEG', quality=quality, optimize=True)
+
+        # Return relative path
+        return relative_path
+
+    def save_material_image(self, image: Image.Image, project_id: Optional[str],
+                            image_format: str = 'PNG') -> str:
+        """
+        Save standalone generated material image (not bound to a specific page)
+
+        Args:
+            image: PIL Image object
+            project_id: Project ID (None for global materials)
+            image_format: Image format (PNG, JPEG, etc.)
+
+        Returns:
+            Relative file path from upload folder
+        """
+        # Handle global materials (project_id is None)
+        if project_id is None:
+            materials_dir = self.upload_folder / "materials"
+            materials_dir.mkdir(exist_ok=True, parents=True)
+        else:
+            materials_dir = self._get_materials_dir(project_id)
+
+        # Use lowercase extension
+        ext = image_format.lower()
+
+        # Generate unique filename
+        import time
+        timestamp = int(time.time() * 1000)  # milliseconds
+        filename = f"material_{timestamp}.{ext}"
+
+        filepath = materials_dir / filename
+
+        # Save image
+        image.save(str(filepath))
+
+        # Return relative path
+        return filepath.relative_to(self.upload_folder).as_posix()
+    
+    def delete_page_image_version(self, image_path: str) -> bool:
+        """
+        Delete a specific image version file and its cache
+
+        Args:
+            image_path: Relative path to the image file
+
+        Returns:
+            True if deleted successfully
+        """
+        filepath = self.upload_folder / image_path.replace('\\', '/')
+        deleted = False
+
+        if filepath.exists() and filepath.is_file():
+            filepath.unlink()
+            deleted = True
+
+        # Also delete corresponding cache file (_thumb.jpg)
+        # e.g., xxx_v1.png -> xxx_v1_thumb.jpg
+        cache_filepath = filepath.parent / f"{filepath.stem}_thumb.jpg"
+        if cache_filepath.exists() and cache_filepath.is_file():
+            cache_filepath.unlink()
+
+        return deleted
+    
+    def get_file_url(self, project_id: Optional[str], file_type: str, filename: str) -> str:
+        """
+        Generate file URL for frontend access
+        
+        Args:
+            project_id: Project ID (None for global materials)
+            file_type: 'template', 'pages', or 'materials'
+            filename: File name
+        
+        Returns:
+            URL path for file access
+        """
+        if project_id is None:
+            # Global materials
+            return f"/files/materials/{filename}"
+        return f"/files/{project_id}/{file_type}/{filename}"
+    
+    def get_absolute_path(self, relative_path: str) -> str:
+        """
+        Get absolute file path from relative path
+        
+        Args:
+            relative_path: Relative path from upload folder
+        
+        Returns:
+            Absolute file path
+        """
+        result = (self.upload_folder / relative_path.replace('\\', '/')).resolve()
+        if not str(result).startswith(str(self.upload_folder.resolve())):
+            raise ValueError(f"Path traversal detected: {relative_path}")
+        return str(result)
+    
+    def delete_template(self, project_id: str) -> bool:
+        """
+        Delete template for project
+        
+        Args:
+            project_id: Project ID
+        
+        Returns:
+            True if deleted successfully
+        """
+        template_dir = self._get_template_dir(project_id)
+        
+        # Delete all files in template directory
+        for file in template_dir.iterdir():
+            if file.is_file():
+                file.unlink()
+        
+        return True
+    
+    def delete_page_image(self, project_id: str, page_id: str) -> bool:
+        """
+        Delete all page images (all versions and their caches)
+
+        Args:
+            project_id: Project ID
+            page_id: Page ID
+
+        Returns:
+            True if deleted successfully
+        """
+        pages_dir = self._get_pages_dir(project_id)
+
+        # Find and delete all page image files (all versions and caches)
+        # Pattern matches: {page_id}_v1.png, {page_id}_v1_thumb.jpg, etc.
+        for file in pages_dir.glob(f"{page_id}_*"):
+            if file.is_file():
+                file.unlink()
+
+        return True
+    
+    def delete_project_files(self, project_id: str) -> bool:
+        """
+        Delete all files for a project
+        
+        Args:
+            project_id: Project ID
+        
+        Returns:
+            True if deleted successfully
+        """
+        import shutil
+        project_dir = self._get_project_dir(project_id)
+        
+        if project_dir.exists():
+            shutil.rmtree(project_dir)
+        
+        return True
+    
+    def file_exists(self, relative_path: str) -> bool:
+        """Check if file exists"""
+        filepath = self.upload_folder / relative_path.replace('\\', '/')
+        return filepath.exists() and filepath.is_file()
+    
+    def get_template_path(self, project_id: str) -> Optional[str]:
+        """
+        Get template file path for project
+        
+        Args:
+            project_id: Project ID
+        
+        Returns:
+            Absolute path to template file or None
+        """
+        
+        # 刷新数据库会话，确保获取最新数据
+        db.session.expire_all()
+        project = Project.query.get(project_id)
+        if project and project.template_image_path:
+            # template_image_path 是相对路径，需要转换为绝对路径
+            template_path = self.upload_folder / project.template_image_path
+            if template_path.exists() and template_path.is_file():
+                return str(template_path)
+        
+        # 如果数据库中没有，回退到目录查找（兼容旧数据）
+        template_dir = self._get_template_dir(project_id)
+        if template_dir.exists():
+            # 按修改时间排序，返回最新的模板文件
+            template_files = [
+                f for f in template_dir.iterdir() 
+                if f.is_file() and f.stem == 'template'
+            ]
+            if template_files:
+                # 返回修改时间最新的文件
+                latest_file = max(template_files, key=lambda f: f.stat().st_mtime)
+                return str(latest_file)
+        
+        return None
+    
+    def _get_user_templates_dir(self) -> Path:
+        """Get user templates directory"""
+        templates_dir = self.upload_folder / "user-templates"
+        templates_dir.mkdir(exist_ok=True, parents=True)
+        return templates_dir
+    
+    def save_user_template(self, file, template_id: str) -> str:
+        """
+        Save user template image file
+        
+        Args:
+            file: FileStorage object from Flask request
+            template_id: Template ID
+        
+        Returns:
+            Relative file path from upload folder
+        """
+        templates_dir = self._get_user_templates_dir()
+        template_dir = templates_dir / template_id
+        template_dir.mkdir(exist_ok=True, parents=True)
+        
+        # Secure filename and preserve extension
+        original_filename = secure_filename(file.filename)
+        ext = original_filename.rsplit('.', 1)[1].lower() if '.' in original_filename else 'png'
+        filename = f"template.{ext}"
+        
+        filepath = template_dir / filename
+        self._save_validated_image_upload(file, filepath)
+        
+        # Return relative path
+        return filepath.relative_to(self.upload_folder).as_posix()
+    
+    def delete_user_template(self, template_id: str) -> bool:
+        """
+        Delete user template
+
+        Args:
+            template_id: Template ID
+
+        Returns:
+            True if deleted successfully
+        """
+        import shutil
+        templates_dir = self._get_user_templates_dir()
+        template_dir = templates_dir / template_id
+
+        if template_dir.exists():
+            shutil.rmtree(template_dir)
+
+        return True
+
+    # ---------- Template assets (per-page template feature) ----------
+
+    def _make_asset_thumbnail(self, src_image: Image.Image, dest: Path,
+                              quality: int = 85, max_width: int = 480) -> None:
+        """Resize + convert + save JPEG thumbnail for a template asset."""
+        thumb = resize_image_for_thumbnail(src_image, max_width)
+        thumb = convert_image_to_rgb(thumb)
+        thumb.save(str(dest), 'JPEG', quality=quality, optimize=True)
+
+    def save_template_asset(self, file, project_id: str, asset_id: str) -> tuple[str, str]:
+        """
+        Save a template asset upload: original (verified) + JPEG thumbnail.
+
+        Returns:
+            (image_path, thumb_path) — both relative to upload_folder.
+        """
+        asset_dir = self._get_template_asset_dir(project_id, asset_id)
+
+        original_filename = secure_filename(file.filename or '')
+        ext = original_filename.rsplit('.', 1)[1].lower() if '.' in original_filename else 'png'
+        if ext == 'jpeg':
+            ext = 'jpg'
+        original_dest = asset_dir / f"original.{ext}"
+
+        self._save_validated_image_upload(file, original_dest)
+
+        thumb_dest = asset_dir / "thumb.jpg"
+        with Image.open(str(original_dest)) as img:
+            self._make_asset_thumbnail(img, thumb_dest)
+
+        image_path = original_dest.relative_to(self.upload_folder).as_posix()
+        thumb_path = thumb_dest.relative_to(self.upload_folder).as_posix()
+        return image_path, thumb_path
+
+    def save_template_asset_from_path(self, src_path: str, project_id: str,
+                                      asset_id: str) -> tuple[str, str]:
+        """
+        Copy an existing local image into the template-assets dir as `original.<ext>`
+        and generate a thumbnail. Used by the PDF-split pipeline.
+        """
+        import shutil
+        src = Path(src_path)
+        if not src.exists() or not src.is_file():
+            raise ValueError(f"Source image does not exist: {src_path}")
+
+        asset_dir = self._get_template_asset_dir(project_id, asset_id)
+        ext = src.suffix.lstrip('.').lower() or 'png'
+        if ext == 'jpeg':
+            ext = 'jpg'
+        original_dest = asset_dir / f"original.{ext}"
+        shutil.copyfile(str(src), str(original_dest))
+
+        thumb_dest = asset_dir / "thumb.jpg"
+        with Image.open(str(original_dest)) as img:
+            self._make_asset_thumbnail(img, thumb_dest)
+
+        image_path = original_dest.relative_to(self.upload_folder).as_posix()
+        thumb_path = thumb_dest.relative_to(self.upload_folder).as_posix()
+        return image_path, thumb_path
+
+    def delete_template_asset(self, project_id: str, asset_id: str) -> None:
+        """Delete the template-assets/<asset_id>/ directory and all its files."""
+        import shutil
+        asset_dir = self._get_template_assets_dir(project_id) / asset_id
+        if asset_dir.exists():
+            shutil.rmtree(asset_dir)
+
+    def save_template_pdf(self, file, project_id: str, task_id: str) -> str:
+        """
+        Save an uploaded template PDF as template-pdf/<task_id>.pdf.
+
+        Returns:
+            Relative path from upload_folder.
+        """
+        pdf_dir = self._get_template_pdf_dir(project_id)
+        original_filename = secure_filename(file.filename or '')
+        if '.' in original_filename and original_filename.rsplit('.', 1)[1].lower() != 'pdf':
+            raise ValueError("Template PDF must have a .pdf extension")
+        dest = pdf_dir / f"{task_id}.pdf"
+        tmp_path = dest.with_name(f".{dest.name}.{uuid.uuid4().hex}.tmp")
+        try:
+            file.save(str(tmp_path))
+            with open(tmp_path, 'rb') as fh:
+                if fh.read(4) != b'%PDF':
+                    raise ValueError("Uploaded file is not a valid PDF")
+            os.replace(tmp_path, dest)
+        except Exception:
+            try:
+                tmp_path.unlink(missing_ok=True)
+            except Exception:
+                pass
+            raise
+        return dest.relative_to(self.upload_folder).as_posix()
+
+    def get_template_pdf_temp_dir(self, project_id: str, task_id: str) -> Path:
+        """Return (and create) the per-task scratch dir for PDF page renders."""
+        pdf_dir = self._get_template_pdf_dir(project_id)
+        task_dir = pdf_dir / task_id
+        task_dir.mkdir(exist_ok=True, parents=True)
+        return task_dir
+
+    def cleanup_template_pdf_temp(self, project_id: str, task_id: str) -> None:
+        """
+        Remove the per-task PDF page-image scratch directory.
+
+        Does NOT delete the original `<task_id>.pdf`; that is kept 7 days for retry
+        (TODO: scheduled cleanup is out of scope for this PR — see spec §4.3).
+        """
+        import shutil
+        task_dir = self._get_template_pdf_dir(project_id) / task_id
+        if task_dir.exists() and task_dir.is_dir():
+            shutil.rmtree(task_dir)
+
+    # ---------- /Template assets ----------
+
+    def save_user_template_thumbnail(self, template_id: str, original_path: str,
+                                      quality: int = 80, max_width: int = 600) -> Optional[str]:
+        """
+        Generate and save thumbnail for user template
+
+        Args:
+            template_id: Template ID
+            original_path: Relative path to original template image
+            quality: JPEG quality (1-100), default 80
+            max_width: Maximum thumbnail width in pixels (default 600)
+
+        Returns:
+            Relative file path to thumbnail, or None if failed
+        """
+        try:
+            # Get full path to original image
+            original_full_path = self.upload_folder / original_path.replace('\\', '/')
+
+            if not original_full_path.exists():
+                return None
+
+            # Open and process image
+            image = Image.open(str(original_full_path))
+
+            # Resize if needed
+            image = resize_image_for_thumbnail(image, max_width)
+
+            # Convert to RGB for JPEG
+            image = convert_image_to_rgb(image)
+
+            # Save thumbnail
+            templates_dir = self._get_user_templates_dir()
+            template_dir = templates_dir / template_id
+            template_dir.mkdir(exist_ok=True, parents=True)
+
+            thumb_filename = "template-thumb.webp"
+            thumb_filepath = template_dir / thumb_filename
+
+            image.save(str(thumb_filepath), 'WEBP', quality=quality)
+            image.close()
+
+            return thumb_filepath.relative_to(self.upload_folder).as_posix()
+        except Exception:
+            return None
+    

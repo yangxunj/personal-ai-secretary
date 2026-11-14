@@ -1,8 +1,36 @@
 # PPT 制作模块：首期部署与验证
 
-本栏目连接单独运行的 Banana Slides 后端。秘书平台只保存连接配置；项目、大纲、页面图片及导出文件保存在独立后端的数据库和文件卷中，与已有“知识幻灯片”、秘书数据库及其他 Banana Slides 实例分开。当前只提供网页和现有桌面应用使用的栏目，未把 Python 服务打进 Windows 安装包，也未接入聊天 Agent 或 Android APK。
+本栏目连接单独运行的 Banana Slides 后端。引擎源码现已按固定版本纳入本项目；项目、大纲、页面图片及导出文件保存在独立后端的数据目录中，与已有“知识幻灯片”、秘书数据库及其他 Banana Slides 实例分开。当前先验证网页部署，尚未把 Python 服务打进 Windows 安装包，也未接入聊天 Agent 或 Android APK。
 
-## 运行独立后端
+## 项目内引擎：隔离部署
+
+`integrations/banana-slides/engine/` 包含固定的引擎源码、许可证及依赖锁，来源见同目录的 `ENGINE-SOURCE.md`。在项目根目录的 `.env` 里按 `.env.example` 配置 `SECRETARY_PPT_BACKEND_URL` 和 `PPT_TEXT_*`、`PPT_IMAGE_*`；文字模型和图片模型必须分别支持所选服务，实际密钥只填写在本机配置中。引擎的图片理解组件默认使用同一套文字模型配置；如果未来需要图片理解功能，所选文字模型还必须支持视觉输入。当前采用配置文件统一管理，尚未接入设置页面。
+
+安装 Docker 后，在秘书平台项目根目录启动：
+
+```powershell
+docker compose -p secretary-ppt-managed -f integrations/banana-slides/compose.managed.yml up -d --build
+```
+
+该命令只从项目内 `engine/` 构建，不依赖旁边的 Banana Slides 源码目录。默认只在本机 `127.0.0.1:15398` 监听，数据保存在本项目 `data/ppt-engine/instance` 和 `data/ppt-engine/uploads`，不读取已有服务的数据库。`SECRETARY_PPT_BACKEND_URL` 应设为 `http://127.0.0.1:15398`，修改后重启秘书平台。要自定义 `SECRETARY_PPT_ENGINE_DATA_DIR`，请使用绝对路径，并在备份和部署时使用同一配置；自定义 `SECRETARY_PPT_ENGINE_PORT` 时也要同步修改后端地址。
+
+此方式仍需要单独启动一个 Docker 后端，是把源码、配置和数据纳入项目的阶段性部署方式；尚不等于 Windows 安装包自动管理引擎。原有手机预览仍连接已有 PPT 服务，切换到本项目内引擎前应另行配置和验收；不会自动导入或迁移旧项目。
+
+## 备份和恢复
+
+现有 `npm run backup` 在检测到 `data/ppt-engine` 存在时，会将其 SQLite 一致性快照和 `uploads/` 一起打包进原有备份。为防止生成中出现数据库与图片不一致，**必须先等待 PPT 任务结束并停止托管引擎**，备份完成后再启动：
+
+```powershell
+docker compose -p secretary-ppt-managed -f integrations/banana-slides/compose.managed.yml stop
+npm run backup
+docker compose -p secretary-ppt-managed -f integrations/banana-slides/compose.managed.yml start
+```
+
+当端口仍被占用、PPT 数据不完整或数据库中仍有未结束任务时，备份会报错而不是跳过 PPT。备份期间不要启动引擎；关闭前的异常中断可能留下未结束任务记录，需先启动引擎处理该状态再停止。备份可能包含 PPT 数据库中保存的敏感配置，使用默认加密方式并妥善保管口令，不要使用明文备份存放正式数据。
+
+`node scripts/restore.mjs` 只解包到新目录，不会自动覆盖数据。核对后，关闭秘书平台和 PPT 引擎，把恢复出的 `ppt-engine/` 中 `instance` 和 `uploads` 一起放回对应数据目录，再启动引擎。模型配置文件 `.env` 不随备份复制，须另行安全保存和恢复。旧 Docker 命名卷中的数据及其他 Banana Slides 实例不属于此备份范围。
+
+## 原有独立后端方式
 
 需要 Docker Desktop、Banana Slides 源码，以及兼容该版本的文本模型和图片生成模型。首次在 PowerShell 中以源码根目录构建专用镜像（路径按实际情况修改）：
 

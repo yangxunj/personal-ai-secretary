@@ -1,0 +1,29 @@
+services:
+  banana:
+    image: secretary-banana-engine:cc2f989d
+    build:
+      context: ./engine
+      dockerfile: backend/Dockerfile
+    environment:
+      DATABASE_PATH: /app/backend/instance/database.db
+      DATABASE_URL: sqlite:////app/backend/instance/database.db
+      UPLOAD_FOLDER: /app/uploads
+      AI_PROVIDER_FORMAT: ${PPT_AI_PROVIDER_FORMAT:-openai}
+      TEXT_MODEL_SOURCE: ${PPT_TEXT_MODEL_SOURCE:-openai}
+      TEXT_API_BASE: ${PPT_TEXT_API_BASE:-}
+      TEXT_API_KEY: ${PPT_TEXT_API_KEY:-}
+      TEXT_MODEL: ${PPT_TEXT_MODEL:-}
+      IMAGE_CAPTION_MODEL_SOURCE: ${PPT_TEXT_MODEL_SOURCE:-openai}
+      IMAGE_CAPTION_API_BASE: ${PPT_TEXT_API_BASE:-}
+      IMAGE_CAPTION_API_KEY: ${PPT_TEXT_API_KEY:-}
+      IMAGE_CAPTION_MODEL: ${PPT_TEXT_MODEL:-}
+      IMAGE_MODEL_SOURCE: ${PPT_IMAGE_MODEL_SOURCE:-openai}
+      IMAGE_API_BASE: ${PPT_IMAGE_API_BASE:-}
+      IMAGE_API_KEY: ${PPT_IMAGE_API_KEY:-}
+      IMAGE_MODEL: ${PPT_IMAGE_MODEL:-}
+    ports:
+      - "127.0.0.1:${SECRETARY_PPT_ENGINE_PORT:-15398}:5000"
+    volumes:
+      - ${SECRETARY_PPT_ENGINE_DATA_DIR:-../../data/ppt-engine}/instance:/app/backend/instance
+      - ${SECRETARY_PPT_ENGINE_DATA_DIR:-../../data/ppt-engine}/uploads:/app/uploads
+    restart: unless-stopped

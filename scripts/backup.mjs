@@ -18,6 +18,7 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import path from 'node:path';
 import { PrismaClient } from '@prisma/client';
+import { checkPptEngineBackup, stagePptEngineBackup } from './ppt-engine-backup.mjs';
 
 // 显式加载 .env。不要依赖 Prisma 顺手加载的副作用 —— 动态 import Prisma 的
 // 脚本会在读取环境变量时拿到 undefined，排查起来很费劲。
@@ -121,7 +122,7 @@ console.log('已解密为 recovered.tar，用 tar -xf recovered.tar 解开');
 \`\`\`
 
 解出来的 \`recovered.tar\` 是标准 tar 包，任何解压工具都能打开，里面是
-\`secretary.db\`（标准 SQLite 文件，可用任意 SQLite 工具查看）、\`uploads/\` 和 \`pi-sessions/\`（如有）。恢复前先关闭应用，数据库和 Pi 会话目录一起恢复。
+\`secretary.db\`（标准 SQLite 文件，可用任意 SQLite 工具查看）、\`uploads/\`、\`pi-sessions/\` 和 \`ppt-engine/\`（如有）。恢复前先关闭应用和 PPT 引擎；PPT 引擎的数据库及图片目录必须一起恢复。备份可能包含敏感配置信息，请保管好加密文件和口令。
 
 ## 加密参数
 
@@ -154,6 +155,9 @@ async function main() {
   const stage = path.resolve(process.env.BACKUP_STAGE_DIR || '.backup-stage');
   const stageRelative=path.relative(process.cwd(),stage);
   if(!stageRelative||stageRelative==='..'||stageRelative.startsWith('..'+path.sep)||path.isAbsolute(stageRelative)||!['.backup-stage','backup-stage'].includes(path.basename(stage)))throw new Error('Backup staging must be a dedicated backup-stage directory inside this workspace.');
+  if (process.env.SECRETARY_PPT_ENGINE_DATA_DIR && !path.isAbsolute(process.env.SECRETARY_PPT_ENGINE_DATA_DIR)) throw new Error('自定义 PPT 数据目录必须使用绝对路径');
+  const pptRoot = process.env.SECRETARY_PPT_ENGINE_DATA_DIR || './data/ppt-engine';
+  await checkPptEngineBackup({ dataRoot: pptRoot, port: process.env.SECRETARY_PPT_ENGINE_PORT || 15398 });
   await rm(stage, { recursive: true, force: true });
   await mkdir(stage, { recursive: true });
   await mkdir(BACKUP_DIR, { recursive: true });
@@ -192,6 +196,8 @@ async function main() {
     await cp(path.join(dataRoot, name), path.join(stage, name));
     extras.push(name);
   }
+  // PPT 项目使用独立数据库和图片目录；必须停机后一起快照，不能只备份秘书数据库。
+  if (await stagePptEngineBackup({ dataRoot: pptRoot, stage, port: process.env.SECRETARY_PPT_ENGINE_PORT || 15398 })) extras.push('ppt-engine');
   const piAfter=await piState();await db.$disconnect();
   if(JSON.stringify(piBefore)!==JSON.stringify(piAfter))throw new Error('Pi changed during backup. Run backup again after the chat finishes.');
 
