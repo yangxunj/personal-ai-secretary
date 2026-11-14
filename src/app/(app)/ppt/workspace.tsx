@@ -6,6 +6,7 @@ type Page = { page_id: string; generated_image_url: string | null; outline_conte
 type Project = { project_id: string; project_title: string | null; idea_prompt: string; status: string; pages?: Page[] };
 type Task = { task_id: string; status: string; progress?: { completed?: number; total?: number; failed?: number }; error_message?: string };
 const storageKey = 'secretary-ppt-active-task';
+const taskKey = (id: string) => `secretary-ppt-last-task:${id}`;
 const button = 'rounded-lg bg-brand-500 px-4 py-2 text-sm font-medium text-white disabled:opacity-50';
 const secondary = 'rounded-lg border px-4 py-2 text-sm disabled:opacity-50';
 
@@ -34,9 +35,13 @@ export default function PptWorkspace() {
   const [error, setError] = useState('');
   const [active, setActive] = useState<{ projectId: string; taskId: string; stage: string } | null>(null);
   const [task, setTask] = useState<Task | null>(null);
+  const [taskProjectId, setTaskProjectId] = useState<string | null>(null);
 
   const refreshList = useCallback(async () => { const data = await api('projects'); setProjects(data.projects || []); }, []);
-  const open = useCallback(async (id: string) => { setProject(await api(`projects/${id}`)); }, []);
+  const open = useCallback(async (id: string) => {
+    setProject(await api(`projects/${id}`));
+    try { const saved = localStorage.getItem(taskKey(id)); setTask(saved ? JSON.parse(saved) : null); setTaskProjectId(id); } catch { setTask(null); }
+  }, []);
   useEffect(() => {
     refreshList().catch(e => setError(e.message));
     try { const saved = localStorage.getItem(storageKey); if (saved) { const restored = JSON.parse(saved); setActive(restored); open(restored.projectId).catch(e => setError(e.message)); } } catch { localStorage.removeItem(storageKey); }
@@ -49,8 +54,9 @@ export default function PptWorkspace() {
       try {
         const current: Task = await api(`projects/${active!.projectId}/tasks/${active!.taskId}`);
         if (stopped) return;
-        setTask(current);
+        setTask(current); setTaskProjectId(active!.projectId);
         if (current.status === 'COMPLETED' || current.status === 'FAILED') {
+          localStorage.setItem(taskKey(active!.projectId), JSON.stringify({ status: current.status, progress: current.progress }));
           localStorage.removeItem(storageKey); setActive(null);
           if (current.status === 'FAILED' || (current.progress?.failed || 0) > 0) setError('生成未完全成功，请检查模型配置后重试。');
           await open(active!.projectId); await refreshList();
@@ -71,6 +77,7 @@ export default function PptWorkspace() {
   async function stage(name: 'outline' | 'descriptions' | 'images', label: string) {
     if (!project) return;
     await run(label, async () => {
+      localStorage.removeItem(taskKey(project.project_id)); setTask(null);
       const result = await api(`projects/${project.project_id}/${name}`, 'POST');
       if (result.task_id) {
         const next = { projectId: project.project_id, taskId: result.task_id, stage: label };
@@ -84,6 +91,7 @@ export default function PptWorkspace() {
   }
   const pages = project?.pages || [];
   const locked = !!busy || !!active;
+  const taskFailed = taskProjectId === project?.project_id && task && (task.status === 'FAILED' || (task.status === 'COMPLETED' && (task.progress?.failed || 0) > 0));
   return <div className="mx-auto max-w-6xl space-y-5 p-4 md:p-6">
     <p className="muted text-sm">输入教学主题，依次生成大纲、页面描述和图片。导出的是图片型 PPT，文字不能单独编辑。</p>
     {error && <div role="alert" className="rounded-lg border border-red-300 bg-red-50 p-3 text-sm text-red-800">{error}</div>}
@@ -102,7 +110,7 @@ export default function PptWorkspace() {
       </aside>
       <section className="surface min-h-80 rounded-xl border p-4 md:p-5">
         {!project ? <p className="muted text-sm">创建或选择一个项目开始制作。</p> : <div className="space-y-4">
-          <div><h2 className="text-lg font-semibold">{project.project_title || project.idea_prompt || '未命名项目'}</h2><p className="muted mt-1 text-sm">项目状态：{project.status} · {pages.length} 页</p></div>
+          <div><h2 className="text-lg font-semibold">{project.project_title || project.idea_prompt || '未命名项目'}</h2><p className="muted mt-1 text-sm">项目状态：{taskFailed ? '生成未完全成功' : project.status} · {pages.length} 页</p></div>
           <div className="flex flex-wrap gap-2">
             <button className={secondary} disabled={locked || pages.length > 0} onClick={() => stage('outline', '生成大纲')}>1. 生成大纲</button>
             <button className={secondary} disabled={locked || !pages.length} onClick={() => stage('descriptions', '生成页面描述')}>2. 生成页面描述</button>
