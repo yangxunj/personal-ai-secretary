@@ -1,23 +1,13 @@
 import { sessionIsCurrent } from '@/lib/auth';
+import { pptBackend, preparePptGeneration } from '@/lib/ppt-runtime';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-function backend(): string {
-  const value = process.env.SECRETARY_PPT_BACKEND_URL;
-  if (!value) throw new Error('PPT 服务尚未配置，请参照部署说明启动独立服务。');
-  let url: URL;
-  try { url = new URL(value); } catch { throw new Error('PPT 服务地址无效。'); }
-  if (url.protocol !== 'http:' || !['127.0.0.1', 'localhost', '[::1]'].includes(url.hostname) || url.username || url.password || url.pathname !== '/' || url.search || url.hash) {
-    throw new Error('PPT 服务地址必须是本机 HTTP 地址，且不能包含路径或凭据。');
-  }
-  return url.origin;
-}
-
 async function call(path: string, init: RequestInit = {}, timeout = 30_000) {
-  const response = await fetch(backend() + path, { ...init, redirect: 'error', cache: 'no-store', signal: AbortSignal.timeout(timeout) });
+  const response = await fetch(pptBackend() + path, { ...init, redirect: 'error', cache: 'no-store', signal: AbortSignal.timeout(timeout) });
   return response;
 }
 
@@ -60,6 +50,7 @@ async function handle(req: Request, context: Context) {
       if (req.method === 'GET' && path.length === 2) return Response.json(await jsonCall(`/api/projects/${id}`));
       if (req.method === 'GET' && path.length === 4 && path[2] === 'tasks' && uuid.test(path[3])) return Response.json(await jsonCall(`/api/projects/${id}/tasks/${path[3]}`));
       if (req.method === 'POST' && path.length === 3 && ['outline', 'descriptions', 'images'].includes(path[2])) {
+        await preparePptGeneration(pptBackend());
         return Response.json(await jsonCall(`/api/projects/${id}/generate/${path[2]}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ language: 'zh', max_workers: 2 }) }, path[2] === 'outline' ? 600_000 : 30_000));
       }
       if (req.method === 'POST' && path.length === 3 && path[2] === 'export') {

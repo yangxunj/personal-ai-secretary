@@ -9,6 +9,9 @@ import HarnessSettings from './HarnessSettings';
 import PhoneAccessSettings from './PhoneAccessSettings';
 import FamilyMembersSettings from './FamilyMembersSettings';
 import SettingsTabs from './SettingsTabs';
+import PptSettings from './PptSettings';
+import { getPptOpenRouterKey } from '@/lib/ppt-settings';
+import { usesManagedPptAddress } from '@/lib/ppt-runtime';
 import { getChatBackend, getCodexConfig, localCodexEnabled } from '@/lib/codex/config';
 import {
   changePasswordAction,
@@ -89,6 +92,8 @@ export default async function SettingsPage({
         </section>
           </>}
         />
+
+        <PptSettings hasKey={Boolean(await getPptOpenRouterKey())} chatApiReady={Boolean(ai.baseUrl && ai.model && ai.apiKey)} chatModel={ai.model} managedAddress={usesManagedPptAddress()} />
 
         {asr && tts && realtime && <>
         <section id="voice" className="surface border rounded-2xl p-4 scroll-mt-4" style={{ borderColor: 'var(--border)' }}>

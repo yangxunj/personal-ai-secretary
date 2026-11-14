@@ -4,7 +4,13 @@
 
 ## 项目内引擎：隔离部署
 
-`integrations/banana-slides/engine/` 包含固定的引擎源码、许可证及依赖锁，来源见同目录的 `ENGINE-SOURCE.md`。在项目根目录的 `.env` 里按 `.env.example` 配置 `SECRETARY_PPT_BACKEND_URL` 和 `PPT_TEXT_*`、`PPT_IMAGE_*`；文字模型和图片模型必须分别支持所选服务，实际密钥只填写在本机配置中。引擎的图片理解组件默认使用同一套文字模型配置；如果未来需要图片理解功能，所选文字模型还必须支持视觉输入。当前采用配置文件统一管理，尚未接入设置页面。
+`integrations/banana-slides/engine/` 包含固定的引擎源码、许可证及依赖锁，来源见同目录的 `ENGINE-SOURCE.md`。在项目根目录的 `.env` 里按 `.env.example` 设置 `SECRETARY_PPT_BACKEND_URL` 和可选的 `PPT_TEXT_*`、`PPT_IMAGE_*` 初始配置。
+
+在秘书平台“设置 → AI 设置 → PPT 制作模型”里填入 OpenRouter API Key 后，项目内引擎会在每次发起生成前，自动使用秘书平台现有的 Pi 对话 API 配置（地址、模型和密钥，例如 DeepSeek）生成大纲和页面描述，使用 OpenRouter 的 `meta/muse-image` 生成图片。Codex 对话的登录不会自动变成 Pi 的 API 配置；若使用 Codex 对话，仍需单独在 Pi 模型配置中准备文字 API。保存设置不会发起模型调用或验证余额；空密钥栏保留已有设置。
+
+OpenRouter 密钥与现有对话 API 密钥一样保存在秘书数据库中，沿用项目现有的数据库文件访问保护；它们不会返回到设置页或写入 PPT 引擎数据库。生成前，秘书平台先通过 `data/ppt-engine/instance/.secretary-control-token` 与项目内引擎相互校验，再通过本机接口将配置放入引擎进程内存；引擎重启后会在下一次生成时重新应用。引擎有任务正在运行时，修改后的配置会等待任务结束，避免影响正在运行的任务。请保护数据目录的系统访问权限；控制文件不纳入 PPT 备份。
+
+设置页的配置只应用于项目内托管引擎，不会改写原有 Banana Slides 服务。若当前仍连接旧服务，保存后需要启动并切换到托管引擎；如果还没有在设置页配置 OpenRouter，则沿用现有引擎配置。图片理解组件默认使用同一套文字模型配置；未来若使用图片理解功能，文字模型需支持视觉输入。
 
 安装 Docker 后，在秘书平台项目根目录启动：
 

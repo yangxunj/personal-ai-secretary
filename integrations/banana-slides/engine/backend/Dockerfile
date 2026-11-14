@@ -64,6 +64,7 @@ RUN if [ -f uv.lock ]; then \
 
 # 复制后端代码
 COPY backend/ ./backend/
+COPY secretary_runtime_control.py ./secretary_runtime_control.py
 
 # 复制测试资源
 COPY assets/ ./assets/
@@ -89,4 +90,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD ["sh", "-c", "curl -f http://localhost:5000/health || exit 1"]
 
 # 启动应用。直接使用构建阶段同步好的虚拟环境，避免预构建镜像启动时再次联网解析依赖。
-CMD ["sh", "-c", "cd /app/backend && /app/.venv/bin/alembic upgrade head && exec /app/.venv/bin/python app.py"]
+CMD ["sh", "-c", "cd /app/backend && /app/.venv/bin/alembic upgrade head && exec /app/.venv/bin/python /app/secretary_runtime_control.py"]

@@ -17,6 +17,7 @@ test('PPT backup requires a stopped engine and saves a consistent database and i
   try {
     await mkdir(path.join(root, 'instance'), { recursive: true });
     await mkdir(path.join(root, 'uploads', 'project', 'pages'), { recursive: true });
+    await writeFile(path.join(root, 'instance', '.secretary-control-token'), 'test-only-token');
     await writeFile(path.join(root, 'uploads', 'project', 'pages', 'test.png'), 'synthetic-image');
     const db = new PrismaClient({ datasources: { db: { url } } });
     await db.$executeRawUnsafe('CREATE TABLE tasks (id TEXT PRIMARY KEY, status TEXT NOT NULL)');
@@ -30,6 +31,7 @@ test('PPT backup requires a stopped engine and saves a consistent database and i
     server = null;
     assert.equal(await stagePptEngineBackup({ dataRoot: root, stage, port }), true);
     assert.equal(await readFile(path.join(stage, 'ppt-engine', 'uploads', 'project', 'pages', 'test.png'), 'utf8'), 'synthetic-image');
+    await assert.rejects(readFile(path.join(stage, 'ppt-engine', 'instance', '.secretary-control-token')), { code: 'ENOENT' });
     const snapshot = new PrismaClient({ datasources: { db: { url: `file:${path.join(stage, 'ppt-engine', 'instance', 'database.db').replace(/\\/g, '/')}` } } });
     const rows = await snapshot.$queryRawUnsafe('SELECT status FROM tasks');
     await snapshot.$disconnect();

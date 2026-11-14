@@ -22,7 +22,7 @@ export default function SettingsTabs({ initialTab, navigationKey, ai, general, c
     function restore() {
       const hash = window.location.hash;
       const sectionTab = ['#language', '#members'].includes(hash) ? 'general'
-        : ['#voice', '#speech', '#realtime'].includes(hash) ? 'ai' : null;
+        : ['#voice', '#speech', '#realtime', '#ppt'].includes(hash) ? 'ai' : null;
       const queryTab = new URLSearchParams(window.location.search).get('tab');
       setSelected(sectionTab ?? (tabs.includes(queryTab as Tab) ? queryTab as Tab : initialTab));
       if (sectionTab) requestAnimationFrame(() => document.getElementById(hash.slice(1))?.scrollIntoView());

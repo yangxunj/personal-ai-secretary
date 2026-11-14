@@ -13,6 +13,7 @@ import { sessionIsCurrent } from '@/lib/auth';
 import { db } from '@/lib/db';
 import { diagnoseCodex, getCodexConfig, localCodexEnabled, openCodex } from '@/lib/codex/config';
 import { denyRequest, runTurn } from '@/lib/codex/protocol.mjs';
+import { savePptOpenRouterKey } from '@/lib/ppt-settings';
 
 /**
  * 改密码。
@@ -185,6 +186,15 @@ export async function setLocaleAction(formData: FormData) {
 
 
 export type HarnessSaveResult = { ok: boolean; message: string; backend?: 'pi' | 'codex' };
+
+export async function savePptSettingsAction(_previous: { ok: boolean; message: string }, form: FormData): Promise<{ ok: boolean; message: string }> {
+  if (!(await sessionIsCurrent())) return { ok: false, message: '登录已过期，请重新登录。' };
+  const t = await getT();
+  const saved = await savePptOpenRouterKey(String(form.get('openrouterApiKey') ?? ''));
+  if (!saved) return { ok: false, message: t('请填写有效的 OpenRouter API Key。') };
+  revalidatePath('/settings');
+  return { ok: true, message: t('已保存。使用项目内 PPT 引擎生成时将自动应用。') };
+}
 
 /** Validate the selected configuration first, then save it and the default together. */
 export async function saveHarnessSettingsAction(_previous: HarnessSaveResult, form: FormData): Promise<HarnessSaveResult> {
